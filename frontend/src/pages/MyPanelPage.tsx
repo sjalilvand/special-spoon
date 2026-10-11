@@ -10,7 +10,6 @@ import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import {
   fetchMyAppointments, fetchMyCases, fetchMyProfile, fetchMyRecommendations,
 } from "../api/me";
-import type { MyProfile } from "../api/me";
 
 function isNotFound(e: unknown): boolean {
   const anyE = e as { response?: { status?: number } };
@@ -156,11 +155,9 @@ export default function MyPanelPage() {
           )}
           {recs?.items.map((r) => (
             <Box key={r.id} sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.5 }}>
-              <Stack direction="row" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-                <Typography variant="caption" color="text.secondary">
-                  پرونده {r.case_number} — {r.published_at ? new Date(r.published_at).toLocaleString("fa-IR") : ""}
-                </Typography>
-              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                پرونده {r.case_number} — {r.published_at ? new Date(r.published_at).toLocaleString("fa-IR") : ""}
+              </Typography>
               <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>{r.content}</Typography>
             </Box>
           ))}
