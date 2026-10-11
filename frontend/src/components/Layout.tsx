@@ -6,37 +6,32 @@ import { useAuth } from "../auth/AuthContext";
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.roles.includes("SYSTEM_ADMIN") ?? false;
+  const roles = user?.roles ?? [];
+  const has = (rs: string[]) => rs.some((r) => roles.includes(r));
 
   return (
     <Box minHeight="100vh" bgcolor="grey.50">
       <AppBar position="static" color="primary" elevation={1}>
-        <Toolbar sx={{ gap: 1.5 }}>
-          <Typography
-            variant="h6"
-            sx={{ flexGrow: 1, cursor: "pointer", fontWeight: 700 }}
-            onClick={() => navigate("/")}
-          >
+        <Toolbar sx={{ gap: 1.5, flexWrap: "wrap" }}>
+          <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 700 }} onClick={() => navigate("/")}>
             Rosepsy
           </Typography>
-          {isAdmin && (
-            <Button color="inherit" onClick={() => navigate("/users")}>
-              کاربران
-            </Button>
+          {has(["SYSTEM_ADMIN"]) && (
+            <Button color="inherit" onClick={() => navigate("/users")}>کاربران</Button>
           )}
-          <Button color="inherit" onClick={() => navigate("/change-password")}>
-            تغییر رمز
-          </Button>
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/counselors")}>مشاوران</Button>
+          )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]) && (
+            <Button color="inherit" onClick={() => navigate("/applicants")}>متقاضیان</Button>
+          )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]) && (
+            <Button color="inherit" onClick={() => navigate("/imports")}>ورود اکسل</Button>
+          )}
+          <Box flexGrow={1} />
+          <Button color="inherit" onClick={() => navigate("/change-password")}>تغییر رمز</Button>
           <Chip size="small" color="secondary" label={user?.display_name ?? ""} />
-          <Button
-            color="inherit"
-            onClick={async () => {
-              await logout();
-              navigate("/login");
-            }}
-          >
-            خروج
-          </Button>
+          <Button color="inherit" onClick={async () => { await logout(); navigate("/login"); }}>خروج</Button>
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ mt: 4, pb: 6 }}>

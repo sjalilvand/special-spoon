@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "../components/Layout";
 import ActivatePage from "../pages/ActivatePage";
+import ApplicantsPage from "../pages/ApplicantsPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
+import CounselorsPage from "../pages/CounselorsPage";
 import HomePage from "../pages/HomePage";
+import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
 import UsersPage from "../pages/UsersPage";
 import ProtectedRoute from "./ProtectedRoute";
@@ -12,36 +15,26 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivatePage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <HomePage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/change-password"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <ChangePasswordPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/users"
-        element={
-          <ProtectedRoute roles={["SYSTEM_ADMIN"]}>
-            <Layout>
-              <UsersPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<ProtectedRoute><Layout><HomePage /></Layout></ProtectedRoute>} />
+      <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
+      <Route path="/users" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><UsersPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/counselors" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>
+          <Layout><CounselorsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/applicants" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
+          <Layout><ApplicantsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/imports" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
+          <Layout><ImportsPage /></Layout>
+        </ProtectedRoute>
+      } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
