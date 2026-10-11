@@ -2,6 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
@@ -28,7 +29,7 @@ def _roles(actor) -> set[str]:
     return {r.code for r in actor.roles}
 
 
-def _clinical_access(actor, case) -> None:
+def _clinical_access(db: Session, actor, case: Case) -> None:
     """محتوای جلسه بالینی است - فقط مشاور تخصیصی یا مسئول فنی؛ سایر نقش‌ها 404 (بند ۳.۲)."""
     roles = _roles(actor)
     if "TECHNICAL_SUPERVISOR" in roles:
@@ -40,7 +41,7 @@ def _clinical_access(actor, case) -> None:
     raise HTTPException(status_code=404, detail="پرونده یافت نشد")
 
 
-def _assigned_counselor(actor, case) -> None:
+def _assigned_counselor(db: Session, actor, case: Case) -> None:
     if "COUNSELOR" not in _roles(actor):
         raise HTTPException(status_code=403, detail="ثبت جلسه فقط با نقش مشاور و تخصیص جاری مجاز است")
     c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
@@ -57,7 +58,7 @@ def _clean_content(raw: dict | None) -> dict:
     return out
 
 
-def _session_out(db, s: Session) -> dict:
+def _session_out(db: Session, s: Session) -> dict:
     c = db.get(Counselor, s.counselor_id)
     revs = db.scalars(
         select(SessionNoteRevision)
@@ -82,14 +83,14 @@ def _session_out(db, s: Session) -> dict:
     }
 
 
-def _get_case_or_404(db, case_id) -> Case:
+def _get_case_or_404(db: Session, case_id) -> Case:
     case = db.get(Case, case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="پرونده یافت نشد")
     return case
 
 
-def _latest_revision(db, session_id) -> SessionNoteRevision | None:
+def _latest_revision(db: Session, session_id) -> SessionNoteRevision | None:
     return db.scalar(
         select(SessionNoteRevision)
         .where(SessionNoteRevision.session_id == session_id)
@@ -99,9 +100,9 @@ def _latest_revision(db, session_id) -> SessionNoteRevision | None:
 
 
 @router.get("/cases/{case_id}/sessions")
-def list_case_sessions(case_id: uuid.UUID, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def list_case_sessions(case_id: uuid.UUID, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     case = _get_case_or_404(db, case_id)
-    _clinical_access(actor, case)
+    _clinical_access(db, actor, case)
     items = db.scalars(
         select(Session).where(Session.case_id == case.id).order_by(Session.session_number.desc())
     ).all()
@@ -109,11 +110,11 @@ def list_case_sessions(case_id: uuid.UUID, db=Depends(get_db), actor=Depends(get
 
 
 @router.post("/cases/{case_id}/sessions", status_code=201)
-def create_session(case_id: uuid.UUID, payload: SessionCreate, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def create_session(case_id: uuid.UUID, payload: SessionCreate, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     case = _get_case_or_404(db, case_id)
     if case.status in (CaseStatus.CLOSED, CaseStatus.ARCHIVED):
         raise HTTPException(status_code=409, detail="برای پرونده بسته یا بایگانی نمی‌توان جلسه ثبت کرد")
-    _assigned_counselor(actor, case)
+    _assigned_counselor(db, actor, case)
 
     appointment = None
     if payload.appointment_id is not None:
@@ -151,12 +152,12 @@ def create_session(case_id: uuid.UUID, payload: SessionCreate, db=Depends(get_db
 
 
 @router.post("/sessions/{session_id}/note")
-def save_note(session_id: uuid.UUID, payload: SessionNoteUpdate, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def save_note(session_id: uuid.UUID, payload: SessionNoteUpdate, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     s = db.get(Session, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="جلسه یافت نشد")
     case = _get_case_or_404(db, s.case_id)
-    _clinical_access(actor, case)
+    _clinical_access(db, actor, case)
     latest = _latest_revision(db, s.id)
     if latest is None:
         raise HTTPException(status_code=404, detail="یادداشت یافت نشد")
@@ -175,12 +176,12 @@ def save_note(session_id: uuid.UUID, payload: SessionNoteUpdate, db=Depends(get_
 
 
 @router.post("/sessions/{session_id}/note/finalize")
-def finalize_note(session_id: uuid.UUID, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def finalize_note(session_id: uuid.UUID, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     s = db.get(Session, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="جلسه یافت نشد")
     case = _get_case_or_404(db, s.case_id)
-    _clinical_access(actor, case)
+    _clinical_access(db, actor, case)
     latest = _latest_revision(db, s.id)
     if latest is None:
         raise HTTPException(status_code=404, detail="یادداشت یافت نشد")
@@ -200,12 +201,12 @@ def finalize_note(session_id: uuid.UUID, db=Depends(get_db), actor=Depends(get_c
 
 
 @router.post("/sessions/{session_id}/note/revisions", status_code=201)
-def create_note_revision(session_id: uuid.UUID, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def create_note_revision(session_id: uuid.UUID, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     s = db.get(Session, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="جلسه یافت نشد")
     case = _get_case_or_404(db, s.case_id)
-    _clinical_access(actor, case)
+    _clinical_access(db, actor, case)
     latest = _latest_revision(db, s.id)
     if latest is None:
         raise HTTPException(status_code=404, detail="یادداشت یافت نشد")

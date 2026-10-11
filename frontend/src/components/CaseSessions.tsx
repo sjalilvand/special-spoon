@@ -26,9 +26,8 @@ export default function CaseSessions({ caseId }: { caseId: string }) {
   const [editing, setEditing] = useState<SessionRow | null>(null);
   const [noteContent, setNoteContent] = useState<Record<string, string>>({});
   const [noteError, setNoteError] = useState<string | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["sessions", caseId],
     queryFn: () => fetchCaseSessions(caseId),
   });
@@ -128,7 +127,7 @@ export default function CaseSessions({ caseId }: { caseId: string }) {
           <Button size="small" variant="contained" onClick={() => setCreateOpen(true)}>ثبت جلسه</Button>
         )}
       </Box>
-      {listError && <Alert severity="error">{listError}</Alert>}
+      {error && <Alert severity="error">{errDetail(error)}</Alert>}
       <TableContainer>
         <Table size="small">
           <TableHead>

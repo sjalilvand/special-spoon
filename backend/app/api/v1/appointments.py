@@ -3,6 +3,7 @@ from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
@@ -22,16 +23,7 @@ def _roles(actor) -> set[str]:
     return {r.code for r in actor.roles}
 
 
-def _case_access(actor, case) -> bool:
-    roles = _roles(actor)
-    if roles & set(STAFF_ROLES):
-        return True
-    if "COUNSELOR" in roles:
-        c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id)) if False else None
-    return False
-
-
-def _can_access_case(db, actor, case) -> bool:
+def _can_access_case(db: Session, actor, case: Case) -> bool:
     roles = _roles(actor)
     if roles & set(STAFF_ROLES):
         return True
@@ -42,7 +34,7 @@ def _can_access_case(db, actor, case) -> bool:
     return False
 
 
-def _appt_out(db, a: Appointment) -> dict:
+def _appt_out(db: Session, a: Appointment) -> dict:
     case = db.get(Case, a.case_id)
     applicant = db.get(Applicant, case.applicant_id) if case else None
     c = db.get(Counselor, a.counselor_id)
@@ -66,7 +58,7 @@ def list_appointments(
     status: str = Query(default="", max_length=20),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    db=Depends(get_db),
+    db: Session = Depends(get_db),
     actor=Depends(get_current_user),
 ) -> dict:
     roles = _roles(actor)
@@ -91,7 +83,7 @@ def list_appointments(
 
 
 @router.post("/appointments", status_code=201)
-def create_appointment(payload: AppointmentCreate, db=Depends(get_db), actor=Depends(get_current_user)) -> dict:
+def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     case = db.get(Case, payload.case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="پرونده یافت نشد")
@@ -127,7 +119,7 @@ def create_appointment(payload: AppointmentCreate, db=Depends(get_db), actor=Dep
 def update_appointment(
     appointment_id: uuid.UUID,
     payload: AppointmentUpdate,
-    db=Depends(get_db),
+    db: Session = Depends(get_db),
     actor=Depends(get_current_user),
 ) -> dict:
     a = db.get(Appointment, appointment_id)
@@ -164,12 +156,14 @@ def update_appointment(
 
 
 @router.get("/worklists/counselor-appointments")
-def counselor_appointments(db=Depends(get_db), actor=Depends(require_roles("COUNSELOR"))) -> dict:
+def counselor_appointments(db: Session = Depends(get_db), actor=Depends(require_roles("COUNSELOR"))) -> dict:
     """کارتابل مشاور - نوبت‌های امروز و آینده (بند ۹.۱)"""
     c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
     if c is None:
         return {"items": []}
-    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min)
+    today_start = datetime.combine(
+        datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc
+    )
     rows = db.execute(
         select(Appointment, Case, Applicant)
         .join(Case, Appointment.case_id == Case.id)
