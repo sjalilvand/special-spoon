@@ -5,16 +5,15 @@
 
 ## پیش‌نیازها
 
-- Docker Desktop (شامل Docker Compose v2)
+- Docker Desktop (شامل Docker Compose v2) — حتماً اجرا باشد
 - Git
 
 ## راه‌اندازی عملیاتی
 
-1) تنظیمات محیط:
+1) تنظیمات محیط (اسکریپت‌ها این کار را خودکار انجام می‌دهند؛ برای دستی):
 
     Copy-Item .env.example .env
-
-    سپس در فایل .env مقدار POSTGRES_PASSWORD و همان مقدار داخل DATABASE_URL را تغییر دهید.
+    # مقادیر POSTGRES_PASSWORD و AUTH_SECRET_KEY را تصادفی کنید (در DATABASE_URL هم)
 
 2) ساخت و اجرا:
 
@@ -23,13 +22,21 @@
     docker compose run --rm migrate
     docker compose up -d
 
-3) دسترسی:
+3) ایجاد مدیر اولیه (فرمان امن — بند ۴.۲ سند):
+
+    docker compose run --rm api python create_admin.py
+
+    نام کاربری و رمز تصادفی فقط یک بار چاپ می‌شود؛ آن را در جای امن ذخیره کنید.
+    در اولین ورود، تغییر رمز الزامی است (must_change_password).
+
+4) دسترسی:
 
     - وب:          http://localhost:8080
     - مستندات API:  http://localhost:8080/api/v1/docs
 
-نکته امنیتی (بند ۴.۲ سند): ایجاد «مدیر اولیه» در فاز ۲ از طریق فرمان امن اضافه می‌شود؛
-هیچ رمز ثابتی در کد یا Docker وجود ندارد.
+نکته: مقدار ENVIRONMENT=development فقط برای تست محلی روی HTTP است.
+پیش از ورود داده واقعی: HTTPS فعال شود و ENVIRONMENT=production قرار گیرد
+(Cookie مربوط به Refresh Token در production فقط Secure ارسال می‌شود).
 
 ## توسعه
 
@@ -56,7 +63,7 @@
 ## وضعیت فازها (بند ۱۶ سند)
 
 - [x] فاز ۱: اسکلت FastAPI، React، PostgreSQL و Docker
-- [ ] فاز ۲: ورود، نقش‌ها، مدیر اولیه و مدیریت حساب
+- [x] فاز ۲: ورود، نقش‌ها، مدیر اولیه و مدیریت حساب
 - [ ] فاز ۳: مشاوران، متقاضیان و سه قالب اکسل
 - [ ] فاز ۴: تشکیل پرونده، رضایت و تخصیص
 - [ ] فاز ۵: فرم ثابت نسخه‌دار و ثبت ارزیابی

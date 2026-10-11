@@ -1,0 +1,256 @@
+import time
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_current_user_optional
+from app.core.config import get_settings
+from app.core.security import (
+    create_access_token,
+    generate_activation_token,
+    generate_refresh_token,
+    hash_password,
+    hash_token,
+    verify_password,
+)
+from app.db.session import get_db
+from app.models.user import ActivationToken, AuthSession, User, UserStatus
+from app.schemas.auth import (
+    ActivateRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    TokenResponse,
+)
+from app.services.audit import record_audit
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+settings = get_settings()
+
+REFRESH_COOKIE = "rosepsy_refresh"
+
+# کنترل تلاش‌های ورود - بند ۴.۲ سند (کنترل در حافظه برای نسخه اول)
+_failed_attempts: dict[str, list[float]] = {}
+_attempts_lock = Lock()
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _register_failed_attempt(key: str) -> None:
+    now = time.monotonic()
+    window = settings.login_attempt_window_minutes * 60
+    with _attempts_lock:
+        attempts = [t for t in _failed_attempts.get(key, []) if now - t < window]
+        attempts.append(now)
+        _failed_attempts[key] = attempts
+
+
+def _is_blocked(key: str) -> bool:
+    now = time.monotonic()
+    window = settings.login_attempt_window_minutes * 60
+    with _attempts_lock:
+        attempts = [t for t in _failed_attempts.get(key, []) if now - t < window]
+        return len(attempts) >= settings.login_max_attempts
+
+
+def _clear_attempts(key: str) -> None:
+    with _attempts_lock:
+        _failed_attempts.pop(key, None)
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=token,
+        max_age=settings.refresh_token_expire_days * 24 * 3600,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/api/v1/auth",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(key=REFRESH_COOKIE, path="/api/v1/auth")
+
+
+def _revoke_all_sessions(db: Session, user_id) -> None:
+    now = datetime.now(timezone.utc)
+    sessions = db.scalars(
+        select(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+    ).all()
+    for s in sessions:
+        s.revoked_at = now
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(
+    payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
+) -> TokenResponse:
+    username = payload.username.strip().lower()
+    ip = _client_ip(request)
+    key = f"{username}|{ip}"
+
+    if _is_blocked(key):
+        raise HTTPException(status_code=429, detail="تلاش‌های ناموفق زیاد است؛ کمی بعد دوباره تلاش کنید")
+
+    user = db.scalar(select(User).where(User.username == username))
+    invalid = HTTPException(status_code=401, detail="نام کاربری یا رمز عبور نادرست است")
+
+    if user is None or not verify_password(user.password_hash, payload.password):
+        _register_failed_attempt(key)
+        record_audit(db, action="auth.login_failed", detail={"username": username, "ip": ip})
+        raise invalid
+
+    if user.status == UserStatus.DISABLED:
+        record_audit(db, action="auth.login_failed", actor_user_id=user.id, detail={"reason": "disabled", "ip": ip})
+        raise invalid
+
+    if user.status == UserStatus.PENDING:
+        raise HTTPException(status_code=403, detail="حساب در انتظار فعال‌سازی است")
+
+    _clear_attempts(key)
+    token, token_hash = generate_refresh_token()
+    session = AuthSession(
+        user_id=user.id,
+        refresh_token_hash=token_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+        ip=ip,
+        user_agent=(request.headers.get("user-agent") or "")[:400],
+    )
+    db.add(session)
+    user.last_login_at = datetime.now(timezone.utc)
+    db.commit()
+
+    record_audit(db, action="auth.login", actor_user_id=user.id, detail={"ip": ip})
+    _set_refresh_cookie(response, token)
+    return TokenResponse(
+        access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+        must_change_password=user.must_change_password,
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+    raw = request.cookies.get(REFRESH_COOKIE)
+    if not raw:
+        raise HTTPException(status_code=401, detail="نشستی یافت نشد؛ وارد شوید")
+
+    session = db.scalar(select(AuthSession).where(AuthSession.refresh_token_hash == hash_token(raw)))
+    now = datetime.now(timezone.utc)
+    if session is None or session.revoked_at is not None or session.expires_at < now:
+        raise HTTPException(status_code=401, detail="نشست منقضی شده است؛ وارد شوید")
+
+    user = db.get(User, session.user_id)
+    if user is None or user.status != UserStatus.ACTIVE:
+        session.revoked_at = now
+        db.commit()
+        raise HTTPException(status_code=401, detail="حساب فعال نیست")
+
+    # چرخش Refresh Token - بند ۴.۲ سند
+    session.revoked_at = now
+    new_token, new_hash = generate_refresh_token()
+    new_session = AuthSession(
+        user_id=user.id,
+        refresh_token_hash=new_hash,
+        expires_at=now + timedelta(days=settings.refresh_token_expire_days),
+        ip=_client_ip(request),
+        user_agent=(request.headers.get("user-agent") or "")[:400],
+    )
+    db.add(new_session)
+    db.commit()
+
+    _set_refresh_cookie(response, new_token)
+    return TokenResponse(
+        access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+        must_change_password=user.must_change_password,
+    )
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
+) -> dict:
+    raw = request.cookies.get(REFRESH_COOKIE)
+    if raw:
+        session = db.scalar(select(AuthSession).where(AuthSession.refresh_token_hash == hash_token(raw)))
+        if session and session.revoked_at is None:
+            session.revoked_at = datetime.now(timezone.utc)
+            db.commit()
+            if user is not None:
+                record_audit(db, action="auth.logout", actor_user_id=user.id)
+    _clear_refresh_cookie(response)
+    return {"status": "ok"}
+
+
+@router.get("/me")
+def me(user: User = Depends(get_current_user)) -> dict:
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "display_name": user.display_name,
+        "email": user.email,
+        "mobile": user.mobile,
+        "status": user.status,
+        "must_change_password": user.must_change_password,
+        "roles": sorted(r.code for r in user.roles),
+    }
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    if not verify_password(user.password_hash, payload.current_password):
+        raise HTTPException(status_code=400, detail="رمز عبور فعلی نادرست است")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="رمز جدید باید با رمز فعلی متفاوت باشد")
+
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = False
+    user.auth_version += 1
+    _revoke_all_sessions(db, user.id)
+    db.commit()
+    record_audit(db, action="auth.password_changed", actor_user_id=user.id)
+    _clear_refresh_cookie(response)
+    return {"status": "ok"}
+
+
+@router.post("/activate")
+def activate(payload: ActivateRequest, db: Session = Depends(get_db)) -> dict:
+    token_hash = hash_token(payload.token.strip())
+    activation = db.scalar(
+        select(ActivationToken).where(
+            ActivationToken.token_hash == token_hash,
+            ActivationToken.used_at.is_(None),
+            ActivationToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    if activation is None:
+        raise HTTPException(status_code=400, detail="توکن فعال‌سازی نامعتبر یا منقضی است")
+
+    user = db.get(User, activation.user_id)
+    if user is None:
+        raise HTTPException(status_code=400, detail="توکن فعال‌سازی نامعتبر است")
+
+    user.password_hash = hash_password(payload.new_password)
+    user.status = UserStatus.ACTIVE
+    user.must_change_password = False
+    user.auth_version += 1
+    activation.used_at = datetime.now(timezone.utc)
+    db.commit()
+    record_audit(db, action="auth.activated", actor_user_id=user.id)
+    return {"status": "ok"}

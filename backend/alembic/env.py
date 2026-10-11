@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.base import Base  # noqa: E402
+import app.models  # noqa: F401,E402  (ثبت مدل‌ها در metadata)
 
 config = context.config
 
@@ -20,7 +21,6 @@ database_url = os.getenv(
 )
 config.set_main_option("sqlalchemy.url", database_url)
 
-# فازهای بعدی: مدل‌های بند ۱۱ سند در app.models ثبت و از طریق app.db.base وارد می‌شوند
 target_metadata = Base.metadata
 
 
