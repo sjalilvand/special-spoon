@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.v1.applicants import router as applicants_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.cases import router as cases_router
 from app.api.v1.counselors import router as counselors_router
 from app.api.v1.health import router as health_router
 from app.api.v1.imports import router as imports_router
@@ -25,6 +26,7 @@ app.include_router(org_router, prefix=settings.api_prefix)
 app.include_router(counselors_router, prefix=settings.api_prefix)
 app.include_router(applicants_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
+app.include_router(cases_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
