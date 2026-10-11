@@ -5,7 +5,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { errDetail } from "../api/client";
 import { ASSESSMENT_STATUS_META, fetchCounselorWorklist } from "../api/assessments";
 
 export default function MyAssessmentsPage() {

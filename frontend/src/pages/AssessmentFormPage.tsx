@@ -9,7 +9,7 @@ import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import {
   ASSESSMENT_STATUS_META, approveAssessment, createAssessmentDraft, fetchAssessment,
-  fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
+  createRevision, fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
 } from "../api/assessments";
 import type { FormFieldDef } from "../api/assessments";
 import { fetchCase } from "../api/cases";
