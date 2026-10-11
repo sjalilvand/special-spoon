@@ -17,6 +17,7 @@ import { fetchServiceLocations } from "../api/people";
 import CaseAssessments from "../components/CaseAssessments";
 import CaseAppointments from "../components/CaseAppointments";
 import CaseSessions from "../components/CaseSessions";
+import CaseRecommendations from "../components/CaseRecommendations";
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -161,6 +162,7 @@ export default function CaseDetailPage() {
       <CaseAssessments caseId={c.id} />
       <CaseAppointments caseId={c.id} />
       <CaseSessions caseId={c.id} />
+      <CaseRecommendations caseId={c.id} />
       {editOpen && <EditDialog caseData={c} onClose={() => setEditOpen(false)} />}
       {assignOpen && <AssignDialog caseData={c} onClose={() => setAssignOpen(false)} />}
       {actionMode !== null && <ActionDialog mode={actionMode} caseData={c} onClose={() => setActionMode(null)} />}

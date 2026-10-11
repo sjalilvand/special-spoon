@@ -12,7 +12,9 @@ import HomePage from "../pages/HomePage";
 import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
+import MyPanelPage from "../pages/MyPanelPage";
 import ReviewsPage from "../pages/ReviewsPage";
+import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import UsersPage from "../pages/UsersPage";
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -59,11 +61,17 @@ export default function AppRoutes() {
       <Route path="/reviews" element={
         <ProtectedRoute roles={["TECHNICAL_SUPERVISOR"]}><Layout><ReviewsPage /></Layout></ProtectedRoute>
       } />
+      <Route path="/supervised-cases" element={
+        <ProtectedRoute roles={["TECHNICAL_SUPERVISOR"]}><Layout><SupervisorCasesPage /></Layout></ProtectedRoute>
+      } />
       <Route path="/my-assessments" element={
         <ProtectedRoute roles={["COUNSELOR"]}><Layout><MyAssessmentsPage /></Layout></ProtectedRoute>
       } />
       <Route path="/worklist" element={
         <ProtectedRoute roles={["COUNSELOR"]}><Layout><CounselorWorklistPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/me" element={
+        <ProtectedRoute roles={["APPLICANT"]}><Layout><MyPanelPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
