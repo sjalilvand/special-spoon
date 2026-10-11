@@ -1,3 +1,4 @@
+from app.models.assessment import Assessment, AssessmentStatus, FormVersion, ReviewAction
 from app.models.audit import AuditEvent
 from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Consent
 from app.models.import_job import ImportJob, ImportRow
@@ -7,6 +8,8 @@ from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus
 __all__ = [
     "ActivationToken",
     "Applicant",
+    "Assessment",
+    "AssessmentStatus",
     "AuditEvent",
     "AuthSession",
     "CASE_STATUSES",
@@ -15,9 +18,11 @@ __all__ = [
     "CaseStatus",
     "Consent",
     "Counselor",
+    "FormVersion",
     "ImportJob",
     "ImportRow",
     "OrganizationUnit",
+    "ReviewAction",
     "Role",
     "ServiceLocation",
     "User",
