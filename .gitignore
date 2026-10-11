@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# محرمانه - بند ۱۳.۲ سند: فایل تنظیمات واقعی خارج از مخزن
+.env
+*.local
+
+# پشتیبان‌ها
+backups/
+
+# توسعه
+backend/uploads_dev/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
