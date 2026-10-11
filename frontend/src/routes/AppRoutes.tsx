@@ -6,6 +6,7 @@ import AssessmentFormPage from "../pages/AssessmentFormPage";
 import CaseDetailPage from "../pages/CaseDetailPage";
 import CasesPage from "../pages/CasesPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
+import CounselorWorklistPage from "../pages/CounselorWorklistPage";
 import CounselorsPage from "../pages/CounselorsPage";
 import HomePage from "../pages/HomePage";
 import ImportsPage from "../pages/ImportsPage";
@@ -60,6 +61,9 @@ export default function AppRoutes() {
       } />
       <Route path="/my-assessments" element={
         <ProtectedRoute roles={["COUNSELOR"]}><Layout><MyAssessmentsPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/worklist" element={
+        <ProtectedRoute roles={["COUNSELOR"]}><Layout><CounselorWorklistPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

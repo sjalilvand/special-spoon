@@ -20,6 +20,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Button color="inherit" onClick={() => navigate("/cases")}>پرونده‌ها</Button>
           )}
           {has(["COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/worklist")}>کارتابل</Button>
+          )}
+          {has(["COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/my-assessments")}>ارزیابی‌های من</Button>
           )}
           {has(["TECHNICAL_SUPERVISOR"]) && (
