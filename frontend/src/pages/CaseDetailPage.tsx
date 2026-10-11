@@ -14,6 +14,7 @@ import {
 } from "../api/cases";
 import type { CaseDetail } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import CaseAssessments from "../components/CaseAssessments";
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -155,6 +156,7 @@ export default function CaseDetailPage() {
         </TableContainer>
       </Paper>
 
+      <CaseAssessments caseId={c.id} />
       {editOpen && <EditDialog caseData={c} onClose={() => setEditOpen(false)} />}
       {assignOpen && <AssignDialog caseData={c} onClose={() => setAssignOpen(false)} />}
       {actionMode !== null && <ActionDialog mode={actionMode} caseData={c} onClose={() => setActionMode(null)} />}

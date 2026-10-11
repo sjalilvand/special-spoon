@@ -3,7 +3,7 @@ import { tokenStore } from "../auth/tokenStore";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api/v1",
-  withCredentials: true, // ارسال Cookie برای Refresh Token - بند ۴.۲ سند
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -13,14 +13,12 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// مسیرهایی که خطای 401 آن‌ها نباید باعث تلاش Refresh شود
 const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/activate"];
 
 let refreshPromise: Promise<string | null> | null = null;
 
 async function callRefresh(): Promise<string | null> {
   try {
-    // با axios خام تا حلقه interceptor ایجاد نشود
     const res = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, {}, { withCredentials: true });
     return res.data.access_token as string;
   } catch {
@@ -58,6 +56,15 @@ apiClient.interceptors.response.use(
 );
 
 export function errDetail(e: unknown): string {
-  const anyE = e as { response?: { data?: { detail?: string } } };
-  return anyE?.response?.data?.detail ?? "خطای نامشخص رخ داد";
+  const anyE = e as { response?: { data?: { detail?: unknown } } };
+  const d = anyE?.response?.data?.detail;
+  if (typeof d === "string") return d;
+  if (d && typeof d === "object") {
+    const obj = d as { message?: string; errors?: { label?: string; error?: string }[] };
+    const errs = (obj.errors ?? [])
+      .map((x) => `${x.label ?? ""}: ${x.error ?? ""}`.trim())
+      .filter(Boolean);
+    return [obj.message, ...errs].filter(Boolean).join(" — ");
+  }
+  return "خطای نامشخص رخ داد";
 }

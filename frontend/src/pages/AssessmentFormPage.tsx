@@ -1,0 +1,365 @@
+import {
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, FormControlLabel, MenuItem, Paper, Stack, TextField, Typography,
+} from "@mui/material";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { errDetail } from "../api/client";
+import {
+  ASSESSMENT_STATUS_META, approveAssessment, createAssessmentDraft, fetchAssessment,
+  fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
+} from "../api/assessments";
+import type { FormFieldDef } from "../api/assessments";
+import { fetchCase } from "../api/cases";
+
+export default function AssessmentFormPage() {
+  const params = useParams<{ id?: string; caseId?: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { user } = useAuth();
+
+  const [currentId, setCurrentId] = useState<string | null>(params.id ?? null);
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [rowVersion, setRowVersion] = useState(1);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [busySave, setBusySave] = useState(false);
+  const [busyFinalize, setBusyFinalize] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnComment, setReturnComment] = useState("");
+
+  const { data: def, isLoading: defLoading } = useQuery({
+    queryKey: ["form-def"],
+    queryFn: fetchFormDefinition,
+  });
+
+  const { data: existing, isLoading: existingLoading } = useQuery({
+    queryKey: ["assessment", currentId],
+    queryFn: () => fetchAssessment(currentId!),
+    enabled: Boolean(currentId),
+  });
+
+  const { data: caseInfo } = useQuery({
+    queryKey: ["case", params.caseId],
+    queryFn: () => fetchCase(params.caseId!),
+    enabled: !currentId && Boolean(params.caseId),
+  });
+
+  useEffect(() => {
+    if (existing && loadedFor !== existing.id) {
+      setAnswers(existing.answers ?? {});
+      setRowVersion(existing.row_version);
+      setLoadedFor(existing.id);
+    }
+  }, [existing, loadedFor]);
+
+  const status = existing?.status ?? "draft";
+  const editable = !currentId
+    ? true
+    : Boolean(
+        existing &&
+        existing.author_user_id === user?.id &&
+        (existing.status === "draft" || existing.status === "returned")
+      );
+  const canReview = Boolean(
+    existing &&
+    existing.status === "pending_review" &&
+    user?.roles.includes("TECHNICAL_SUPERVISOR") &&
+    user?.id !== existing.author_user_id
+  );
+  const isRevisionable = Boolean(
+    existing &&
+    existing.author_user_id === user?.id &&
+    (existing.status === "pending_review" || existing.status === "approved")
+  );
+
+  const setValue = (path: string, v: unknown) => setAnswers((p) => ({ ...p, [path]: v }));
+
+  const ensureSaved = async (): Promise<{ id: string; rowVersion: number }> => {
+    if (!currentId) {
+      const res = await createAssessmentDraft(params.caseId!, answers);
+      setCurrentId(res.id);
+      navigate(`/assessments/${res.id}`, { replace: true });
+      return { id: res.id, rowVersion: res.row_version };
+    }
+    const res = await saveAssessmentDraft(currentId, answers, rowVersion);
+    setRowVersion(res.row_version);
+    return { id: currentId, rowVersion: res.row_version };
+  };
+
+  const refreshAll = (id: string) => {
+    qc.invalidateQueries({ queryKey: ["assessment", id] });
+    qc.invalidateQueries();
+  };
+
+  const doSave = async () => {
+    setBusySave(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const s = await ensureSaved();
+      setMessage("پیش‌نویس ذخیره شد.");
+      refreshAll(s.id);
+    } catch (e) {
+      setError(errDetail(e));
+    } finally {
+      setBusySave(false);
+    }
+  };
+
+  const doFinalize = async () => {
+    setBusyFinalize(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const s = await ensureSaved();
+      await finalizeAssessment(s.id, s.rowVersion);
+      setConfirmFinalize(false);
+      setMessage("ارزیابی نهایی شد و به صف بررسی مسئول فنی رفت.");
+      refreshAll(s.id);
+    } catch (e) {
+      setError(errDetail(e));
+      setConfirmFinalize(false);
+    } finally {
+      setBusyFinalize(false);
+    }
+  };
+
+  const doApprove = async () => {
+    if (!currentId || !window.confirm("تأیید این ارزیابی؟")) return;
+    setError(null);
+    try {
+      await approveAssessment(currentId);
+      setMessage("ارزیابی تأیید شد.");
+      refreshAll(currentId);
+    } catch (e) {
+      setError(errDetail(e));
+    }
+  };
+
+  const doReturn = async () => {
+    if (!currentId) return;
+    if (returnComment.trim().length < 5) {
+      setError("ثبت توضیح برای برگشت الزامی است (بند ۷.۲)");
+      return;
+    }
+    setError(null);
+    try {
+      await returnAssessment(currentId, returnComment.trim());
+      setReturnOpen(false);
+      setReturnComment("");
+      setMessage("ارزیابی برای اصلاح به مشاور برگشت داده شد.");
+      refreshAll(currentId);
+    } catch (e) {
+      setError(errDetail(e));
+    }
+  };
+
+  const doRevision = async () => {
+    if (!currentId || !window.confirm("ایجاد نسخه اصلاحی جدید متصل به این نسخه؟")) return;
+    setError(null);
+    try {
+      const res = await createRevision(currentId);
+      navigate(`/assessments/${res.id}`, { replace: true });
+      setCurrentId(res.id);
+      setLoadedFor(null);
+      setMessage("نسخه اصلاحی ایجاد شد.");
+      qc.invalidateQueries();
+    } catch (e) {
+      setError(errDetail(e));
+    }
+  };
+
+  if (defLoading || (currentId && existingLoading)) return <CircularProgress />;
+  if (!def) return <Alert severity="error">تعریف فرم بارگذاری نشد.</Alert>;
+
+  const st = ASSESSMENT_STATUS_META[status] ?? { label: status, color: "default" as const };
+  const headerCaseNumber = existing?.case_number ?? caseInfo?.case_number ?? "—";
+  const headerApplicant = existing?.applicant_name ?? caseInfo?.applicant_name ?? "—";
+
+  return (
+    <Stack spacing={2}>
+      <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
+        <Typography variant="h6" fontWeight={700}>
+          فرم {def.code} — نسخه {def.version}
+        </Typography>
+        <Chip size="small" color={st.color} label={st.label} />
+        <Typography variant="body2" color="text.secondary">
+          پرونده {headerCaseNumber} — {headerApplicant}
+          {existing ? ` — نسخه شماره ${existing.version_no}` : ""}
+        </Typography>
+        <Box flexGrow={1} />
+        {editable && (
+          <>
+            <Button variant="outlined" onClick={doSave} disabled={busySave}>
+              {busySave ? "در حال ذخیره…" : "ذخیره پیش‌نویس"}
+            </Button>
+            <Button variant="contained" onClick={() => setConfirmFinalize(true)} disabled={busyFinalize}>
+              نهایی‌سازی
+            </Button>
+          </>
+        )}
+        {canReview && (
+          <>
+            <Button variant="contained" color="success" onClick={doApprove}>تأیید</Button>
+            <Button variant="outlined" color="error" onClick={() => setReturnOpen(true)}>برگشت</Button>
+          </>
+        )}
+        {isRevisionable && (
+          <Button variant="outlined" onClick={doRevision}>ایجاد نسخه اصلاحی</Button>
+        )}
+      </Box>
+
+      {status === "returned" && (
+        <Alert severity="warning">
+          این نسخه توسط مسئول فنی برگشت خورده است؛ پس از اصلاح، دوباره نهایی‌سازی کنید.
+        </Alert>
+      )}
+      {message && <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+
+      {def.sections.map((sec) => (
+        <Paper key={sec.key} sx={{ p: 2 }}>
+          <Typography variant="subtitle1" fontWeight={700} mb={1.5}>{sec.title}</Typography>
+          {editable ? (
+            <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={2}>
+              {sec.fields.map((f) => {
+                const path = `${sec.key}.${f.key}`;
+                return (
+                  <Box key={path} gridColumn={f.type === "textarea" ? "1 / -1" : undefined}>
+                    <FieldInput field={f} path={path} value={answers[path]} onChange={setValue} />
+                  </Box>
+                );
+              })}
+            </Box>
+          ) : (
+            <Stack spacing={0.5}>
+              {sec.fields.map((f) => {
+                const path = `${sec.key}.${f.key}`;
+                return <ReadOnlyField key={path} def={f} value={answers[path]} />;
+              })}
+            </Stack>
+          )}
+        </Paper>
+      ))}
+
+      {existing && existing.review_actions.length > 0 && (
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle1" fontWeight={700} mb={1}>سوابق بررسی</Typography>
+          <Stack spacing={1}>
+            {existing.review_actions.map((r) => (
+              <Stack key={r.id} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Chip size="small" color={r.decision === "approved" ? "success" : "error"}
+                  label={r.decision === "approved" ? "تأیید" : "برگشت"} />
+                <Typography variant="body2">{r.reviewer_name ?? "—"}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {r.created_at ? new Date(r.created_at).toLocaleString("fa-IR") : "—"}
+                </Typography>
+                {r.comment && <Typography variant="body2">توضیح: {r.comment}</Typography>}
+              </Stack>
+            ))}
+          </Stack>
+        </Paper>
+      )}
+
+      <Dialog open={confirmFinalize} onClose={() => setConfirmFinalize(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>نهایی‌سازی ارزیابی</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            فیلدهای لازم در سرور کنترل می‌شوند. پس از نهایی‌سازی، فرم بی‌ردپا تغییر نمی‌کند و
+            برای اصلاح باید نسخه جدید ساخت (بند ۶.۲).
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmFinalize(false)}>انصراف</Button>
+          <Button variant="contained" onClick={doFinalize} disabled={busyFinalize}>
+            {busyFinalize ? "در حال نهایی‌سازی…" : "نهایی‌سازی"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={returnOpen} onClose={() => setReturnOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>برگشت برای اصلاح</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus fullWidth multiline minRows={3} margin="normal"
+            label="توضیح برگشت (الزامی — بند ۷.۲)"
+            value={returnComment}
+            onChange={(e) => setReturnComment(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReturnOpen(false)}>انصراف</Button>
+          <Button variant="contained" color="error" onClick={doReturn}>ثبت برگشت</Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
+  );
+}
+
+function FieldInput({
+  field, path, value, onChange,
+}: {
+  field: FormFieldDef;
+  path: string;
+  value: unknown;
+  onChange: (path: string, v: unknown) => void;
+}) {
+  const label = field.label + (field.required ? " *" : "");
+  if (field.type === "boolean") {
+    return (
+      <FormControlLabel
+        control={<Checkbox checked={Boolean(value)} onChange={(e) => onChange(path, e.target.checked)} />}
+        label={field.label}
+      />
+    );
+  }
+  if (field.type === "select") {
+    return (
+      <TextField
+        select fullWidth size="small" label={label}
+        value={(value as string) ?? ""}
+        onChange={(e) => onChange(path, e.target.value || undefined)}
+      >
+        <MenuItem value="">—</MenuItem>
+        {field.options.map((o) => (
+          <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+        ))}
+      </TextField>
+    );
+  }
+  if (field.type === "textarea") {
+    return (
+      <TextField fullWidth multiline minRows={2} size="small" label={label}
+        value={(value as string) ?? ""}
+        onChange={(e) => onChange(path, e.target.value || undefined)} />
+    );
+  }
+  return (
+    <TextField fullWidth size="small" label={label}
+      value={(value as string) ?? ""}
+      onChange={(e) => onChange(path, e.target.value || undefined)} />
+  );
+}
+
+function ReadOnlyField({ def, value }: { def: FormFieldDef; value: unknown }) {
+  let display = "—";
+  if (def.type === "boolean") {
+    display = value ? "بله" : "خیر";
+  } else if (def.type === "select") {
+    const v = value as string | undefined;
+    display = v ? (def.options.find((o) => o.value === v)?.label ?? v) : "—";
+  } else if (typeof value === "string" && value.trim()) {
+    display = value;
+  }
+  return (
+    <Stack direction="row" spacing={1}>
+      <Typography variant="body2" sx={{ minWidth: 220, color: "text.secondary" }}>{def.label}:</Typography>
+      <Typography variant="body2">{display}</Typography>
+    </Stack>
+  );
+}
