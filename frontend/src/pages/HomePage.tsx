@@ -1,38 +1,30 @@
-import { Chip, Container, Paper, Stack, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
-import { apiClient } from "../api/client";
-
-interface HealthResponse {
-  status: string;
-}
+import { Chip, Paper, Stack, Typography } from "@mui/material";
+import { useAuth } from "../auth/AuthContext";
+import { roleTitle } from "../api/auth";
 
 export default function HomePage() {
-  const [apiStatus, setApiStatus] = useState<string>("در حال بررسی…");
-
-  useEffect(() => {
-    apiClient
-      .get<HealthResponse>("/health")
-      .then((res) => setApiStatus(res.data.status === "ok" ? "متصل" : "نامشخص"))
-      .catch(() => setApiStatus("قطع"));
-  }, []);
+  const { user } = useAuth();
+  if (!user) return null;
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 10 }}>
-      <Paper elevation={3} sx={{ p: 5, textAlign: "center" }}>
-        <Typography variant="h3" fontWeight={700} gutterBottom>
-          Rosepsy
+    <Paper sx={{ p: 4 }}>
+      <Typography variant="h5" fontWeight={700}>
+        خوش آمدید، {user.display_name}
+      </Typography>
+      <Stack direction="row" spacing={1} mt={2} flexWrap="wrap" useFlexGap>
+        {user.roles.map((r) => (
+          <Chip key={r} label={roleTitle(r)} color="primary" variant="outlined" />
+        ))}
+      </Stack>
+      <Typography mt={3} color="text.secondary">
+        فاز ۲ تکمیل شد: ورود، نقش‌ها، مدیر اولیه و مدیریت حساب.
+        فاز بعدی: مشاوران، متقاضیان و سه قالب اکسل (بند ۸ سند).
+      </Typography>
+      {user.must_change_password && (
+        <Typography mt={1} color="warning.main">
+          تغییر رمز عبور اولیه الزامی است — از منوی بالا «تغییر رمز» را انتخاب کنید.
         </Typography>
-        <Typography variant="h6" color="text.secondary" gutterBottom>
-          سامانه مشاوره روان‌شناختی سازمانی — RS-PS-04-01
-        </Typography>
-        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 4 }}>
-          <Chip
-            label={`وضعیت API: ${apiStatus}`}
-            color={apiStatus === "متصل" ? "success" : "warning"}
-          />
-          <Chip label="فاز ۱ — اسکلت پایه" variant="outlined" />
-        </Stack>
-      </Paper>
-    </Container>
+      )}
+    </Paper>
   );
 }
