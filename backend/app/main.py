@@ -8,8 +8,11 @@ from app.api.v1.cases import router as cases_router
 from app.api.v1.counselors import router as counselors_router
 from app.api.v1.health import router as health_router
 from app.api.v1.imports import router as imports_router
+from app.api.v1.me import router as me_router
 from app.api.v1.org import router as org_router
+from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.sessions import router as sessions_router
+from app.api.v1.supervisor import router as supervisor_router
 from app.api.v1.users import router as users_router
 from app.core.config import get_settings
 
@@ -33,6 +36,9 @@ app.include_router(cases_router, prefix=settings.api_prefix)
 app.include_router(assessments_router, prefix=settings.api_prefix)
 app.include_router(appointments_router, prefix=settings.api_prefix)
 app.include_router(sessions_router, prefix=settings.api_prefix)
+app.include_router(recommendations_router, prefix=settings.api_prefix)
+app.include_router(me_router, prefix=settings.api_prefix)
+app.include_router(supervisor_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
