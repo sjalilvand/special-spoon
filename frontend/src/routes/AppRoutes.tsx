@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "../components/Layout";
 import ActivatePage from "../pages/ActivatePage";
 import ApplicantsPage from "../pages/ApplicantsPage";
+import CaseDetailPage from "../pages/CaseDetailPage";
+import CasesPage from "../pages/CasesPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import CounselorsPage from "../pages/CounselorsPage";
 import HomePage from "../pages/HomePage";
@@ -9,6 +11,8 @@ import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
 import UsersPage from "../pages/UsersPage";
 import ProtectedRoute from "./ProtectedRoute";
+
+const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
 
 export default function AppRoutes() {
   return (
@@ -34,6 +38,12 @@ export default function AppRoutes() {
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
           <Layout><ImportsPage /></Layout>
         </ProtectedRoute>
+      } />
+      <Route path="/cases" element={
+        <ProtectedRoute roles={CASE_ROLES}><Layout><CasesPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/cases/:id" element={
+        <ProtectedRoute roles={CASE_ROLES}><Layout><CaseDetailPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

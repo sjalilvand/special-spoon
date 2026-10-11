@@ -16,8 +16,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 700 }} onClick={() => navigate("/")}>
             Rosepsy
           </Typography>
-          {has(["SYSTEM_ADMIN"]) && (
-            <Button color="inherit" onClick={() => navigate("/users")}>کاربران</Button>
+          {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/cases")}>پرونده‌ها</Button>
           )}
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]) && (
             <Button color="inherit" onClick={() => navigate("/counselors")}>مشاوران</Button>
@@ -27,6 +27,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]) && (
             <Button color="inherit" onClick={() => navigate("/imports")}>ورود اکسل</Button>
+          )}
+          {has(["SYSTEM_ADMIN"]) && (
+            <Button color="inherit" onClick={() => navigate("/users")}>کاربران</Button>
           )}
           <Box flexGrow={1} />
           <Button color="inherit" onClick={() => navigate("/change-password")}>تغییر رمز</Button>
