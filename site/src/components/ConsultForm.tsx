@@ -50,7 +50,7 @@ export default function ConsultForm() {
         full_name: fullName.trim(),
         mobile: mobile.trim(),
         topic,
-        preferred_date: toIsoDate(dateVal),
+        preferred_date: safeJalaliToIso(dateVal),
         preferred_slot: slot || undefined,
         city: city.trim() || undefined,
         referral_source: source || undefined,
@@ -149,6 +149,7 @@ export default function ConsultForm() {
                     calendar={persian}
                     locale={persian_fa}
                     containerStyle={{ width: "100%" }}
+                    placeholder="انتخاب تاریخ (کلیک = تقویم شمسی)"
                   />
                 </Box>
                 <TextField
