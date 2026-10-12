@@ -106,7 +106,7 @@ def list_consultation_requests(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _actor=Depends(require_roles("ORG_MANAGER", "RECEPTION")),
+    _actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN")),
 ) -> dict:
     q = select(ConsultationRequest)
     if status in ("new", "in_review", "converted", "archived"):

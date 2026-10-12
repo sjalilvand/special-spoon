@@ -35,6 +35,7 @@ export default function JalaliDateField({
         calendar={persian}
         locale={persian_fa}
         containerStyle={{ width: "100%" }}
+        placeholder="انتخاب تاریخ (کلیک = تقویم شمسی)"
         inputClass="rdp-input"
       />
     </Box>

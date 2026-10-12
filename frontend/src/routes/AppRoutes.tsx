@@ -66,7 +66,7 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/consultation-requests" element={
-        <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION"]}>
+        <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"]}>
           <Layout><ConsultationRequestsPage /></Layout>
         </ProtectedRoute>
       } />
