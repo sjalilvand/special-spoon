@@ -1,4 +1,6 @@
-import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  Alert, Box, Button, Container, MenuItem, Paper, Stack, TextField, Typography,
+} from "@mui/material";
 import { FormEvent, useState } from "react";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -6,13 +8,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { postConsultation } from "../api";
 import { texts } from "../content/texts";
 
-interface JalaliShape {
-  year: number;
-  monthNumber: number;
-  day: number;
-}
-
-function toIsoDate(d: JalaliShape | null): string | undefined {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toIsoDate(d: any): string | undefined {
   if (!d || typeof d.year !== "number") return undefined;
   return new Date(Date.UTC(d.year, d.monthNumber - 1, d.day)).toISOString().slice(0, 10);
 }
@@ -22,7 +19,8 @@ export default function ConsultForm() {
   const [mobile, setMobile] = useState("");
   const [topic, setTopic] = useState("");
   const [slot, setSlot] = useState("");
-  const [dateVal, setDateVal] = useState<JalaliShape | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [dateVal, setDateVal] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [busy, setBusy] = useState(false);
@@ -121,7 +119,7 @@ export default function ConsultForm() {
                   </Typography>
                   <DatePicker
                     value={dateVal}
-                    onChange={(d) => setDateVal(d as unknown as JalaliShape | null)}
+                    onChange={(d) => setDateVal(d)}
                     calendar={persian}
                     locale={persian_fa}
                     containerStyle={{ width: "100%" }}
