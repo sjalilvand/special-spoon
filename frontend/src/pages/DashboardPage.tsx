@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
-import { CASE_STATUS_META, CONSENT_META, PRIORITY_LABELS } from "../api/cases";
+import { CASE_STATUS_META } from "../api/cases";
 import { fetchCounselorOptions } from "../api/cases";
 import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import { fetchReportSummary } from "../api/reports";
@@ -259,7 +259,6 @@ export default function DashboardPage() {
           {roles.includes("TECHNICAL_SUPERVISOR") && (
             <QuickLink to="/reviews" label="بررسی‌های فنی" desc="ارزیابی‌های منتظر تأیید" />
           )}
-          {roles.includes("ORG_MANAGER", ) === false && null}
         </Box>
       </Box>
 

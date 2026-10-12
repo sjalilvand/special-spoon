@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
 import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselor } from "../api/people";
-import { uploadCounselorPhoto } from "../api/siteops";
 import type { Counselor } from "../api/people";
 import JalaliDateField from "../components/JalaliDateField";
 
@@ -23,7 +22,6 @@ export default function CounselorsPage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [photoRow, setPhotoRow] = useState<Counselor | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["counselors", page, search],
@@ -87,7 +85,6 @@ export default function CounselorsPage() {
                     }}>
                       {row.status === "active" ? "غیرفعال" : "فعال"}
                     </Button>
-                    <Button size="small" onClick={() => setPhotoRow(row)}>عکس</Button>
                   </TableCell>
                 </TableRow>
               );
@@ -100,27 +97,6 @@ export default function CounselorsPage() {
       </TableContainer>
 
       <CreateDialog open={open} onClose={() => setOpen(false)} onError={setError} />
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        style={{ display: "none" }}
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f || !photoRow) return;
-          if (f.size > 2 * 1024 * 1024) { setError("حجم عکس باید کمتر از ۲ مگابایت باشد"); setPhotoRow(null); return; }
-          try {
-            await uploadCounselorPhoto(photoRow.id, f);
-            setError(null);
-            alert("عکس مشاور ذخیره شد و در سایت عمومی نمایش داده می‌شود.");
-            queryClient.invalidateQueries({ queryKey: ["counselors"] });
-          } catch (err) {
-            setError(errDetail(err));
-          } finally {
-            setPhotoRow(null);
-          }
-        }}
-      />
     </Stack>
   );
 }
@@ -180,16 +156,16 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
           {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
           <Stack spacing={2} mt={1}>
             <TextField label="کد مشاور *" value={form.counselor_code ?? ""} onChange={set("counselor_code")} required />
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2}>
               <TextField label="نام *" fullWidth value={form.first_name ?? ""} onChange={set("first_name")} required />
               <TextField label="نام خانوادگی *" fullWidth value={form.last_name ?? ""} onChange={set("last_name")} required />
             </Stack>
             <TextField label="کد ملی (متن، ۱۰ رقم)" value={form.national_id ?? ""} onChange={set("national_id")} />
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2}>
               <TextField label="عنوان حرفه‌ای" fullWidth value={form.professional_title ?? ""} onChange={set("professional_title")} />
               <TextField label="تخصص" fullWidth value={form.specialty ?? ""} onChange={set("specialty")} />
             </Stack>
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2}>
               <TextField label="شماره مجوز" fullWidth value={form.license_number ?? ""} onChange={set("license_number")} />
               <TextField label="ظرفیت" type="number" fullWidth value={form.capacity ?? ""} onChange={set("capacity")} />
             </Stack>
@@ -198,7 +174,6 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
               value={undefined}
               onChange={(iso) => setLicenseExpiry(iso)}
             />
-            </Stack>
             <TextField label="تماس کاری (متن)" value={form.work_mobile ?? ""} onChange={set("work_mobile")} />
             <FormControl fullWidth size="small">
               <InputLabel>محل خدمت</InputLabel>
