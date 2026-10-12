@@ -7,39 +7,59 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
-import { CONSULT_STATUS_META, fetchConsultationRequests, updateConsultationRequest } from "../api/siteops";
+import {
+  CONSULT_STATUS_META, createManualConsultationRequest, fetchConsultationRequests,
+  updateConsultationRequest,
+} from "../api/siteops";
 import type { ConsultationRow } from "../api/siteops";
 import { convertConsultationRequest } from "../api/referrals";
 import { fetchCounselorOptions } from "../api/cases";
 import type { OptionRow } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import JalaliDateField from "../components/JalaliDateField";
+
+const TOPICS = ["مشاوره فردی", "زوج‌درمانی", "مشاوره کودک و نوجوان", "درمان گروهی", "نوروفیدبک", "سایر"];
+const SLOTS = ["صبح", "عصر", "هر زمان"];
 
 export default function ConsultationRequestsPage() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const roles = user?.roles ?? [];
+  const canCreate =
+    roles.includes("ORG_MANAGER") || roles.includes("RECEPTION") || roles.includes("COUNSELOR");
+
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [convertRow, setConvertRow] = useState<ConsultationRow | null>(null);
   const [followRow, setFollowRow] = useState<ConsultationRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["consultations", page, status],
     queryFn: () => fetchConsultationRequests({ page: page + 1, status: status || undefined }),
   });
 
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["consultations"] });
+
   return (
     <Stack spacing={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} flexWrap="wrap">
-        <Typography variant="h6" fontWeight={700}>درخواست‌های مشاوره (سایت عمومی)</Typography>
-        <FormControl size="small" sx={{ minWidth: 170 }}>
-          <InputLabel>وضعیت</InputLabel>
-          <Select value={status} label="وضعیت" onChange={(e) => { setPage(0); setStatus(e.target.value); }}>
-            <MenuItem value="">همه</MenuItem>
-            {Object.entries(CONSULT_STATUS_META).map(([k, v]) => (
-              <MenuItem key={k} value={k}>{v.label}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Typography variant="h6" fontWeight={700}>درخواست‌های مشاوره</Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {canCreate && (
+            <Button variant="contained" onClick={() => setCreateOpen(true)}>ثبت درخواست جدید</Button>
+          )}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>وضعیت</InputLabel>
+            <Select value={status} label="وضعیت" onChange={(e) => { setPage(0); setStatus(e.target.value); }}>
+              <MenuItem value="">همه</MenuItem>
+              {Object.entries(CONSULT_STATUS_META).map(([k, v]) => (
+                <MenuItem key={k} value={k}>{v.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
       </Box>
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -88,7 +108,7 @@ export default function ConsultationRequestsPage() {
                   </TableCell>
                   <TableCell>
                     <Chip size="small" variant="outlined"
-                      color={row.contact_attempts > 0 ? "primary" : "default"}
+                      color={(row.contact_attempts ?? 0) > 0 ? "primary" : "default"}
                       label={`${(row.contact_attempts ?? 0).toLocaleString("fa-IR")} تماس`} />
                   </TableCell>
                   <TableCell>
@@ -117,19 +137,249 @@ export default function ConsultationRequestsPage() {
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} از ${count}`} />
       </TableContainer>
 
+      <CreateManualDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        invalidate={invalidate}
+        onError={setError}
+      />
       <ConvertDialog
         row={convertRow}
         onClose={() => setConvertRow(null)}
-        invalidate={() => qc.invalidateQueries({ queryKey: ["consultations"] })}
+        invalidate={invalidate}
         onError={setError}
       />
       <FollowUpDialog
         row={followRow}
         onClose={() => setFollowRow(null)}
-        invalidate={() => qc.invalidateQueries({ queryKey: ["consultations"] })}
+        invalidate={invalidate}
         onError={setError}
       />
     </Stack>
+  );
+}
+
+function CreateManualDialog({ open, onClose, invalidate, onError }: {
+  open: boolean; onClose: () => void; invalidate: () => void; onError: (m: string) => void;
+}) {
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [preferredDate, setPreferredDate] = useState<string | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) { setForm({}); setPreferredDate(undefined); setFormError(null); setSuccess(null); }
+  }, [open]);
+
+  const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setBusy(true);
+    try {
+      await createManualConsultationRequest({
+        full_name: form.full_name?.trim() || "",
+        mobile: form.mobile?.trim() || "",
+        topic: form.topic || "",
+        preferred_date: preferredDate,
+        preferred_slot: form.preferred_slot || undefined,
+        city: form.city?.trim() || undefined,
+        referral_source: form.referral_source?.trim() || undefined,
+        message: form.message?.trim() || undefined,
+        reception_note: form.reception_note?.trim() || undefined,
+      });
+      setSuccess("درخواست ثبت شد. از جدول قابل پیگیری و تبدیل است.");
+      invalidate();
+    } catch (err) {
+      setFormError(errDetail(err));
+      onError(errDetail(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <form onSubmit={submit}>
+        <DialogTitle>ثبت درخواست مشاوره (حضوری/تلفنی)</DialogTitle>
+        <DialogContent>
+          {success && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              {success}
+              <Button size="small" sx={{ display: "block", mt: 1 }} onClick={onClose}>بستن</Button>
+            </Alert>
+          )}
+          {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
+          {!success && (
+            <Stack spacing={2} mt={2}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <TextField label="نام و نام خانوادگی *" value={form.full_name ?? ""} onChange={set("full_name")} required fullWidth />
+                <TextField label="موبایل * (09121234567)" value={form.mobile ?? ""} onChange={set("mobile")} required fullWidth />
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <TextField select label="موضوع *" value={form.topic ?? ""} onChange={set("topic")} required fullWidth>
+                  {TOPICS.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                </TextField>
+                <TextField select label="بازه ترجیحی" value={form.preferred_slot ?? ""} onChange={set("preferred_slot")} fullWidth>
+                  <MenuItem value="">—</MenuItem>
+                  {SLOTS.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                </TextField>
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-end">
+                <TextField label="شهر (اختیاری)" value={form.city ?? ""} onChange={set("city")} fullWidth />
+                <Box sx={{ flexGrow: 1, width: "100%" }}>
+                  <JalaliDateField
+                    label="تاریخ ترجیحی تماس"
+                    value={undefined}
+                    onChange={(iso) => setPreferredDate(iso)}
+                  />
+                </Box>
+              </Stack>
+              <TextField label="نحوه آشنایی (اختیاری)" value={form.referral_source ?? ""} onChange={set("referral_source")} fullWidth />
+              <TextField label="توضیح مراجع (اختیاری)" value={form.message ?? ""} onChange={set("message")} multiline minRows={2} fullWidth />
+              <TextField label="یادداشت پذیرش (اختیاری)" value={form.reception_note ?? ""} onChange={set("reception_note")} multiline minRows={2} fullWidth />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>بستن</Button>
+          {!success && (
+            <Button type="submit" variant="contained" disabled={busy}>
+              {busy ? "در حال ثبت…" : "ثبت درخواست"}
+            </Button>
+          )}
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+function ConvertDialog({ row, onClose, invalidate, onError }: {
+  row: ConsultationRow | null;
+  onClose: () => void;
+  invalidate: () => void;
+  onError: (m: string) => void;
+}) {
+  const [createCase, setCreateCase] = useState(true);
+  const [counselorId, setCounselorId] = useState("");
+  const [serviceLocationId, setServiceLocationId] = useState("");
+  const [firstAppt, setFirstAppt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const { data: counselors } = useQuery({
+    queryKey: ["counselor-options"],
+    queryFn: fetchCounselorOptions,
+    enabled: Boolean(row) && createCase,
+  });
+  const { data: locations } = useQuery({
+    queryKey: ["locations"],
+    queryFn: fetchServiceLocations,
+    enabled: Boolean(row) && createCase,
+  });
+
+  useEffect(() => {
+    if (row) {
+      setCreateCase(true); setCounselorId(""); setServiceLocationId("");
+      setFirstAppt(""); setFormError(null); setSuccess(null);
+    }
+  }, [row]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!row) return;
+    setFormError(null);
+    setBusy(true);
+    try {
+      const res = await convertConsultationRequest(row.id, {
+        create_case: createCase,
+        counselor_id: createCase && counselorId ? counselorId : undefined,
+        service_location_id: createCase && serviceLocationId ? serviceLocationId : undefined,
+        first_appointment_at: createCase && counselorId && firstAppt ? firstAppt : undefined,
+      });
+      const parts = ["متقاضی " + (res.applicant_created ? "ایجاد" : "یافت") + " شد."];
+      if (res.case_number) parts.push("پرونده " + res.case_number + " تشکیل شد.");
+      if (res.first_appointment_created) parts.push("نوبت اولیه ثبت شد.");
+      setSuccess(parts.join(" "));
+      invalidate();
+    } catch (err) {
+      setFormError(errDetail(err));
+      onError(errDetail(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={row !== null} onClose={onClose} maxWidth="xs" fullWidth>
+      <form onSubmit={submit}>
+        <DialogTitle>تبدیل به متقاضی</DialogTitle>
+        <DialogContent>
+          {success && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              {success}
+              <Button size="small" sx={{ display: "block", mt: 1 }} onClick={onClose}>بستن</Button>
+            </Alert>
+          )}
+          {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
+          {row && !success && (
+            <Stack spacing={2} mt={2}>
+              <Typography variant="body2" color="text.secondary">
+                نام: <b>{row.full_name}</b> | موبایل: <b>{row.mobile}</b> | موضوع: <b>{row.topic}</b>
+              </Typography>
+              <FormControlLabel
+                control={<Checkbox checked={createCase} onChange={(e) => setCreateCase(e.target.checked)} />}
+                label="تشکیل پرونده جدید"
+              />
+              {createCase && (
+                <>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>مشاور (اختیاری — تخصیص فوری)</InputLabel>
+                    <Select value={counselorId} label="مشاور (اختیاری)"
+                      onChange={(e) => setCounselorId(e.target.value)}>
+                      <MenuItem value="">— بعداً تخصیص می‌شود —</MenuItem>
+                      {counselors?.items.map((o: OptionRow) => (
+                        <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>مرکز ارائه خدمت</InputLabel>
+                    <Select value={serviceLocationId} label="مرکز ارائه خدمت"
+                      onChange={(e) => setServiceLocationId(e.target.value)}>
+                      <MenuItem value="">—</MenuItem>
+                      {locations?.map((l) => (
+                        <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  {counselorId && (
+                    <TextField
+                      label="نوبت اولیه (اختیاری)"
+                      type="datetime-local"
+                      value={firstAppt}
+                      onChange={(e) => setFirstAppt(e.target.value)}
+                      fullWidth
+                    />
+                  )}
+                </>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>بستن</Button>
+          {row && !success && (
+            <Button type="submit" variant="contained" disabled={busy}>
+              {busy ? "در حال تبدیل…" : "تبدیل"}
+            </Button>
+          )}
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -214,143 +464,6 @@ function FollowUpDialog({ row, onClose, invalidate, onError }: {
           <Button type="submit" variant="contained" disabled={busy}>
             {busy ? "در حال ثبت…" : "ثبت پیگیری"}
           </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
-  );
-}
-
-function ConvertDialog({ row, onClose, invalidate, onError }: {
-  row: ConsultationRow | null;
-  onClose: () => void;
-  invalidate: () => void;
-  onError: (m: string) => void;
-}) {
-  const [createCase, setCreateCase] = useState(true);
-  const [counselorId, setCounselorId] = useState("");
-  const [serviceLocationId, setServiceLocationId] = useState("");
-  const [firstAppt, setFirstAppt] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const { data: counselors } = useQuery({
-    queryKey: ["counselor-options"],
-    queryFn: fetchCounselorOptions,
-    enabled: Boolean(row) && createCase,
-  });
-  const { data: locations } = useQuery({
-    queryKey: ["locations"],
-    queryFn: fetchServiceLocations,
-    enabled: Boolean(row) && createCase,
-  });
-
-  useEffect(() => {
-    if (row) {
-      setCreateCase(true);
-      setCounselorId("");
-      setServiceLocationId("");
-      setFirstAppt("");
-      setFormError(null);
-      setSuccess(null);
-    }
-  }, [row]);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!row) return;
-    setFormError(null);
-    setBusy(true);
-    try {
-      const res = await convertConsultationRequest(row.id, {
-        create_case: createCase,
-        counselor_id: createCase && counselorId ? counselorId : undefined,
-        service_location_id: createCase && serviceLocationId ? serviceLocationId : undefined,
-        first_appointment_at: createCase && counselorId && firstAppt ? firstAppt : undefined,
-      });
-      const parts = ["متقاضی " + (res.applicant_created ? "ایجاد" : "یافت") + " شد."];
-      if (res.case_number) parts.push("پرونده " + res.case_number + " تشکیل شد.");
-      if (res.first_appointment_created) parts.push("نوبت اولیه ثبت شد.");
-      setSuccess(parts.join(" "));
-      invalidate();
-    } catch (err) {
-      setFormError(errDetail(err));
-      onError(errDetail(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={row !== null} onClose={onClose} maxWidth="xs" fullWidth>
-      <form onSubmit={submit}>
-        <DialogTitle>تبدیل به متقاضی</DialogTitle>
-        <DialogContent>
-          {success && (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              {success}
-              <Button size="small" sx={{ display: "block", mt: 1 }} onClick={onClose}>بستن</Button>
-            </Alert>
-          )}
-          {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
-          {row && !success && (
-            <Stack spacing={2} mt={2}>
-              <Typography variant="body2" color="text.secondary">
-                نام: <b>{row.full_name}</b> | موبایل: <b>{row.mobile}</b> | موضوع: <b>{row.topic}</b>
-              </Typography>
-              <FormControlLabel
-                control={<Checkbox checked={createCase} onChange={(e) => setCreateCase(e.target.checked)} />}
-                label="تشکیل پرونده جدید"
-              />
-              {createCase && (
-                <>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>مشاور (اختیاری — تخصیص فوری)</InputLabel>
-                    <Select
-                      value={counselorId}
-                      label="مشاور (اختیاری)"
-                      onChange={(e) => setCounselorId(e.target.value)}
-                    >
-                      <MenuItem value="">— بعداً تخصیص می‌شود —</MenuItem>
-                      {counselors?.items.map((o: OptionRow) => (
-                        <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>مرکز ارائه خدمت</InputLabel>
-                    <Select
-                      value={serviceLocationId}
-                      label="مرکز ارائه خدمت"
-                      onChange={(e) => setServiceLocationId(e.target.value)}
-                    >
-                      <MenuItem value="">—</MenuItem>
-                      {locations?.map((l) => (
-                        <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {counselorId && (
-                    <TextField
-                      label="نوبت اولیه (اختیاری)"
-                      type="datetime-local"
-                      value={firstAppt}
-                      onChange={(e) => setFirstAppt(e.target.value)}
-                      fullWidth
-                    />
-                  )}
-                </>
-              )}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>بستن</Button>
-          {row && !success && (
-            <Button type="submit" variant="contained" disabled={busy}>
-              {busy ? "در حال تبدیل…" : "تبدیل"}
-            </Button>
-          )}
         </DialogActions>
       </form>
     </Dialog>

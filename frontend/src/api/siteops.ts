@@ -38,6 +38,20 @@ export async function updateConsultationRequest(
   await apiClient.patch(`/consultation-requests/${id}`, payload);
 }
 
+export async function createManualConsultationRequest(payload: {
+  full_name: string;
+  mobile: string;
+  topic: string;
+  preferred_date?: string;
+  preferred_slot?: string;
+  city?: string;
+  referral_source?: string;
+  message?: string;
+  reception_note?: string;
+}): Promise<{ id: string }> {
+  return (await apiClient.post("/consultation-requests", payload)).data;
+}
+
 export async function uploadCounselorPhoto(id: string, file: File): Promise<void> {
   const fd = new FormData();
   fd.append("file", file);

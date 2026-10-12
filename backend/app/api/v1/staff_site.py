@@ -106,7 +106,7 @@ def list_consultation_requests(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN")),
+    _actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN", "COUNSELOR")),
 ) -> dict:
     q = select(ConsultationRequest)
     if status in ("new", "in_review", "converted", "archived"):
@@ -234,4 +234,62 @@ def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session 
         "case_id": str(case_id) if case_id else None,
         "case_number": case_number,
         "first_appointment_created": appt_created,
+    }
+
+class ManualConsultationCreate(BaseModel):
+    full_name: str = Field(min_length=3, max_length=200)
+    mobile: str = Field(min_length=10, max_length=20)
+    topic: str = Field(min_length=2, max_length=100)
+    preferred_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    preferred_slot: str | None = Field(default=None, max_length=30)
+    city: str | None = Field(default=None, max_length=100)
+    referral_source: str | None = Field(default=None, max_length=200)
+    message: str | None = Field(default=None, max_length=2000)
+    reception_note: str | None = Field(default=None, max_length=2000)
+
+
+def _normalize_mobile_staff(raw: str) -> str:
+    s = (raw or "").strip()
+    for ch in (" ", "-", "(", ")"):
+        s = s.replace(ch, "")
+    if s.startswith("+98"):
+        s = "0" + s[3:]
+    elif s.startswith("98") and len(s) == 12:
+        s = "0" + s[2:]
+    return s
+
+
+@router.post("/consultation-requests", status_code=201)
+def create_consultation_request(payload: ManualConsultationCreate, db: Session = Depends(get_db), actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "COUNSELOR"))) -> dict:
+    """ثبت حضوری/تلفنی درخواست مشاوره توسط کارکنان (بند ۹.۱ سند)"""
+    mobile = _normalize_mobile_staff(payload.mobile)
+    if not re.fullmatch(r"09\d{9}", mobile):
+        raise HTTPException(status_code=422, detail="شماره موبایل معتبر نیست (نمونه: 09121234567)")
+    preferred = None
+    if payload.preferred_date:
+        try:
+            preferred = date_type.fromisoformat(payload.preferred_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="تاریخ نامعتبر است")
+    r = ConsultationRequest(
+        full_name=payload.full_name.strip(),
+        mobile=mobile,
+        topic=payload.topic.strip(),
+        preferred_date=preferred,
+        preferred_slot=payload.preferred_slot,
+        message=payload.message,
+        city=payload.city,
+        referral_source=payload.referral_source or "ثبت در پنل",
+        reception_note=payload.reception_note,
+        status="in_review",
+    )
+    db.add(r)
+    db.commit()
+    record_audit(db, action="consultation.created_by_staff", actor_user_id=actor.id,
+                 entity_type="consultation_request", entity_id=str(r.id))
+    return {
+        "id": str(r.id),
+        "full_name": r.full_name,
+        "mobile": r.mobile,
+        "status": r.status,
     }
