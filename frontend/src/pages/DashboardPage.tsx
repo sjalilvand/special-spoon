@@ -1,6 +1,6 @@
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid,
-  Paper, Stack, Typography,
+  MenuItem, Paper, Select, Stack, Typography,
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -11,7 +11,6 @@ import { CASE_STATUS_META } from "../api/cases";
 import { fetchCounselorOptions } from "../api/cases";
 import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import { fetchReportSummary } from "../api/reports";
-import type { ReportSummary } from "../api/reports";
 
 const WORKFLOW = [
   { step: "۱", title: "ثبت متقاضی", desc: "ثبت دستی یا ورود اکسل از صفحه «متقاضیان»", link: "/applicants", linkLabel: "متقاضیان" },
