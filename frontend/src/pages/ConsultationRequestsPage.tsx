@@ -10,8 +10,9 @@ import { errDetail } from "../api/client";
 import { CONSULT_STATUS_META, fetchConsultationRequests, updateConsultationRequest } from "../api/siteops";
 import type { ConsultationRow } from "../api/siteops";
 import { convertConsultationRequest } from "../api/referrals";
-import { fetchCounselorOptions, fetchServiceLocations } from "../api/people";
-import type { IdName } from "../api/people";
+import { fetchCounselorOptions } from "../api/cases";
+import type { OptionRow } from "../api/cases";
+import { fetchServiceLocations } from "../api/people";
 
 export default function ConsultationRequestsPage() {
   const qc = useQueryClient();
@@ -168,7 +169,8 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
         service_location_id: createCase && serviceLocationId ? serviceLocationId : undefined,
       });
       setSuccess(
-        `متقاضی ${res.applicant_created ? "ایجاد" : "یافت"} شد${res.case_number ? ` و پرونده ${res.case_number} تشکیل شد` : ""}.`
+        "متقاضی " + (res.applicant_created ? "ایجاد" : "یافت") + " شد" +
+        (res.case_number ? " و پرونده " + res.case_number + " تشکیل شد." : ".")
       );
       invalidate();
     } catch (err) {
@@ -210,7 +212,7 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
                       onChange={(e) => setCounselorId(e.target.value)}
                     >
                       <MenuItem value="">— بعداً تخصیص می‌شود —</MenuItem>
-                      {counselors?.items.map((o: IdName) => (
+                      {counselors?.items.map((o: OptionRow) => (
                         <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
                       ))}
                     </Select>

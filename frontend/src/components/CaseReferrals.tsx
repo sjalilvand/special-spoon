@@ -3,7 +3,7 @@ import {
   DialogTitle, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Radio,
   RadioGroup, Select, Stack, TextField, Typography,
 } from "@mui/material";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
@@ -11,8 +11,9 @@ import {
   REFERRAL_DIRECTION_LABELS, REFERRAL_STATUS_META, createReferral, fetchCaseReferrals, updateReferral,
 } from "../api/referrals";
 import type { ReferralRow } from "../api/referrals";
-import { fetchCounselorOptions, fetchServiceLocations } from "../api/people";
-import type { IdName } from "../api/people";
+import { fetchCounselorOptions } from "../api/cases";
+import type { OptionRow } from "../api/cases";
+import { fetchServiceLocations } from "../api/people";
 
 export default function CaseReferrals({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -179,7 +180,7 @@ function CreateReferralDialog({ open, caseId, onClose, invalidate, onError }: {
                 <Select value={counselorId} label="مشاور مقصد *"
                   onChange={(e) => setCounselorId(e.target.value)}>
                   <MenuItem value="">— انتخاب کنید —</MenuItem>
-                  {counselors?.items.map((o: IdName) => (
+                  {counselors?.items.map((o: OptionRow) => (
                     <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
                   ))}
                 </Select>
