@@ -7,6 +7,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   CONSULT_STATUS_META, createManualConsultationRequest, fetchConsultationRequests,
   updateConsultationRequest,
