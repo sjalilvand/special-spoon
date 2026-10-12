@@ -3,7 +3,7 @@ import { apiClient } from "./client";
 export interface FormFieldDef {
   key: string;
   label: string;
-  type: "text" | "textarea" | "select" | "boolean";
+  type: "text" | "textarea" | "select" | "multiselect" | "boolean";
   required: boolean;
   options: { value: string; label: string }[];
 }
@@ -35,6 +35,7 @@ export interface AssessmentDetail {
   applicant_name: string | null;
   form_code: string;
   form_version: number;
+  form_definition: FormDefinition | null;
   status: string;
   version_no: number;
   row_version: number;

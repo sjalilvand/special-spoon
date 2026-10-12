@@ -8,10 +8,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import {
-  ASSESSMENT_STATUS_META, approveAssessment, createAssessmentDraft, fetchAssessment,
-  createRevision, fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
+  ASSESSMENT_STATUS_META, approveAssessment, createAssessmentDraft, createRevision,
+  fetchAssessment, fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
 } from "../api/assessments";
-import type { FormFieldDef } from "../api/assessments";
+import type { FormDefinition, FormFieldDef, FormSectionDef } from "../api/assessments";
 import { fetchCase } from "../api/cases";
 import { printAssessment } from "../api/reports";
 
@@ -33,7 +33,7 @@ export default function AssessmentFormPage() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnComment, setReturnComment] = useState("");
 
-  const { data: def, isLoading: defLoading } = useQuery({
+  const { data: headDef, isLoading: defLoading } = useQuery({
     queryKey: ["form-def"],
     queryFn: fetchFormDefinition,
   });
@@ -49,6 +49,11 @@ export default function AssessmentFormPage() {
     queryFn: () => fetchCase(params.caseId!),
     enabled: !currentId && Boolean(params.caseId),
   });
+
+  // رندر نسخه‌ای: ارزیابی قدیمی با تعریف نسخه خودش نمایش داده می‌شود
+  const def: FormDefinition | undefined = existing?.form_definition
+    ? existing.form_definition
+    : headDef;
 
   useEffect(() => {
     if (existing && loadedFor !== existing.id) {
@@ -213,19 +218,20 @@ export default function AssessmentFormPage() {
         {isRevisionable && (
           <Button variant="outlined" onClick={doRevision}>ایجاد نسخه اصلاحی</Button>
         )}
+        {existing && ["finalized", "pending_review", "approved"].includes(existing.status) && (
+          <Button
+            variant="outlined"
+            onClick={async () => {
+              try { await printAssessment(existing.id); } catch { /* رخداد چاپ غیربحرانی است */ }
+              window.print();
+            }}
+          >
+            چاپ فرم
+          </Button>
+        )}
       </Box>
 
-      {existing && ["finalized", "pending_review", "approved"].includes(existing.status) && (
-        <Button
-          variant="outlined"
-          onClick={async () => {
-            try { await printAssessment(existing.id); } catch { /* رخداد چاپ غیربحرانی است */ }
-            window.print();
-          }}
-        >
-          چاپ فرم
-        </Button>
-      )}      {status === "returned" && (
+      {status === "returned" && (
         <Alert severity="warning">
           این نسخه توسط مسئول فنی برگشت خورده است؛ پس از اصلاح، دوباره نهایی‌سازی کنید.
         </Alert>
@@ -233,7 +239,7 @@ export default function AssessmentFormPage() {
       {message && <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert>}
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
-      {def.sections.map((sec) => (
+      {def.sections.map((sec: FormSectionDef) => (
         <Paper key={sec.key} sx={{ p: 2 }}>
           <Typography variant="subtitle1" fontWeight={700} mb={1.5}>{sec.title}</Typography>
           {editable ? (
@@ -241,7 +247,7 @@ export default function AssessmentFormPage() {
               {sec.fields.map((f) => {
                 const path = `${sec.key}.${f.key}`;
                 return (
-                  <Box key={path} gridColumn={f.type === "textarea" ? "1 / -1" : undefined}>
+                  <Box key={path} gridColumn={f.type === "textarea" || f.type === "multiselect" ? "1 / -1" : undefined}>
                     <FieldInput field={f} path={path} value={answers[path]} onChange={setValue} />
                   </Box>
                 );
@@ -282,7 +288,7 @@ export default function AssessmentFormPage() {
         <DialogContent>
           <Typography variant="body2">
             فیلدهای لازم در سرور کنترل می‌شوند. پس از نهایی‌سازی، فرم بی‌ردپا تغییر نمی‌کند و
-            برای اصلاح باید نسخه جدید ساخت (بند ۶.۲).
+            برای اصلاح باید نسخه جدید بسازید (بند ۶.۲).
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -343,6 +349,32 @@ function FieldInput({
       </TextField>
     );
   }
+  if (field.type === "multiselect") {
+    const arr = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <Box>
+        <Typography variant="caption" color="text.secondary">{label}</Typography>
+        <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={0.5} mt={0.5}>
+          {field.options.map((o) => (
+            <FormControlLabel
+              key={o.value}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={arr.includes(o.value)}
+                  onChange={(e) => {
+                    const next = e.target.checked ? [...arr, o.value] : arr.filter((v) => v !== o.value);
+                    onChange(path, next.length ? next : undefined);
+                  }}
+                />
+              }
+              label={<Typography variant="body2">{o.label}</Typography>}
+            />
+          ))}
+        </Box>
+      </Box>
+    );
+  }
   if (field.type === "textarea") {
     return (
       <TextField fullWidth multiline minRows={2} size="small" label={label}
@@ -364,12 +396,17 @@ function ReadOnlyField({ def, value }: { def: FormFieldDef; value: unknown }) {
   } else if (def.type === "select") {
     const v = value as string | undefined;
     display = v ? (def.options.find((o) => o.value === v)?.label ?? v) : "—";
+  } else if (def.type === "multiselect") {
+    const arr = Array.isArray(value) ? (value as string[]) : [];
+    display = arr.length
+      ? arr.map((v) => def.options.find((o) => o.value === v)?.label ?? v).join("، ")
+      : "—";
   } else if (typeof value === "string" && value.trim()) {
     display = value;
   }
   return (
     <Stack direction="row" spacing={1}>
-      <Typography variant="body2" sx={{ minWidth: 220, color: "text.secondary" }}>{def.label}:</Typography>
+      <Typography variant="body2" sx={{ minWidth: 240, color: "text.secondary" }}>{def.label}:</Typography>
       <Typography variant="body2">{display}</Typography>
     </Stack>
   );

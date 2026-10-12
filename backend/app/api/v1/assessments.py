@@ -91,6 +91,7 @@ def _assessment_detail(db: Session, a: Assessment) -> dict:
         "case_number": case.case_number if case else None,
         "applicant_name": (f"{applicant.first_name} {applicant.last_name}" if applicant else None),
         "form_code": fv.form_code if fv else FORM_CODE,
+        "form_definition": (fv.definition if fv else None),
         "form_version": fv.version if fv else FORM_VERSION,
         "status": a.status,
         "version_no": a.version_no,
