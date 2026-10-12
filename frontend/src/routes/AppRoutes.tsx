@@ -23,7 +23,7 @@ import UsersPage from "../pages/UsersPage";
 import ProtectedRoute from "./ProtectedRoute";
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
-const STAFF_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
+const STAFF_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "SYSTEM_ADMIN"];
 const CLINICAL_ROLES = ["COUNSELOR", "TECHNICAL_SUPERVISOR"];
 
 function RoleRedirect() {

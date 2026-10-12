@@ -16,7 +16,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 700 }} onClick={() => navigate("/")}>
             Rosepsy | پنل مدیریت
           </Typography>
-          {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+          {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "SYSTEM_ADMIN"]) && (
             <Button color="inherit" onClick={() => navigate("/dashboard")}>داشبورد</Button>
           )}
           {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (

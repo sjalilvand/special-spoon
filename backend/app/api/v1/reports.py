@@ -19,7 +19,7 @@ from app.services.audit import record_audit
 
 router = APIRouter(tags=["reports"])
 
-STAFF_ROLES = ("ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR")
+STAFF_ROLES = ("ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN")
 
 
 def _roles(actor) -> set[str]:
