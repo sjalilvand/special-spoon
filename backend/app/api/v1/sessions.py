@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.services.case_access import counselor_can_access
 from app.models.appointment import (
     Appointment,
     AppointmentStatus,
@@ -36,17 +37,18 @@ def _clinical_access(db: Session, actor, case: Case) -> None:
         return
     if "COUNSELOR" in roles:
         c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
-        if c is not None and case.primary_counselor_id == c.id:
+        if c is not None and counselor_can_access(db, c.id, case):
             return
     raise HTTPException(status_code=404, detail="پرونده یافت نشد")
 
 
-def _assigned_counselor(db: Session, actor, case: Case) -> None:
+def _assigned_counselor(db: Session, actor, case: Case) -> Counselor:
     if "COUNSELOR" not in _roles(actor):
         raise HTTPException(status_code=403, detail="ثبت جلسه فقط با نقش مشاور و تخصیص جاری مجاز است")
     c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
     if c is None or case.primary_counselor_id != c.id:
         raise HTTPException(status_code=403, detail="این پرونده به شما تخصیص نیافته است")
+    return c
 
 
 def _clean_content(raw: dict | None) -> dict:
@@ -114,7 +116,7 @@ def create_session(case_id: uuid.UUID, payload: SessionCreate, db: Session = Dep
     case = _get_case_or_404(db, case_id)
     if case.status in (CaseStatus.CLOSED, CaseStatus.ARCHIVED):
         raise HTTPException(status_code=409, detail="برای پرونده بسته یا بایگانی نمی‌توان جلسه ثبت کرد")
-    _assigned_counselor(db, actor, case)
+    actor_counselor = _assigned_counselor(db, actor, case)
 
     appointment = None
     if payload.appointment_id is not None:
@@ -128,7 +130,7 @@ def create_session(case_id: uuid.UUID, payload: SessionCreate, db: Session = Dep
     s = Session(
         case_id=case.id,
         appointment_id=appointment.id if appointment is not None else None,
-        counselor_id=case.primary_counselor_id,
+        counselor_id=(actor_counselor.id if actor_counselor else case.primary_counselor_id),
         occurred_at=payload.occurred_at,
         session_number=int(last_no) + 1,
         created_by=actor.id,

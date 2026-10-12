@@ -24,6 +24,7 @@ class AssignmentCreate(BaseModel):
     counselor_id: uuid.UUID
     reason: str | None = Field(default=None, max_length=500)
     expected_version: int | None = None
+    role_in_case: str = Field(default="primary", pattern="^(primary|collaborator)$")
 
 
 class CaseActionRequest(BaseModel):

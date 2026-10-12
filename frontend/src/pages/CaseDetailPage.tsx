@@ -14,6 +14,7 @@ import {
 } from "../api/cases";
 import type { CaseDetail } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import CaseClinical from "../components/CaseClinical";
 import CaseAssessments from "../components/CaseAssessments";
 import CaseAppointments from "../components/CaseAppointments";
 import CaseSessions from "../components/CaseSessions";
@@ -160,6 +161,7 @@ export default function CaseDetailPage() {
       </Paper>
 
       <CaseAssessments caseId={c.id} />
+      <CaseClinical caseId={c.id} />
       <CaseAppointments caseId={c.id} />
       <CaseSessions caseId={c.id} />
       <CaseRecommendations caseId={c.id} />
@@ -258,12 +260,14 @@ function EditDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: () =
 
 function AssignDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const isTransfer = Boolean(caseData.primary_counselor_name);
+  const [role, setRole] = useState<"primary" | "collaborator">("primary");
   const [counselorId, setCounselorId] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: counselors } = useQuery({ queryKey: ["counselor-options"], queryFn: fetchCounselorOptions });
+
+  const isTransfer = role === "primary" && Boolean(caseData.primary_counselor_name);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -282,6 +286,7 @@ function AssignDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: ()
         counselor_id: counselorId,
         reason: reason.trim() || undefined,
         expected_version: caseData.version,
+        role_in_case: role,
       });
       await queryClient.invalidateQueries({ queryKey: ["case", caseData.id] });
       onClose();
@@ -295,25 +300,40 @@ function AssignDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: ()
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={submit}>
-        <DialogTitle>{isTransfer ? "انتقال مشاور" : "تخصیص مشاور"}</DialogTitle>
+        <DialogTitle>تخصیص مشاور</DialogTitle>
         <DialogContent>
-          {isTransfer && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              مشاور فعلی: {caseData.primary_counselor_name} — پس از انتقال، دسترسی جاری مشاور قبلی قطع می‌شود
-              (سیاست پیش‌فرض بند ۷.۲).
-            </Alert>
-          )}
-          {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
           <Stack spacing={2} mt={2}>
+            <Typography variant="body2" color="text.secondary">
+              نقش: «مشاور اصلی» جایگزین مشاور فعلی می‌شود (انتقال با علت الزامی)؛
+              «همکار پرونده» مشاور را بدون تغییر مشاور اصلی اضافه می‌کند (بند v1.00).
+            </Typography>
+            <Stack direction="row" spacing={2}>
+              <FormControlLabel
+                control={<Radio checked={role === "primary"} onChange={() => setRole("primary")} />}
+                label="مشاور اصلی"
+              />
+              <FormControlLabel
+                control={<Radio checked={role === "collaborator"} onChange={() => setRole("collaborator")} />}
+                label="همکار پرونده"
+              />
+            </Stack>
+            {isTransfer && (
+              <Alert severity="info">
+                مشاور فعلی: {caseData.primary_counselor_name} — پس از انتقال، دسترسی جاری مشاور قبلی قطع می‌شود.
+              </Alert>
+            )}
+            {formError && <Alert severity="error">{formError}</Alert>}
             <FormControl size="small" required>
               <InputLabel>مشاور *</InputLabel>
               <Select value={counselorId} onChange={(e) => setCounselorId(e.target.value)} label="مشاور *">
                 <MenuItem value="">— انتخاب کنید —</MenuItem>
-                {counselors?.items.map((o) => <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>)}
+                {counselors?.items.map((o) => (
+                  <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+                ))}
               </Select>
             </FormControl>
             <TextField
-              label={isTransfer ? "علت انتقال *" : "علت تخصیص (اختیاری)"}
+              label={isTransfer ? "علت انتقال *" : "علت (اختیاری)"}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               required={isTransfer}
@@ -324,13 +344,14 @@ function AssignDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: ()
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>انصراف</Button>
-          <Button type="submit" variant="contained" disabled={busy}>{busy ? "در حال ثبت…" : "ثبت"}</Button>
+          <Button type="submit" variant="contained" disabled={busy}>
+            {busy ? "در حال ثبت…" : "ثبت"}
+          </Button>
         </DialogActions>
       </form>
     </Dialog>
   );
 }
-
 function ActionDialog({ mode, caseData, onClose }: { mode: "close" | "reopen"; caseData: CaseDetail; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.services.case_access import counselor_can_access
 from app.models.case import Case, CaseStatus
 from app.models.people import Counselor
 from app.models.recommendation import Recommendation
@@ -28,7 +29,7 @@ def _clinical_access(db: Session, actor, case: Case) -> None:
         return
     if "COUNSELOR" in roles:
         c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
-        if c is not None and case.primary_counselor_id == c.id:
+        if c is not None and counselor_can_access(db, c.id, case):
             return
     raise HTTPException(status_code=404, detail="پرونده یافت نشد")
 

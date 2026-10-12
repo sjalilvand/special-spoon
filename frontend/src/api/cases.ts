@@ -20,6 +20,7 @@ export interface CaseRow {
 export interface AssignmentRow {
   id: string;
   counselor_name: string;
+  role?: string;
   start_at: string | null;
   end_at: string | null;
   reason: string | null;

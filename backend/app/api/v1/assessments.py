@@ -10,6 +10,7 @@ from app.core.form_rs_ps_04_01 import (
     FORM_CODE, FORM_DEFINITION, FORM_VERSION, validate_finalization,
 )
 from app.db.session import get_db
+from app.services.case_access import counselor_can_access
 from app.models.assessment import Assessment, AssessmentStatus, FormVersion, ReviewAction
 from app.models.case import Case, CaseStatus
 from app.models.people import Applicant, Counselor
@@ -46,7 +47,7 @@ def _clinical_access(db: Session, actor, case: Case) -> None:
         return
     if "COUNSELOR" in roles:
         c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
-        if c is not None and case.primary_counselor_id == c.id:
+        if c is not None and counselor_can_access(db, c.id, case):
             return
     raise HTTPException(status_code=404, detail="پرونده یافت نشد")
 

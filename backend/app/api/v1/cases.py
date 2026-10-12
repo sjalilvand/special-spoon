@@ -18,6 +18,7 @@ from app.schemas.case import (
     ConsentCreate,
 )
 from app.services.audit import record_audit
+from app.services.case_access import counselor_can_access
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -79,6 +80,7 @@ def _detail_out(db: Session, c: Case) -> dict:
             "end_at": asg.end_at.isoformat() if asg.end_at else None,
             "reason": asg.reason,
             "end_reason": asg.end_reason,
+            "role": getattr(asg, "role_in_case", "primary"),
             "is_current": asg.end_at is None,
         })
     data["assignments"] = out_assignments
@@ -164,7 +166,13 @@ def list_cases(
         counselor = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
         if counselor is None:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
-        q = q.where(Case.primary_counselor_id == counselor.id)
+        q = q.where(or_(
+            Case.primary_counselor_id == counselor.id,
+            Case.id.in_(select(CaseAssignment.case_id).where(
+                CaseAssignment.counselor_id == counselor.id,
+                CaseAssignment.end_at.is_(None),
+            )),
+        ))
     if status and status in CASE_STATUSES:
         q = q.where(Case.status == status)
     if search.strip():
@@ -289,41 +297,61 @@ def assign_counselor(
         raise HTTPException(status_code=422, detail="مشاور یافت نشد")
     if counselor.status != "active":
         raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
-    if case.primary_counselor_id == counselor.id:
-        raise HTTPException(status_code=422, detail="این مشاور هم‌اکنون مشاور اصلی این پرونده است")
 
-    is_transfer = case.primary_counselor_id is not None
-    if is_transfer and not (payload.reason or "").strip():
-        raise HTTPException(status_code=422, detail="برای انتقال مشاور، ثبت علت الزامی است")
+    role = payload.role_in_case or "primary"
+    reason = (payload.reason or "").strip()
 
-    now = datetime.now(timezone.utc)
-    if is_transfer:
-        current = db.scalar(
-            select(CaseAssignment)
-            .where(
+    if role == "primary":
+        if case.primary_counselor_id == counselor.id:
+            raise HTTPException(status_code=422, detail="این مشاور هم‌اکنون مشاور اصلی این پرونده است")
+        is_transfer = case.primary_counselor_id is not None
+        if is_transfer and not reason:
+            raise HTTPException(status_code=422, detail="برای انتقال مشاور، ثبت علت الزامی است")
+        now = datetime.now(timezone.utc)
+        if is_transfer:
+            current = db.scalar(
+                select(CaseAssignment)
+                .where(
+                    CaseAssignment.case_id == case.id,
+                    CaseAssignment.counselor_id == case.primary_counselor_id,
+                    CaseAssignment.end_at.is_(None),
+                )
+                .order_by(CaseAssignment.start_at.desc())
+            )
+            if current is not None:
+                current.end_at = now
+                current.end_reason = reason
+        db.add(CaseAssignment(
+            case_id=case.id, counselor_id=counselor.id,
+            reason=reason or None, assigned_by=actor.id, role_in_case="primary",
+        ))
+        case.primary_counselor_id = counselor.id
+        if case.status in (CaseStatus.NEW, CaseStatus.AWAITING_ASSIGNMENT):
+            case.status = CaseStatus.ACTIVE
+    else:
+        # همکار پرونده - بدون تغییر مشاور اصلی (سند v1.00)
+        if case.primary_counselor_id == counselor.id:
+            raise HTTPException(status_code=422, detail="این مشاور هم‌اکنون مشاور اصلی این پرونده است")
+        dup = db.scalar(
+            select(CaseAssignment).where(
                 CaseAssignment.case_id == case.id,
-                CaseAssignment.counselor_id == case.primary_counselor_id,
+                CaseAssignment.counselor_id == counselor.id,
                 CaseAssignment.end_at.is_(None),
             )
-            .order_by(CaseAssignment.start_at.desc())
         )
-        if current is not None:
-            current.end_at = now
-            current.end_reason = payload.reason
-    db.add(CaseAssignment(
-        case_id=case.id, counselor_id=counselor.id,
-        reason=payload.reason, assigned_by=actor.id,
-    ))
-    case.primary_counselor_id = counselor.id
+        if dup is not None:
+            raise HTTPException(status_code=422, detail="این مشاور از قبل به‌عنوان همکار فعال این پرونده ثبت شده است")
+        db.add(CaseAssignment(
+            case_id=case.id, counselor_id=counselor.id,
+            reason=reason or None, assigned_by=actor.id, role_in_case="collaborator",
+        ))
+
     case.version += 1
-    if case.status in (CaseStatus.NEW, CaseStatus.AWAITING_ASSIGNMENT):
-        case.status = CaseStatus.ACTIVE
     db.commit()
     record_audit(db, action="case.counselor_assigned", actor_user_id=actor.id,
                  entity_type="case", entity_id=str(case.id),
-                 detail={"counselor_id": str(counselor.id), "transfer": is_transfer})
+                 detail={"counselor_id": str(counselor.id), "role": role})
     return _detail_out(db, case)
-
 
 # ---------- بستن / بازگشایی (بند ۷.۲) ----------
 

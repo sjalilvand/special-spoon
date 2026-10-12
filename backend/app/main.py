@@ -6,6 +6,7 @@ from app.api.v1.assessments import router as assessments_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.cases import router as cases_router
 from app.api.v1.counselors import router as counselors_router
+from app.api.v1.clinical import router as clinical_router
 from app.api.v1.health import router as health_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.me import router as me_router
@@ -43,6 +44,7 @@ app.include_router(recommendations_router, prefix=settings.api_prefix)
 app.include_router(me_router, prefix=settings.api_prefix)
 app.include_router(supervisor_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
+app.include_router(clinical_router, prefix=settings.api_prefix)
 app.include_router(public_router, prefix=settings.api_prefix)
 app.include_router(staff_site_router, prefix=settings.api_prefix)
 
