@@ -1,12 +1,14 @@
 import {
-  Alert, Box, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Paper, Select,
-  Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
-  TableRow, Typography,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions,
+  DialogContent, DialogTitle, FormControl, FormControlLabel, InputLabel, MenuItem,
+  Paper, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
+  TablePagination, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
 import { CONSULT_STATUS_META, fetchConsultationRequests, updateConsultationRequest } from "../api/siteops";
+import type { ConsultationRow } from "../api/siteops";
 import { convertConsultationRequest } from "../api/referrals";
 import { fetchCounselorOptions, fetchServiceLocations } from "../api/people";
 import type { IdName } from "../api/people";
@@ -54,7 +56,6 @@ export default function ConsultationRequestsPage() {
               <TableCell>موبایل</TableCell>
               <TableCell>موضوع</TableCell>
               <TableCell>تاریخ ترجیحی</TableCell>
-              <TableCell>بازه</TableCell>
               <TableCell>زمان ثبت</TableCell>
               <TableCell>وضعیت</TableCell>
               <TableCell>عملیات</TableCell>
@@ -62,13 +63,14 @@ export default function ConsultationRequestsPage() {
           </TableHead>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={8} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} align="center"><CircularProgress size={24} /></TableCell></TableRow>
             )}
             {data?.items.length === 0 && (
-              <TableRow><TableCell colSpan={8}>درخواستی ثبت نشده است.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7}>درخواستی ثبت نشده است.</TableCell></TableRow>
             )}
             {data?.items.map((row) => {
               const m = CONSULT_STATUS_META[row.status] ?? { label: row.status, color: "default" as const };
+              const canConvert = row.status === "new" || row.status === "in_review";
               return (
                 <TableRow key={row.id}>
                   <TableCell>{row.full_name}</TableCell>
@@ -77,27 +79,28 @@ export default function ConsultationRequestsPage() {
                   <TableCell>
                     {row.preferred_date ? new Date(row.preferred_date).toLocaleDateString("fa-IR") : "—"}
                   </TableCell>
-                  <TableCell>{row.preferred_slot ?? "—"}</TableCell>
                   <TableCell>
                     {row.created_at ? new Date(row.created_at).toLocaleString("fa-IR") : "—"}
                   </TableCell>
                   <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
                   <TableCell>
-                    {(row.status === "new" || row.status === "in_review") && (
-                      <Button size="small" variant="outlined" onClick={() => setConvertRow(row)}>
-                        تبدیل
-                      </Button>
-                    )}
-                    <FormControl size="small" sx={{ minWidth: 150 }}>
-                      <Select
-                        value={row.status}
-                        onChange={(e) => changeStatus.mutate({ id: row.id, status: e.target.value })}
-                      >
-                        {Object.entries(CONSULT_STATUS_META).map(([k, v]) => (
-                          <MenuItem key={k} value={k}>{v.label}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      {canConvert && (
+                        <Button size="small" variant="outlined" onClick={() => setConvertRow(row)}>
+                          تبدیل
+                        </Button>
+                      )}
+                      <FormControl size="small" sx={{ minWidth: 130 }}>
+                        <Select
+                          value={row.status}
+                          onChange={(e) => changeStatus.mutate({ id: row.id, status: e.target.value })}
+                        >
+                          {Object.entries(CONSULT_STATUS_META).map(([k, v]) => (
+                            <MenuItem key={k} value={k}>{v.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               );
@@ -108,6 +111,7 @@ export default function ConsultationRequestsPage() {
           onPageChange={(_, p) => setPage(p)} rowsPerPage={20} rowsPerPageOptions={[20]}
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} از ${count}`} />
       </TableContainer>
+
       <ConvertDialog
         row={convertRow}
         onClose={() => setConvertRow(null)}
@@ -143,7 +147,13 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
   });
 
   useEffect(() => {
-    if (row) { setCreateCase(true); setCounselorId(""); setServiceLocationId(""); setFormError(null); setSuccess(null); }
+    if (row) {
+      setCreateCase(true);
+      setCounselorId("");
+      setServiceLocationId("");
+      setFormError(null);
+      setSuccess(null);
+    }
   }, [row]);
 
   const submit = async (e: FormEvent) => {
@@ -161,7 +171,6 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
         `متقاضی ${res.applicant_created ? "ایجاد" : "یافت"} شد${res.case_number ? ` و پرونده ${res.case_number} تشکیل شد` : ""}.`
       );
       invalidate();
-      setTimeout(() => { onClose(); }, 2000);
     } catch (err) {
       setFormError(errDetail(err));
       onError(errDetail(err));
@@ -175,7 +184,12 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
       <form onSubmit={submit}>
         <DialogTitle>تبدیل به متقاضی</DialogTitle>
         <DialogContent>
-          {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+          {success && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              {success}
+              <Button size="small" sx={{ display: "block", mt: 1 }} onClick={onClose}>بستن</Button>
+            </Alert>
+          )}
           {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
           {row && !success && (
             <Stack spacing={2} mt={2}>
@@ -190,8 +204,11 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
                 <>
                   <FormControl size="small" fullWidth>
                     <InputLabel>مشاور (اختیاری — تخصیص فوری)</InputLabel>
-                    <Select value={counselorId} label="مشاور (اختیاری)"
-                      onChange={(e) => setCounselorId(e.target.value)}>
+                    <Select
+                      value={counselorId}
+                      label="مشاور (اختیاری)"
+                      onChange={(e) => setCounselorId(e.target.value)}
+                    >
                       <MenuItem value="">— بعداً تخصیص می‌شود —</MenuItem>
                       {counselors?.items.map((o: IdName) => (
                         <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
@@ -200,8 +217,11 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
                   </FormControl>
                   <FormControl size="small" fullWidth>
                     <InputLabel>مرکز ارائه خدمت</InputLabel>
-                    <Select value={serviceLocationId} label="مرکز ارائه خدمت"
-                      onChange={(e) => setServiceLocationId(e.target.value)}>
+                    <Select
+                      value={serviceLocationId}
+                      label="مرکز ارائه خدمت"
+                      onChange={(e) => setServiceLocationId(e.target.value)}
+                    >
                       <MenuItem value="">—</MenuItem>
                       {locations?.map((l) => (
                         <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>
