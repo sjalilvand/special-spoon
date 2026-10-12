@@ -1,0 +1,171 @@
+@font-face {
+	font-weight: normal;
+	font-style: normal;
+	font-family: "woodmart-font";
+	src: url("//rosecenter.ir/wp-content/themes/woodmart/fonts/woodmart-font-1-400.woff2?v=8.2.6") format("woff2");
+}
+
+:root {
+	--wd-text-font: "meen-regular", Arial, Helvetica, sans-serif;
+	--wd-text-font-weight: 400;
+	--wd-text-color: rgb(69,69,69);
+	--wd-text-font-size: 15px;
+	--wd-title-font: "meem-extrabold", Arial, Helvetica, sans-serif;
+	--wd-title-font-weight: 600;
+	--wd-title-color: rgb(69,69,69);
+	--wd-entities-title-font: "meem-black", Arial, Helvetica, sans-serif;
+	--wd-entities-title-font-weight: 500;
+	--wd-entities-title-color: rgb(69,69,69);
+	--wd-entities-title-color-hover: rgb(51 51 51 / 65%);
+	--wd-alternative-font: "meem-semibold", Arial, Helvetica, sans-serif;
+	--wd-widget-title-font: "meen-regular", Arial, Helvetica, sans-serif;
+	--wd-widget-title-font-weight: 600;
+	--wd-widget-title-transform: uppercase;
+	--wd-widget-title-color: rgb(69,69,69);
+	--wd-widget-title-font-size: 15px;
+	--wd-header-el-font: "meen-regular", Arial, Helvetica, sans-serif;
+	--wd-header-el-font-weight: 700;
+	--wd-header-el-transform: uppercase;
+	--wd-header-el-font-size: 15px;
+	--wd-brd-radius: 15px;
+	--wd-primary-color: rgb(241,130,140);
+	--wd-alternative-color: rgb(180,222,208);
+	--wd-link-color: rgb(196,223,244);
+	--wd-link-color-hover: rgb(31,0,158);
+	--btn-default-bgcolor: rgb(198,223,243);
+	--btn-default-bgcolor-hover: rgb(251,216,218);
+	--btn-accented-bgcolor: rgb(241,130,140);
+	--btn-accented-bgcolor-hover: rgb(248,192,198);
+	--wd-form-brd-width: 2px;
+	--notices-success-bg: rgb(0,67,156);
+	--notices-success-color: #fff;
+	--notices-warning-bg: #E0B252;
+	--notices-warning-color: #fff;
+	--wd-sticky-btn-height: 95px;
+}
+.wd-popup.wd-age-verify {
+	--wd-popup-width: 500px;
+}
+.wd-popup.wd-promo-popup {
+	background-color: #111111;
+	background-image: none;
+	background-repeat: no-repeat;
+	background-size: contain;
+	background-position: left center;
+	--wd-popup-width: 800px;
+}
+.header-banner {
+	background-image: none;
+	background-repeat: no-repeat;
+	background-size: cover;
+	background-attachment: inherit;
+	background-position: center top;
+}
+:is(.woodmart-woocommerce-layered-nav, .wd-product-category-filter) .wd-scroll-content {
+	max-height: 280px;
+}
+.wd-page-title {
+	background-color: rgb(255,255,255);
+	background-image: url(https://rosecenter.ir/wp-content/uploads/2025/07/Untitled-1.webp);
+	background-size: cover;
+	background-position: center center;
+}
+html .page-title > .container > .title, html .page-title .wd-title-wrapp > .title {
+	font-family: "meem-extrabold", Arial, Helvetica, sans-serif;
+	font-weight: 800;
+	font-size: 48px;
+	color: rgb(255,255,255);
+}
+.woodmart-archive-shop:not(.single-product) .wd-page-content {
+	background-color: #f6f6f6;
+	background-image: none;
+}
+ {
+	font-family: "meem-extrabold", Arial, Helvetica, sans-serif;
+}
+.wd-popup.popup-quick-view {
+	--wd-popup-width: 920px;
+}
+
+@media (max-width: 1024px) {
+	:root {
+		--wd-sticky-btn-height: 95px;
+	}
+
+}
+
+@media (max-width: 768.98px) {
+	:root {
+		--wd-sticky-btn-height: 42px;
+	}
+
+}
+:root{
+--wd-container-w: 1252px;
+--wd-form-brd-radius: 35px;
+--btn-default-color: #fff;
+--btn-default-color-hover: #fff;
+--btn-accented-color: #fff;
+--btn-accented-color-hover: #fff;
+--btn-default-brd-radius: 5px;
+--btn-default-box-shadow: none;
+--btn-default-box-shadow-hover: none;
+--btn-accented-brd-radius: 5px;
+--btn-accented-box-shadow: none;
+--btn-accented-box-shadow-hover: none;
+}
+
+@media (min-width: 1252px) {
+section.elementor-section.wd-section-stretch > .elementor-container {
+margin-left: auto;
+margin-right: auto;
+}
+}
+
+rs-slides :is([data-type=text],[data-type=button]) {
+font-family: meen-regular !important;
+}
+rs-slides :is(h1,h2,h3,h4,h5,h6)[data-type=text] {
+font-family: meem-extrabold !important;
+}
+
+@font-face {
+	font-family: "meem-extrabold";
+	src: url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-ExtraBold.woff2") format("woff2"), 
+url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-ExtraBold.woff") format("woff");
+	font-weight: 900;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "meen-regular";
+	src: url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Regular.woff2") format("woff2"), 
+url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Regular-1.woff") format("woff");
+	font-weight: 400;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "meem-semibold";
+	src: url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-SemiBold.woff2") format("woff2"), 
+url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-SemiBold.woff") format("woff");
+	font-weight: 600;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "meem-black";
+	src: url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Black.woff2") format("woff2"), 
+url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Black.woff") format("woff");
+	font-weight: 900;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "meem-bold";
+	src: url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Bold.woff2") format("woff2"), 
+url("//rosecenter.ir/wp-content/uploads/2025/07/Meem-Bold-1.woff") format("woff");
+	font-weight: 700;
+	font-style: normal;
+}
+

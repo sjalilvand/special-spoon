@@ -98,6 +98,7 @@ def env():
     data["counselor_b"] = cB
     data["applicant_a"] = aA
     data["case"] = case
+    data["db"] = db
     db.commit()
     yield data
     db.close()
