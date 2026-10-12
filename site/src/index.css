@@ -1,0 +1,17 @@
+body {
+  font-family: "Vazirmatn", Tahoma, sans-serif;
+  background: #fffafb;
+}
+.rdp-input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d8c3ca;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  background: #fff;
+}
+.rdp-input:focus {
+  outline: 2px solid #b04a5a33;
+  border-color: #b04a5a;
+}
