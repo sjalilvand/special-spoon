@@ -110,7 +110,9 @@ export default function CaseDetailPage() {
               )}
               {c.assignments.map((a) => (
                 <TableRow key={a.id}>
-                  <TableCell>{a.counselor_name}</TableCell>
+                  <TableCell>
+                    {a.counselor_name} {a.role === "collaborator" && <Chip size="small" label="همکار" variant="outlined" />}
+                  </TableCell>
                   <TableCell>{a.start_at ? new Date(a.start_at).toLocaleString("fa-IR") : "—"}</TableCell>
                   <TableCell>{a.end_at ? new Date(a.end_at).toLocaleString("fa-IR") : "—"}</TableCell>
                   <TableCell>{a.reason ?? "—"}</TableCell>

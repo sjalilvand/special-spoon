@@ -75,6 +75,7 @@ class CaseAssignment(Base):
     end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     end_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    role_in_case: Mapped[str] = mapped_column(String(20), default="primary")
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

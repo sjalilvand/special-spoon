@@ -38,7 +38,7 @@ def _assigned_counselor(db: Session, actor, case: Case) -> None:
     if "COUNSELOR" not in _roles(actor):
         raise HTTPException(status_code=403, detail="ثبت توصیه فقط با نقش مشاور و تخصیص جاری مجاز است")
     c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
-    if c is None or case.primary_counselor_id != c.id:
+    if c is None or not counselor_can_access(db, c.id, case):
         raise HTTPException(status_code=403, detail="این پرونده به شما تخصیص نیافته است")
 
 
