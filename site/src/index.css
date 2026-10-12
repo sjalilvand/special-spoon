@@ -1,8 +1,14 @@
 html { scroll-behavior: smooth; }
 body { font-family: "Vazirmatn", Tahoma, sans-serif; background: #fffafb; }
 ::selection { background: rgba(176,74,90,.25); }
+.grad-text {
+  background: linear-gradient(120deg,#b04a5a 20%,#7a5c8a 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 .hover-lift { transition: transform .25s ease, box-shadow .25s ease; }
-.hover-lift:hover { transform: translateY(-6px); box-shadow: 0 14px 34px rgba(176,74,90,.18) !important; }
+.hover-lift:hover { transform: translateY(-6px); box-shadow: 0 14px 34px rgba(176,74,90,.2) !important; }
 .rdp-input {
   width: 100%;
   padding: 14px;

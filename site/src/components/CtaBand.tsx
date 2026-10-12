@@ -3,16 +3,23 @@ import { texts } from "../content/texts";
 
 export default function CtaBand() {
   return (
-    <Box sx={{ background: "linear-gradient(135deg,#fdeef1 0%,#f6e2ef 100%)", py: 8 }}>
+    <Box sx={{ background: "linear-gradient(135deg,#b04a5a 0%,#7a5c8a 100%)", py: 9 }}>
       <Container>
         <Stack spacing={2} alignItems="center" textAlign="center">
-          <Typography variant="h4" fontWeight={800} color="primary.dark">
+          <Typography variant="h3" fontWeight={800} color="#fff">
             {texts.ctaBand.title}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 560 }}>
+          <Typography variant="body1" sx={{ maxWidth: 560, color: "rgba(255,255,255,0.9)" }}>
             {texts.ctaBand.sub}
           </Typography>
-          <Button href="#consult" variant="contained" size="large" sx={{ mt: 1 }}>
+          <Button
+            href="#consult"
+            size="large"
+            sx={{
+              mt: 1.5, bgcolor: "#fff", color: "primary.main", fontWeight: 800,
+              px: 4, "&:hover": { bgcolor: "#fde7ec" },
+            }}
+          >
             {texts.ctaBand.button}
           </Button>
         </Stack>

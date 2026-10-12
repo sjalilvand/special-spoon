@@ -7,7 +7,7 @@ export default function Header() {
     <AppBar
       position="sticky"
       elevation={0}
-      sx={{ bgcolor: "rgba(255,255,255,0.94)", backdropFilter: "blur(8px)" }}
+      sx={{ bgcolor: "rgba(255,255,255,0.96)", backdropFilter: "blur(8px)", borderBottom: "1px solid #f6e3e8" }}
     >
       <Toolbar sx={{ gap: 1 }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ flexGrow: 1 }}>
@@ -26,21 +26,30 @@ export default function Header() {
           <Button
             key={n.id}
             href={`#${n.id}`}
-            sx={{ color: "text.primary", display: { xs: "none", md: "inline-flex" } }}
+            sx={{ color: "text.primary", display: { xs: "none", md: "inline-flex" }, fontWeight: 600 }}
           >
             {n.label}
           </Button>
         ))}
-        {/* ناوبری سخت — پنل اپ جداگانه است و RouterLink نباید استفاده شود */}
+        {/* ناوبری سخت با اسلش — /panel بدون اسلش به location / می‌افتد */}
         <Button
-          href="/panel"
+          href="/panel/"
           variant="outlined"
           size="small"
-          sx={{ display: { xs: "none", md: "inline-flex" } }}
+          sx={{ display: { xs: "none", md: "inline-flex" }, borderColor: "primary.main", color: "primary.main", fontWeight: 700 }}
         >
           ورود به سامانه
         </Button>
-        <Button href="#consult" variant="contained" size="small">
+        <Button
+          href="#consult"
+          size="small"
+          sx={{
+            background: "linear-gradient(135deg,#b04a5a 0%,#8a3342 100%)",
+            color: "#fff",
+            fontWeight: 700,
+            "&:hover": { background: "linear-gradient(135deg,#a03e4e 0%,#7a2c3a 100%)" },
+          }}
+        >
           درخواست مشاوره
         </Button>
       </Toolbar>

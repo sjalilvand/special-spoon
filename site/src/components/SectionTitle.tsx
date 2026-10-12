@@ -13,20 +13,27 @@ export default function SectionTitle({
       <Typography
         variant="caption"
         sx={{
-          bgcolor: light ? "rgba(255,255,255,0.18)" : "#fde7ec",
+          background: light ? "rgba(255,255,255,0.2)" : "linear-gradient(135deg,#fde7ec 0%,#f0e6f6 100%)",
           color: light ? "#fff" : "primary.main",
-          px: 2, py: 0.5, borderRadius: 99, fontWeight: 700,
+          px: 2.5, py: 0.6, borderRadius: 99, fontWeight: 700,
+          border: light ? "none" : "1px solid #f6d7de",
         }}
       >
         {label}
       </Typography>
-      <Typography variant="h4" fontWeight={800} color={light ? "#fff" : "primary.main"} textAlign="center">
+      <Typography
+        variant="h3"
+        fontWeight={800}
+        textAlign="center"
+        className={light ? "" : "grad-text"}
+        color={light ? "#fff" : undefined}
+      >
         {title}
       </Typography>
       {sub && (
         <Typography
           variant="body1"
-          sx={{ maxWidth: 620, textAlign: "center", color: light ? "rgba(255,255,255,0.88)" : "text.secondary" }}
+          sx={{ maxWidth: 620, textAlign: "center", color: light ? "rgba(255,255,255,0.9)" : "text.secondary" }}
         >
           {sub}
         </Typography>
