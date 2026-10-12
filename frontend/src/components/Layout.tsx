@@ -10,12 +10,15 @@ export default function Layout({ children }: { children: ReactNode }) {
   const has = (rs: string[]) => rs.some((r) => roles.includes(r));
 
   return (
-    <Box minHeight="100vh" bgcolor="grey.50">
-      <AppBar position="static" color="primary" elevation={1}>
+    <Box minHeight="100vh" bgcolor="#fffafb">
+      <AppBar position="static" elevation={1}>
         <Toolbar sx={{ gap: 1.5, flexWrap: "wrap" }}>
-          <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 700 }} onClick={() => navigate("/")}>
-            Rosepsy | پنل مدیریت
+          <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 800 }} onClick={() => navigate("/")}>
+            Rosepsy
           </Typography>
+          <Button color="inherit" size="small" href="/" sx={{ opacity: 0.9 }}>
+            سایت عمومی ←
+          </Button>
           {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "SYSTEM_ADMIN"]) && (
             <Button color="inherit" onClick={() => navigate("/dashboard")}>داشبورد</Button>
           )}
@@ -57,7 +60,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           <Box flexGrow={1} />
           <Button color="inherit" onClick={() => navigate("/change-password")}>تغییر رمز</Button>
-          <Chip size="small" color="secondary" label={user?.display_name ?? ""} />
+          <Chip size="small" sx={{ bgcolor: "rgba(255,255,255,.25)", color: "#fff" }} label={user?.display_name ?? ""} />
           <Button color="inherit" onClick={async () => { await logout(); navigate("/login"); }}>خروج</Button>
         </Toolbar>
       </AppBar>
