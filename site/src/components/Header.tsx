@@ -1,5 +1,4 @@
 import { AppBar, Box, Button, Stack, Toolbar, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
 import { SUGGESTED } from "../content/assets";
 import { texts } from "../content/texts";
 
@@ -32,9 +31,9 @@ export default function Header() {
             {n.label}
           </Button>
         ))}
+        {/* ناوبری سخت — پنل اپ جداگانه است و RouterLink نباید استفاده شود */}
         <Button
-          component={RouterLink}
-          to="/panel"
+          href="/panel"
           variant="outlined"
           size="small"
           sx={{ display: { xs: "none", md: "inline-flex" } }}

@@ -1,5 +1,5 @@
 import { Box, Container, Paper, Stack, Typography } from "@mui/material";
-import { SUGGESTED } from "../content/assets";
+import { SERVICE_ICONS } from "../content/assets";
 import { texts } from "../content/texts";
 
 export default function Services() {
@@ -10,7 +10,7 @@ export default function Services() {
       </Typography>
       <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={3}>
         {texts.services.map((s, idx) => {
-          const icon = SUGGESTED.icons[idx] ?? null;
+          const icon = SERVICE_ICONS[idx] ?? null;
           return (
             <Paper key={s.title} elevation={2} sx={{ p: 3 }}>
               <Stack direction="row" spacing={2} alignItems="flex-start">

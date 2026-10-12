@@ -1,11 +1,11 @@
-// تولید خودکار توسط اسکریپت ۲۶ — برای بازتولید، اسکریپت را دوباره اجرا کنید
+// تولیدشده بر اساس Inventory پوشه site (۲۹ تصویر) — فاز ۱۰
 export interface SiteAsset {
   file: string;
   original: string;
 }
 
 export const IMAGES: SiteAsset[] = [
-   { file: "/assets/img-1.webp", original: "location-150x150-1-20x20.webp" },
+  { file: "/assets/img-1.webp", original: "location-150x150-1-20x20.webp" },
   { file: "/assets/img-2.webp", original: "mail-20x20.webp" },
   { file: "/assets/img-3.png", original: "rose-logo-1-300x65.png" },
   { file: "/assets/img-4.png", original: "rose-logo-1.png" },
@@ -39,13 +39,17 @@ export const IMAGES: SiteAsset[] = [
 export const SUGGESTED: {
   logo: string | null;
   hero: string[];
-  icons: string[];
   about: string | null;
-  counselors: string[];
 } = {
-  logo: "/assets/img-3.png",
+  logo: "/assets/img-4.png",
   hero: ["/assets/img-11.png", "/assets/img-12.png", "/assets/img-13.png"],
-  icons: ["/assets/img-9.svg", "/assets/img-15.svg", "/assets/img-20.svg", "/assets/img-21.svg", "/assets/img-22.svg", "/assets/img-23.svg", "/assets/img-24.svg", "/assets/img-25.svg"],
   about: null,
-  counselors: ["/assets/img-26.svg", "/assets/img-27.svg", "/assets/img-28.svg", "/assets/img-29.svg"],
 };
+
+// نگاشت آیکون خدمات به ترتیب تعریف در texts.services
+export const SERVICE_ICONS: (string | null)[] = [
+  "/assets/img-20.svg", // روان‌درمانی
+  "/assets/img-26.svg", // مشاوره
+  "/assets/img-9.svg",  // آموزش
+  "/assets/img-28.svg", // درمان گروهی
+];

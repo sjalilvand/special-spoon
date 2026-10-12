@@ -1,5 +1,4 @@
 import { Box, Container, Divider, Stack, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
 import { texts } from "../content/texts";
 
 export default function Footer() {
@@ -22,9 +21,9 @@ export default function Footer() {
             <Typography variant="body2">ساعات کاری: {texts.footer.hours}</Typography>
           </Stack>
           <Stack spacing={1}>
-            <RouterLink to="/panel" style={{ color: "#ffd7de", textDecoration: "none" }}>
+            <a href="/panel" style={{ color: "#ffd7de", textDecoration: "none" }}>
               ورود به سامانه مدیریت
-            </RouterLink>
+            </a>
           </Stack>
         </Stack>
         <Divider sx={{ my: 3, borderColor: "#ffffff33" }} />
