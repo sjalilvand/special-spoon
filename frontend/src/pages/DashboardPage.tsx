@@ -11,7 +11,6 @@ import { CASE_STATUS_META } from "../api/cases";
 import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import { fetchCounselorOptions } from "../api/cases";
 import { fetchReportSummary } from "../api/reports";
-import type { ReportSummary } from "../api/reports";
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
