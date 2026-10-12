@@ -7,12 +7,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errDetail } from "../api/client";
 import { CONSULT_STATUS_META, fetchConsultationRequests, updateConsultationRequest } from "../api/siteops";
+import { convertConsultationRequest } from "../api/referrals";
+import { fetchCounselorOptions, fetchServiceLocations } from "../api/people";
+import type { IdName } from "../api/people";
 
 export default function ConsultationRequestsPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [convertRow, setConvertRow] = useState<ConsultationRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["consultations", page, status],
@@ -79,6 +83,11 @@ export default function ConsultationRequestsPage() {
                   </TableCell>
                   <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
                   <TableCell>
+                    {(row.status === "new" || row.status === "in_review") && (
+                      <Button size="small" variant="outlined" onClick={() => setConvertRow(row)}>
+                        تبدیل
+                      </Button>
+                    )}
                     <FormControl size="small" sx={{ minWidth: 150 }}>
                       <Select
                         value={row.status}
@@ -99,6 +108,120 @@ export default function ConsultationRequestsPage() {
           onPageChange={(_, p) => setPage(p)} rowsPerPage={20} rowsPerPageOptions={[20]}
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} از ${count}`} />
       </TableContainer>
+      <ConvertDialog
+        row={convertRow}
+        onClose={() => setConvertRow(null)}
+        invalidate={() => qc.invalidateQueries({ queryKey: ["consultations"] })}
+        onError={setError}
+      />
     </Stack>
+  );
+}
+
+function ConvertDialog({ row, onClose, invalidate, onError }: {
+  row: ConsultationRow | null;
+  onClose: () => void;
+  invalidate: () => void;
+  onError: (m: string) => void;
+}) {
+  const [createCase, setCreateCase] = useState(true);
+  const [counselorId, setCounselorId] = useState("");
+  const [serviceLocationId, setServiceLocationId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const { data: counselors } = useQuery({
+    queryKey: ["counselor-options"],
+    queryFn: fetchCounselorOptions,
+    enabled: Boolean(row) && createCase,
+  });
+  const { data: locations } = useQuery({
+    queryKey: ["locations"],
+    queryFn: fetchServiceLocations,
+    enabled: Boolean(row) && createCase,
+  });
+
+  useEffect(() => {
+    if (row) { setCreateCase(true); setCounselorId(""); setServiceLocationId(""); setFormError(null); setSuccess(null); }
+  }, [row]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!row) return;
+    setFormError(null);
+    setBusy(true);
+    try {
+      const res = await convertConsultationRequest(row.id, {
+        create_case: createCase,
+        counselor_id: createCase && counselorId ? counselorId : undefined,
+        service_location_id: createCase && serviceLocationId ? serviceLocationId : undefined,
+      });
+      setSuccess(
+        `متقاضی ${res.applicant_created ? "ایجاد" : "یافت"} شد${res.case_number ? ` و پرونده ${res.case_number} تشکیل شد` : ""}.`
+      );
+      invalidate();
+      setTimeout(() => { onClose(); }, 2000);
+    } catch (err) {
+      setFormError(errDetail(err));
+      onError(errDetail(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={row !== null} onClose={onClose} maxWidth="xs" fullWidth>
+      <form onSubmit={submit}>
+        <DialogTitle>تبدیل به متقاضی</DialogTitle>
+        <DialogContent>
+          {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+          {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
+          {row && !success && (
+            <Stack spacing={2} mt={2}>
+              <Typography variant="body2" color="text.secondary">
+                نام: <b>{row.full_name}</b> | موبایل: <b>{row.mobile}</b> | موضوع: <b>{row.topic}</b>
+              </Typography>
+              <FormControlLabel
+                control={<Checkbox checked={createCase} onChange={(e) => setCreateCase(e.target.checked)} />}
+                label="تشکیل پرونده جدید"
+              />
+              {createCase && (
+                <>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>مشاور (اختیاری — تخصیص فوری)</InputLabel>
+                    <Select value={counselorId} label="مشاور (اختیاری)"
+                      onChange={(e) => setCounselorId(e.target.value)}>
+                      <MenuItem value="">— بعداً تخصیص می‌شود —</MenuItem>
+                      {counselors?.items.map((o: IdName) => (
+                        <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>مرکز ارائه خدمت</InputLabel>
+                    <Select value={serviceLocationId} label="مرکز ارائه خدمت"
+                      onChange={(e) => setServiceLocationId(e.target.value)}>
+                      <MenuItem value="">—</MenuItem>
+                      {locations?.map((l) => (
+                        <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>بستن</Button>
+          {row && !success && (
+            <Button type="submit" variant="contained" disabled={busy}>
+              {busy ? "در حال تبدیل…" : "تبدیل"}
+            </Button>
+          )}
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }

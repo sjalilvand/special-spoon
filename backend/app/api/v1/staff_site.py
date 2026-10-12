@@ -14,6 +14,10 @@ from app.models.consultation import ConsultationRequest
 from app.models.people import Counselor
 from app.models.user import User
 from app.services.audit import record_audit
+from app.models.case import Case, CaseAssignment, CaseStatus
+from app.models.people import Applicant
+from app.api.v1.cases import generate_case_number
+from datetime import date as date_type
 
 router = APIRouter(tags=["site-ops"])
 
@@ -124,3 +128,82 @@ def update_consultation_request(
                  entity_type="consultation_request", entity_id=str(r.id),
                  detail={"status": payload.status})
     return _out(db, r)
+
+
+class ConvertRequest(BaseModel):
+    create_case: bool = False
+    counselor_id: uuid.UUID | None = None
+    service_location_id: uuid.UUID | None = None
+
+
+@router.post("/consultation-requests/{request_id}/convert")
+def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session = Depends(get_db), actor=Depends(require_roles("ORG_MANAGER", "RECEPTION"))) -> dict:
+    r = db.get(ConsultationRequest, request_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail="درخواست یافت نشد")
+    if r.status not in ("new", "in_review"):
+        raise HTTPException(status_code=409, detail="این درخواست قبلاً تبدیل یا بایگانی شده است")
+
+    full_name = (r.full_name or "").strip()
+    parts = full_name.split(" ", 1)
+    first = parts[0] if parts else full_name
+    last = parts[1] if len(parts) > 1 else "—"
+
+    applicant = db.scalar(select(Applicant).where(Applicant.mobile == r.mobile))
+    created_applicant = False
+    if applicant is None:
+        applicant = Applicant(
+            first_name=first, last_name=last, mobile=r.mobile,
+            status="active", record_source="manual",
+        )
+        db.add(applicant)
+        db.flush()
+        created_applicant = True
+
+    case_id = None
+    case_number = None
+    if payload.create_case:
+        counselor_id = payload.counselor_id
+        if counselor_id is not None:
+            cc = db.get(Counselor, counselor_id)
+            if cc is None or cc.status != "active":
+                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+        case = Case(
+            case_number=generate_case_number(db),
+            applicant_id=applicant.id,
+            acceptance_date=date_type.today(),
+            service_location_id=payload.service_location_id,
+            service_type=r.topic,
+            created_by=actor.id,
+        )
+        db.add(case)
+        db.flush()
+        if counselor_id is not None:
+            db.add(CaseAssignment(
+                case_id=case.id, counselor_id=counselor_id,
+                reason="تبدیل از درخواست مشاوره سایت", assigned_by=actor.id, role_in_case="primary",
+            ))
+            case.primary_counselor_id = counselor_id
+            case.status = CaseStatus.ACTIVE
+        else:
+            case.status = CaseStatus.AWAITING_ASSIGNMENT
+        case_id = case.id
+        case_number = case.case_number
+
+    r.status = "converted"
+    r.applicant_id = applicant.id
+    r.case_id = case_id
+    r.handled_by = actor.id
+    from datetime import datetime as dt, timezone as tz
+    r.handled_at = dt.now(tz.utc)
+    db.commit()
+    record_audit(db, action="consultation.converted", actor_user_id=actor.id,
+                 entity_type="consultation_request", entity_id=str(r.id),
+                 detail={"applicant_id": str(applicant.id), "case_id": str(case_id) if case_id else None})
+    return {
+        "status": "converted",
+        "applicant_id": str(applicant.id),
+        "applicant_created": created_applicant,
+        "case_id": str(case_id) if case_id else None,
+        "case_number": case_number,
+    }

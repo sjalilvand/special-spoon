@@ -13,6 +13,7 @@ from app.api.v1.me import router as me_router
 from app.api.v1.org import router as org_router
 from app.api.v1.public import router as public_router
 from app.api.v1.recommendations import router as recommendations_router
+from app.api.v1.referrals import router as referrals_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.staff_site import router as staff_site_router
@@ -45,6 +46,7 @@ app.include_router(me_router, prefix=settings.api_prefix)
 app.include_router(supervisor_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
 app.include_router(clinical_router, prefix=settings.api_prefix)
+app.include_router(referrals_router, prefix=settings.api_prefix)
 app.include_router(public_router, prefix=settings.api_prefix)
 app.include_router(staff_site_router, prefix=settings.api_prefix)
 

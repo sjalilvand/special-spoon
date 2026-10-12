@@ -13,6 +13,7 @@ from app.models.consultation import ConsultationRequest
 from app.models.import_job import ImportJob, ImportRow
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
 from app.models.recommendation import Recommendation
+from app.models.referral import Referral
 from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus, user_roles_table
 
 __all__ = [
@@ -21,7 +22,7 @@ __all__ = [
     "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Consent",
     "ConsultationRequest", "Counselor", "Diagnosis", "FormVersion",
     "ImportJob", "ImportRow", "OrganizationUnit", "Recommendation",
-    "ReviewAction", "Role", "ServiceLocation", "Session",
+    "Referral", "ReviewAction", "Role", "ServiceLocation", "Session",
     "SessionNoteRevision", "SessionNoteStatus", "TreatmentPlan",
     "User", "UserScope", "UserStatus", "user_roles_table",
 ]

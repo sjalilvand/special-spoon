@@ -15,6 +15,7 @@ import {
 import type { CaseDetail } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
 import CaseClinical from "../components/CaseClinical";
+import CaseReferrals from "../components/CaseReferrals";
 import CaseAssessments from "../components/CaseAssessments";
 import CaseAppointments from "../components/CaseAppointments";
 import CaseSessions from "../components/CaseSessions";
@@ -164,6 +165,7 @@ export default function CaseDetailPage() {
 
       <CaseAssessments caseId={c.id} />
       <CaseClinical caseId={c.id} />
+      <CaseReferrals caseId={c.id} />
       <CaseAppointments caseId={c.id} />
       <CaseSessions caseId={c.id} />
       <CaseRecommendations caseId={c.id} />
