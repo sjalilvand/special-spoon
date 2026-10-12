@@ -8,6 +8,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { postConsultation } from "../api";
 import { texts } from "../content/texts";
 
+const SOURCES = ["جست‌وجوی اینترنتی", "معرفی آشنایان", "شبکه‌های اجتماعی", "تابلو/محل", "سایر"];
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toIsoDate(d: any): string | undefined {
   if (!d || typeof d.year !== "number") return undefined;
@@ -21,6 +23,8 @@ export default function ConsultForm() {
   const [slot, setSlot] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dateVal, setDateVal] = useState<any>(null);
+  const [city, setCity] = useState("");
+  const [source, setSource] = useState("");
   const [message, setMessage] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,8 +42,10 @@ export default function ConsultForm() {
         topic,
         preferred_date: toIsoDate(dateVal),
         preferred_slot: slot || undefined,
+        city: city.trim() || undefined,
+        referral_source: source || undefined,
         message: message.trim() || undefined,
-        website: honeypot, // ضدربات — باید خالی بماند
+        website: honeypot,
       });
       setDone(true);
     } catch (err) {
@@ -100,16 +106,26 @@ export default function ConsultForm() {
                     fullWidth
                   >
                     {texts.topics.map((t) => (
-                      <MenuItem key={t} value={t}>
-                        {t}
-                      </MenuItem>
+                      <MenuItem key={t} value={t}>{t}</MenuItem>
                     ))}
                   </TextField>
                   <TextField select label="بازه زمانی ترجیحی" value={slot} onChange={(e) => setSlot(e.target.value)} fullWidth>
                     {texts.slots.map((s) => (
-                      <MenuItem key={s} value={s}>
-                        {s}
-                      </MenuItem>
+                      <MenuItem key={s} value={s}>{s}</MenuItem>
+                    ))}
+                  </TextField>
+                </Stack>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5}>
+                  <TextField
+                    label="شهر (اختیاری)"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    fullWidth
+                  />
+                  <TextField select label="نحوه آشنایی با ما (اختیاری)" value={source} onChange={(e) => setSource(e.target.value)} fullWidth>
+                    <MenuItem value="">—</MenuItem>
+                    {SOURCES.map((s) => (
+                      <MenuItem key={s} value={s}>{s}</MenuItem>
                     ))}
                   </TextField>
                 </Stack>

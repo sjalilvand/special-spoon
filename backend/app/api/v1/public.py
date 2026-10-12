@@ -60,6 +60,8 @@ class ConsultationCreate(BaseModel):
     preferred_slot: str | None = Field(default=None, max_length=30)
     message: str | None = Field(default=None, max_length=2000)
     website: str | None = Field(default=None, max_length=100)  # honeypot ضدربات
+    city: str | None = Field(default=None, max_length=100)
+    referral_source: str | None = Field(default=None, max_length=200)
 
 
 @router.get("/counselors")
@@ -119,6 +121,8 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         preferred_date=preferred,
         preferred_slot=payload.preferred_slot,
         message=payload.message,
+        city=payload.city,
+        referral_source=payload.referral_source,
         ip=ip,
     )
     db.add(r)

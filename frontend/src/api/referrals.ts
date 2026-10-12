@@ -50,6 +50,6 @@ export async function updateReferral(id: string, payload: Record<string, unknown
 export async function convertConsultationRequest(
   id: string,
   payload: Record<string, unknown>
-): Promise<{ applicant_id: string; applicant_created: boolean; case_id: string | null; case_number: string | null }> {
+): Promise<{ applicant_id: string; applicant_created: boolean; case_id: string | null; case_number: string | null; first_appointment_created: boolean }> {
   return (await apiClient.post(`/consultation-requests/${id}/convert`, payload)).data;
 }

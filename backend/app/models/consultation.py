@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
-    CheckConstraint, Date, DateTime, ForeignKey, String, Text, func,
+    CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,4 +40,8 @@ class ConsultationRequest(Base):
     case_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("cases.id", ondelete="SET NULL"), nullable=True
     )
+    reception_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    referral_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

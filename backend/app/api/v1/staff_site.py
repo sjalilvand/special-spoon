@@ -18,6 +18,8 @@ from app.models.case import Case, CaseAssignment, CaseStatus
 from app.models.people import Applicant
 from app.api.v1.cases import generate_case_number
 from datetime import date as date_type
+from app.models.appointment import Appointment
+from datetime import datetime as rdt, timezone as rtz
 
 router = APIRouter(tags=["site-ops"])
 
@@ -74,6 +76,8 @@ async def upload_counselor_photo(
 
 class ConsultStatusUpdate(BaseModel):
     status: str = Field(pattern="^(new|in_review|converted|archived)$")
+    reception_note: str | None = Field(default=None, max_length=2000)
+    add_contact_attempt: bool = False
 
 
 def _out(db: Session, r: ConsultationRequest) -> dict:
@@ -89,6 +93,10 @@ def _out(db: Session, r: ConsultationRequest) -> dict:
         "status": r.status,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "handled_by_name": handler.display_name if handler else None,
+        "reception_note": r.reception_note,
+        "contact_attempts": r.contact_attempts or 0,
+        "city": r.city,
+        "referral_source": r.referral_source,
     }
 
 
@@ -121,6 +129,10 @@ def update_consultation_request(
     if r is None:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد")
     r.status = payload.status
+    if payload.reception_note is not None:
+        r.reception_note = payload.reception_note
+    if payload.add_contact_attempt:
+        r.contact_attempts = (r.contact_attempts or 0) + 1
     r.handled_by = actor.id
     r.handled_at = datetime.now(timezone.utc)
     db.commit()
@@ -134,6 +146,7 @@ class ConvertRequest(BaseModel):
     create_case: bool = False
     counselor_id: uuid.UUID | None = None
     service_location_id: uuid.UUID | None = None
+    first_appointment_at: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
 
 
 @router.post("/consultation-requests/{request_id}/convert")
@@ -162,6 +175,7 @@ def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session 
 
     case_id = None
     case_number = None
+    appt_created = False
     if payload.create_case:
         counselor_id = payload.counselor_id
         if counselor_id is not None:
@@ -189,6 +203,19 @@ def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session 
             case.status = CaseStatus.AWAITING_ASSIGNMENT
         case_id = case.id
         case_number = case.case_number
+        if payload.first_appointment_at:
+            if counselor_id is None:
+                raise HTTPException(status_code=422, detail="برای ثبت نوبت اولیه، انتخاب مشاور الزامی است")
+            try:
+                appt_at = rdt.fromisoformat(payload.first_appointment_at).replace(tzinfo=rtz.utc)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="زمان نوبت اولیه نامعتبر است")
+            db.add(Appointment(
+                case_id=case.id, counselor_id=counselor_id,
+                scheduled_at=appt_at, status="scheduled",
+                note="نوبت اولیه — تبدیل از درخواست سایت", created_by=actor.id,
+            ))
+            appt_created = True
 
     r.status = "converted"
     r.applicant_id = applicant.id
@@ -206,4 +233,5 @@ def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session 
         "applicant_created": created_applicant,
         "case_id": str(case_id) if case_id else None,
         "case_number": case_number,
+        "first_appointment_created": appt_created,
     }

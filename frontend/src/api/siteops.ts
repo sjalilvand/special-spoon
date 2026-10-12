@@ -11,6 +11,10 @@ export interface ConsultationRow {
   status: string;
   created_at: string | null;
   handled_by_name: string | null;
+  reception_note: string | null;
+  contact_attempts: number;
+  city: string | null;
+  referral_source: string | null;
 }
 
 export const CONSULT_STATUS_META: Record<string, { label: string; color: "success" | "warning" | "info" | "default" }> = {
@@ -27,8 +31,11 @@ export async function fetchConsultationRequests(params: {
   return (await apiClient.get("/consultation-requests", { params: { ...params, page_size: 20 } })).data;
 }
 
-export async function updateConsultationRequest(id: string, status: string): Promise<void> {
-  await apiClient.patch(`/consultation-requests/${id}`, { status });
+export async function updateConsultationRequest(
+  id: string,
+  payload: { status: string; reception_note?: string; add_contact_attempt?: boolean }
+): Promise<void> {
+  await apiClient.patch(`/consultation-requests/${id}`, payload);
 }
 
 export async function uploadCounselorPhoto(id: string, file: File): Promise<void> {
