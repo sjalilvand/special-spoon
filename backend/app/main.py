@@ -11,6 +11,7 @@ from app.api.v1.imports import router as imports_router
 from app.api.v1.me import router as me_router
 from app.api.v1.org import router as org_router
 from app.api.v1.recommendations import router as recommendations_router
+from app.api.v1.reports import router as reports_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.supervisor import router as supervisor_router
 from app.api.v1.users import router as users_router
@@ -39,6 +40,7 @@ app.include_router(sessions_router, prefix=settings.api_prefix)
 app.include_router(recommendations_router, prefix=settings.api_prefix)
 app.include_router(me_router, prefix=settings.api_prefix)
 app.include_router(supervisor_router, prefix=settings.api_prefix)
+app.include_router(reports_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

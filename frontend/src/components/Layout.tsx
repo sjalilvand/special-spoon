@@ -17,6 +17,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             Rosepsy
           </Typography>
           {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/dashboard")}>داشبورد</Button>
+          )}
+          {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/cases")}>پرونده‌ها</Button>
           )}
           {has(["COUNSELOR"]) && (
@@ -45,6 +48,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {has(["SYSTEM_ADMIN"]) && (
             <Button color="inherit" onClick={() => navigate("/users")}>کاربران</Button>
+          )}
+          {has(["SYSTEM_ADMIN"]) && (
+            <Button color="inherit" onClick={() => navigate("/audit-events")}>رخدادها</Button>
           )}
           <Box flexGrow={1} />
           <Button color="inherit" onClick={() => navigate("/change-password")}>تغییر رمز</Button>

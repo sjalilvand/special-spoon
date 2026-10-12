@@ -3,11 +3,13 @@ import Layout from "../components/Layout";
 import ActivatePage from "../pages/ActivatePage";
 import ApplicantsPage from "../pages/ApplicantsPage";
 import AssessmentFormPage from "../pages/AssessmentFormPage";
+import AuditEventsPage from "../pages/AuditEventsPage";
 import CaseDetailPage from "../pages/CaseDetailPage";
 import CasesPage from "../pages/CasesPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import CounselorWorklistPage from "../pages/CounselorWorklistPage";
 import CounselorsPage from "../pages/CounselorsPage";
+import DashboardPage from "../pages/DashboardPage";
 import HomePage from "../pages/HomePage";
 import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
@@ -19,6 +21,7 @@ import UsersPage from "../pages/UsersPage";
 import ProtectedRoute from "./ProtectedRoute";
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
+const STAFF_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
 const CLINICAL_ROLES = ["COUNSELOR", "TECHNICAL_SUPERVISOR"];
 
 export default function AppRoutes() {
@@ -28,6 +31,12 @@ export default function AppRoutes() {
       <Route path="/activate" element={<ActivatePage />} />
       <Route path="/" element={<ProtectedRoute><Layout><HomePage /></Layout></ProtectedRoute>} />
       <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
+      <Route path="/dashboard" element={
+        <ProtectedRoute roles={STAFF_ROLES}><Layout><DashboardPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/audit-events" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><AuditEventsPage /></Layout></ProtectedRoute>
+      } />
       <Route path="/users" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><UsersPage /></Layout></ProtectedRoute>
       } />

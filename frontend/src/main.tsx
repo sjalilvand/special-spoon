@@ -7,6 +7,7 @@ import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import theme from "./theme";
 import "vazirmatn/Vazirmatn-font-face.css";
+import "./index.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

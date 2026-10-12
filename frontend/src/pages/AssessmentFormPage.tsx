@@ -13,6 +13,7 @@ import {
 } from "../api/assessments";
 import type { FormFieldDef } from "../api/assessments";
 import { fetchCase } from "../api/cases";
+import { printAssessment } from "../api/reports";
 
 export default function AssessmentFormPage() {
   const params = useParams<{ id?: string; caseId?: string }>();
@@ -214,7 +215,17 @@ export default function AssessmentFormPage() {
         )}
       </Box>
 
-      {status === "returned" && (
+      {existing && ["finalized", "pending_review", "approved"].includes(existing.status) && (
+        <Button
+          variant="outlined"
+          onClick={async () => {
+            try { await printAssessment(existing.id); } catch { /* رخداد چاپ غیربحرانی است */ }
+            window.print();
+          }}
+        >
+          چاپ فرم
+        </Button>
+      )}      {status === "returned" && (
         <Alert severity="warning">
           این نسخه توسط مسئول فنی برگشت خورده است؛ پس از اصلاح، دوباره نهایی‌سازی کنید.
         </Alert>
