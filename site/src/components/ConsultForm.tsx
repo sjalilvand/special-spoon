@@ -11,9 +11,19 @@ import { texts } from "../content/texts";
 const SOURCES = ["جست‌وجوی اینترنتی", "معرفی آشنایان", "شبکه‌های اجتماعی", "تابلو/محل", "سایر"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toIsoDate(d: any): string | undefined {
-  if (!d || typeof d.year !== "number") return undefined;
-  return new Date(Date.UTC(d.year, d.monthNumber - 1, d.day)).toISOString().slice(0, 10);
+function safeJalaliToIso(d: any): string | undefined {
+  if (!d || typeof d !== "object") return undefined;
+  try {
+    const y = Number(d.year);
+    const m = Number(d.monthNumber ?? d.month?.number);
+    const day = Number(d.day);
+    if (!y || !m || !day || m < 1 || m > 12 || day < 1 || day > 31) return undefined;
+    const dt = new Date(Date.UTC(y, m - 1, day));
+    if (isNaN(dt.getTime())) return undefined;
+    return dt.toISOString().slice(0, 10);
+  } catch {
+    return undefined;
+  }
 }
 
 export default function ConsultForm() {
