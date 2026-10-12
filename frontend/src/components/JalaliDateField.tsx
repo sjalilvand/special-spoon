@@ -3,12 +3,6 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 
-interface JalaliShape {
-  year: number;
-  monthNumber: number;
-  day: number;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function safeJalaliToIso(d: any): string | undefined {
   if (!d || typeof d !== "object") return undefined;
@@ -42,7 +36,7 @@ export default function JalaliDateField({
       </Typography>
       <DatePicker
         value={value}
-        onChange={(d) => onChange(jalaliToIso(d as unknown as JalaliShape | null))}
+        onChange={(d) => onChange(safeJalaliToIso(d))}
         calendar={persian}
         locale={persian_fa}
         containerStyle={{ width: "100%" }}
