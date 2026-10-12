@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
 import { createApplicant, fetchApplicants, fetchOrgUnits, fetchServiceLocations } from "../api/people";
+import JalaliDateField from "../components/JalaliDateField";
 
 export default function ApplicantsPage() {
   const [page, setPage] = useState(0);
@@ -79,13 +80,14 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Record<string, string>>({});
   const [createAccount, setCreateAccount] = useState(false);
+  const [birthDate, setBirthDate] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: units } = useQuery({ queryKey: ["units"], queryFn: fetchOrgUnits, enabled: open });
   const { data: locations } = useQuery({ queryKey: ["locations"], queryFn: fetchServiceLocations, enabled: open });
 
   useEffect(() => {
-    if (open) { setForm({}); setCreateAccount(false); setFormError(null); }
+    if (open) { setForm({}); setCreateAccount(false); setFormError(null); setBirthDate(undefined); }
   }, [open]);
 
   const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -101,7 +103,7 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
         external_id: form.external_id?.trim() || undefined,
         employee_code: form.employee_code?.trim() || undefined,
         national_id: form.national_id?.trim() || undefined,
-        birth_date: form.birth_date?.trim() || undefined,
+        birth_date: birthDate,
         gender: form.gender || undefined,
         mobile: form.mobile?.trim() || undefined,
         unit_id: form.unit_id || undefined,
@@ -140,7 +142,11 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
             </Stack>
             <Stack direction="row" spacing={2}>
               <TextField label="کد ملی (متن، ۱۰ رقم)" fullWidth value={form.national_id ?? ""} onChange={set("national_id")} />
-              <TextField label="تاریخ تولد (۱۳۷۰/۰۳/۲۱)" fullWidth value={form.birth_date ?? ""} onChange={set("birth_date")} />
+              <JalaliDateField
+                label="تاریخ تولد"
+                value={undefined}
+                onChange={(iso) => setBirthDate(iso)}
+              />
             </Stack>
             <Stack direction="row" spacing={2}>
               <TextField label="موبایل (متن)" fullWidth value={form.mobile ?? ""} onChange={set("mobile")} />

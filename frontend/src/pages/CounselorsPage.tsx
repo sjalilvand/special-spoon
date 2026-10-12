@@ -9,6 +9,7 @@ import { errDetail } from "../api/client";
 import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselor } from "../api/people";
 import { uploadCounselorPhoto } from "../api/siteops";
 import type { Counselor } from "../api/people";
+import JalaliDateField from "../components/JalaliDateField";
 
 const STATUS: Record<string, { label: string; color: "success" | "default" | "warning" }> = {
   active: { label: "فعال", color: "success" },
@@ -128,12 +129,13 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Record<string, string>>({});
   const [createAccount, setCreateAccount] = useState(false);
+  const [licenseExpiry, setLicenseExpiry] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: locations } = useQuery({ queryKey: ["locations"], queryFn: fetchServiceLocations, enabled: open });
 
   useEffect(() => {
-    if (open) { setForm({}); setCreateAccount(false); setFormError(null); }
+    if (open) { setForm({}); setCreateAccount(false); setFormError(null); setLicenseExpiry(undefined); }
   }, [open]);
 
   const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -152,6 +154,7 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
         degree: form.degree?.trim() || undefined,
         specialty: form.specialty?.trim() || undefined,
         license_number: form.license_number?.trim() || undefined,
+        license_expiry_date: licenseExpiry,
         work_mobile: form.work_mobile?.trim() || undefined,
         email: form.email?.trim() || undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
@@ -177,18 +180,24 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
           {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
           <Stack spacing={2} mt={1}>
             <TextField label="کد مشاور *" value={form.counselor_code ?? ""} onChange={set("counselor_code")} required />
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <TextField label="نام *" fullWidth value={form.first_name ?? ""} onChange={set("first_name")} required />
               <TextField label="نام خانوادگی *" fullWidth value={form.last_name ?? ""} onChange={set("last_name")} required />
             </Stack>
             <TextField label="کد ملی (متن، ۱۰ رقم)" value={form.national_id ?? ""} onChange={set("national_id")} />
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <TextField label="عنوان حرفه‌ای" fullWidth value={form.professional_title ?? ""} onChange={set("professional_title")} />
               <TextField label="تخصص" fullWidth value={form.specialty ?? ""} onChange={set("specialty")} />
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <TextField label="شماره مجوز" fullWidth value={form.license_number ?? ""} onChange={set("license_number")} />
               <TextField label="ظرفیت" type="number" fullWidth value={form.capacity ?? ""} onChange={set("capacity")} />
+            </Stack>
+            <JalaliDateField
+              label="تاریخ اعتبار مجوز"
+              value={undefined}
+              onChange={(iso) => setLicenseExpiry(iso)}
+            />
             </Stack>
             <TextField label="تماس کاری (متن)" value={form.work_mobile ?? ""} onChange={set("work_mobile")} />
             <FormControl fullWidth size="small">

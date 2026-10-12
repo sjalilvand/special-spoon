@@ -1,16 +1,15 @@
-/* بند ۹ و ۱۴: چاپ مجاز فرم - پنهان‌کردن عناصر رابط در خروجی چاپ */
-@media print {
-  .MuiAppBar-root {
-    display: none !important;
-  }
-  .MuiButton-root {
-    display: none !important;
-  }
-  .MuiContainer-maxWidthLg {
-    max-width: 100% !important;
-    padding: 0 !important;
-  }
-  body {
-    background: #fff !important;
-  }
+html { scroll-behavior: smooth; }
+body { font-family: "Vazirmatn", Tahoma, sans-serif; }
+.rdp-input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(0,0,0,.23);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 15px;
+  background: #fff;
+}
+.rdp-input:focus {
+  outline: 2px solid #5b4b8a33;
+  border-color: #5b4b8a;
 }
