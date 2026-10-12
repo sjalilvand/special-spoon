@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { fetchPublicCounselors } from "../api";
 import type { PublicCounselor } from "../api";
 import { texts } from "../content/texts";
+import SectionTitle from "./SectionTitle";
 
 export default function Counselors() {
   const [items, setItems] = useState<PublicCounselor[] | null>(null);
@@ -16,14 +17,9 @@ export default function Counselors() {
   }, []);
 
   return (
-    <Box sx={{ bgcolor: "#fdf2f4", py: 8 }}>
+    <Box sx={{ py: 9 }}>
       <Container id="counselors">
-        <Typography variant="h4" fontWeight={800} color="primary.main" textAlign="center">
-          {texts.counselorsTitle}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" textAlign="center" mb={4}>
-          {texts.counselorsSub}
-        </Typography>
+        <SectionTitle label="تیم ما" title={texts.counselorsTitle} sub={texts.counselorsSub} />
 
         {items === null && (
           <Stack alignItems="center" py={4}>
@@ -39,8 +35,8 @@ export default function Counselors() {
 
         <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={3}>
           {items?.map((c) => (
-            <Card key={c.id} elevation={2} sx={{ borderRadius: 4 }}>
-              <CardContent sx={{ textAlign: "center" }}>
+            <Card key={c.id} className="hover-lift" elevation={2} sx={{ borderRadius: 4, border: "1px solid #f6e3e8" }}>
+              <CardContent sx={{ textAlign: "center", p: 3 }}>
                 {c.photo_url ? (
                   <Box
                     component="img"
@@ -53,13 +49,9 @@ export default function Counselors() {
                     {c.name.charAt(0)}
                   </Avatar>
                 )}
-                <Typography variant="h6" fontWeight={700}>
-                  {c.name}
-                </Typography>
+                <Typography variant="h6" fontWeight={700}>{c.name}</Typography>
                 {c.professional_title && (
-                  <Typography variant="body2" color="text.secondary">
-                    {c.professional_title}
-                  </Typography>
+                  <Typography variant="body2" color="text.secondary">{c.professional_title}</Typography>
                 )}
                 {c.specialty && (
                   <Chip size="small" label={c.specialty} color="primary" variant="outlined" sx={{ mt: 1 }} />

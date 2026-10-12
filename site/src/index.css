@@ -1,7 +1,8 @@
-body {
-  font-family: "Vazirmatn", Tahoma, sans-serif;
-  background: #fffafb;
-}
+html { scroll-behavior: smooth; }
+body { font-family: "Vazirmatn", Tahoma, sans-serif; background: #fffafb; }
+::selection { background: rgba(176,74,90,.25); }
+.hover-lift { transition: transform .25s ease, box-shadow .25s ease; }
+.hover-lift:hover { transform: translateY(-6px); box-shadow: 0 14px 34px rgba(176,74,90,.18) !important; }
 .rdp-input {
   width: 100%;
   padding: 14px;
@@ -12,6 +13,6 @@ body {
   background: #fff;
 }
 .rdp-input:focus {
-  outline: 2px solid #b04a5a33;
+  outline: 2px solid rgba(176,74,90,.2);
   border-color: #b04a5a;
 }
