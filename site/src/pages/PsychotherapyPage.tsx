@@ -2,7 +2,6 @@ import { Box, Button, Container, Paper, Stack, Typography } from "@mui/material"
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { psycho } from "../content/psycho";
-import { texts } from "../content/texts";
 
 export default function PsychotherapyPage() {
   return (
