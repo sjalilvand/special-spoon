@@ -8,6 +8,7 @@ from app.models.appointment import (
 from app.models.assessment import Assessment, AssessmentStatus, FormVersion, ReviewAction
 from app.models.audit import AuditEvent
 from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Consent
+from app.models.consultation import ConsultationRequest
 from app.models.import_job import ImportJob, ImportRow
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
 from app.models.recommendation import Recommendation
@@ -26,6 +27,7 @@ __all__ = [
     "Case",
     "CaseAssignment",
     "CaseStatus",
+    "ConsultationRequest",
     "Consent",
     "Counselor",
     "FormVersion",

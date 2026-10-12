@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
 import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselor } from "../api/people";
+import { uploadCounselorPhoto } from "../api/siteops";
 import type { Counselor } from "../api/people";
 
 const STATUS: Record<string, { label: string; color: "success" | "default" | "warning" }> = {
@@ -21,6 +22,7 @@ export default function CounselorsPage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [photoRow, setPhotoRow] = useState<Counselor | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["counselors", page, search],
@@ -84,6 +86,7 @@ export default function CounselorsPage() {
                     }}>
                       {row.status === "active" ? "غیرفعال" : "فعال"}
                     </Button>
+                    <Button size="small" onClick={() => setPhotoRow(row)}>عکس</Button>
                   </TableCell>
                 </TableRow>
               );
@@ -96,6 +99,27 @@ export default function CounselorsPage() {
       </TableContainer>
 
       <CreateDialog open={open} onClose={() => setOpen(false)} onError={setError} />
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: "none" }}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f || !photoRow) return;
+          if (f.size > 2 * 1024 * 1024) { setError("حجم عکس باید کمتر از ۲ مگابایت باشد"); setPhotoRow(null); return; }
+          try {
+            await uploadCounselorPhoto(photoRow.id, f);
+            setError(null);
+            alert("عکس مشاور ذخیره شد و در سایت عمومی نمایش داده می‌شود.");
+            queryClient.invalidateQueries({ queryKey: ["counselors"] });
+          } catch (err) {
+            setError(errDetail(err));
+          } finally {
+            setPhotoRow(null);
+          }
+        }}
+      />
     </Stack>
   );
 }

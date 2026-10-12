@@ -7,6 +7,7 @@ import AuditEventsPage from "../pages/AuditEventsPage";
 import CaseDetailPage from "../pages/CaseDetailPage";
 import CasesPage from "../pages/CasesPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
+import ConsultationRequestsPage from "../pages/ConsultationRequestsPage";
 import CounselorWorklistPage from "../pages/CounselorWorklistPage";
 import CounselorsPage from "../pages/CounselorsPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -53,6 +54,11 @@ export default function AppRoutes() {
       <Route path="/imports" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
           <Layout><ImportsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/consultation-requests" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION"]}>
+          <Layout><ConsultationRequestsPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/cases" element={

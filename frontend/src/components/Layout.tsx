@@ -14,13 +14,16 @@ export default function Layout({ children }: { children: ReactNode }) {
       <AppBar position="static" color="primary" elevation={1}>
         <Toolbar sx={{ gap: 1.5, flexWrap: "wrap" }}>
           <Typography variant="h6" sx={{ cursor: "pointer", fontWeight: 700 }} onClick={() => navigate("/")}>
-            Rosepsy
+            Rosepsy | پنل مدیریت
           </Typography>
           {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/dashboard")}>داشبورد</Button>
           )}
           {has(["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/cases")}>پرونده‌ها</Button>
+          )}
+          {has(["ORG_MANAGER", "RECEPTION"]) && (
+            <Button color="inherit" onClick={() => navigate("/consultation-requests")}>درخواست‌ها</Button>
           )}
           {has(["COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/worklist")}>کارتابل</Button>

@@ -13,12 +13,15 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
+// پنل در مسیر /panel سرو می‌شود؛ base هنگام build با --base=/panel/ تنظیم می‌شود
+const base = import.meta.env.BASE_URL;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter basename={base === "/" ? "/" : base.replace(/\/$/, "")}>
           <AuthProvider>
             <App />
           </AuthProvider>
