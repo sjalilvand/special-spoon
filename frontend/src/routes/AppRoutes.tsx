@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { CircularProgress } from "@mui/material";
 import Layout from "../components/Layout";
+import { useAuth } from "../auth/AuthContext";
 import ActivatePage from "../pages/ActivatePage";
 import ApplicantsPage from "../pages/ApplicantsPage";
 import AssessmentFormPage from "../pages/AssessmentFormPage";
@@ -11,7 +13,6 @@ import ConsultationRequestsPage from "../pages/ConsultationRequestsPage";
 import CounselorWorklistPage from "../pages/CounselorWorklistPage";
 import CounselorsPage from "../pages/CounselorsPage";
 import DashboardPage from "../pages/DashboardPage";
-import HomePage from "../pages/HomePage";
 import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
@@ -25,12 +26,20 @@ const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSEL
 const STAFF_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
 const CLINICAL_ROLES = ["COUNSELOR", "TECHNICAL_SUPERVISOR"];
 
+function RoleRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return <CircularProgress sx={{ mx: "auto", display: "block", mt: 10 }} />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.roles.includes("APPLICANT")) return <Navigate to="/me" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivatePage />} />
-      <Route path="/" element={<ProtectedRoute><Layout><HomePage /></Layout></ProtectedRoute>} />
+      <Route path="/" element={<RoleRedirect />} />
       <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={
         <ProtectedRoute roles={STAFF_ROLES}><Layout><DashboardPage /></Layout></ProtectedRoute>
