@@ -20,6 +20,7 @@ from app.api.v1.cases import generate_case_number
 from datetime import date as date_type
 from app.models.appointment import Appointment
 from datetime import datetime as rdt, timezone as rtz
+from app.services.case_access import counselor_can_access
 
 router = APIRouter(tags=["site-ops"])
 
@@ -150,10 +151,18 @@ class ConvertRequest(BaseModel):
 
 
 @router.post("/consultation-requests/{request_id}/convert")
-def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session = Depends(get_db), actor=Depends(require_roles("ORG_MANAGER", "RECEPTION"))) -> dict:
+def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
     r = db.get(ConsultationRequest, request_id)
     if r is None:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد")
+    # ماتریس: مدیر سازمان/پذیرش همیشه؛ مشاور تنها اگر به‌عنوان همکار/اصلی به یکی از پرونده‌های متقاضی تخصیص دارد
+    actor_roles = {rc.code for rc in actor.roles}
+    if not (actor_roles & {"ORG_MANAGER", "RECEPTION"}):
+        if "COUNSELOR" not in actor_roles:
+            raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
+        counselor = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
+        if counselor is None or payload.counselor_id != counselor.id:
+            raise HTTPException(status_code=403, detail="مشاور فقط می‌تواند درخواست را با خودش به‌عنوان مشاور تبدیل کند")
     if r.status not in ("new", "in_review"):
         raise HTTPException(status_code=409, detail="این درخواست قبلاً تبدیل یا بایگانی شده است")
 

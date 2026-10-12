@@ -87,7 +87,9 @@ export default function ConsultationRequestsPage() {
             )}
             {data?.items.map((row) => {
               const m = CONSULT_STATUS_META[row.status] ?? { label: row.status, color: "default" as const };
-              const canConvert = row.status === "new" || row.status === "in_review";
+              const canConvert = (row.status === "new" || row.status === "in_review") && (
+    roles.includes("ORG_MANAGER") || roles.includes("RECEPTION") || roles.includes("COUNSELOR")
+  );
               return (
                 <TableRow key={row.id}>
                   <TableCell>
