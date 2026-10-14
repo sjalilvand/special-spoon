@@ -1,62 +1,89 @@
 import {
-  Alert, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
-  DialogTitle, Paper, Stack, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { finalizeIntake, fetchIntake, saveIntake } from "../api/siteops";
 import type { ConsultationRow } from "../api/siteops";
+import JalaliDateField from "./JalaliDateField";
 
-const SECTIONS: { title: string; fields: [string, string, boolean?][] }[] = [
-  { title: "اطلاعات مراجع", fields: [
-    ["identity_full_name", "نام و نام خانوادگی", true],
-    ["identity_birth_date", "تاریخ تولد (۱۳۷۰/۰۳/۲۱)"],
-    ["identity_education", "تحصیلات"],
-    ["identity_gender", "جنسیت"],
-    ["identity_marital", "وضعیت تأهل"],
-    ["identity_separation", "علت جدایی (در صورت طلاق)"],
-    ["identity_address", "آدرس"],
-    ["identity_phone", "شماره تماس"],
-    ["identity_first_visit", "تاریخ اولین مراجعه"],
-    ["identity_reason", "دلیل مراجعه به مشاوره"],
+type FieldType = "text" | "multiline" | "select" | "jalali" | "number";
+
+interface IntakeField {
+  key: string;
+  label: string;
+  type: FieldType;
+  required?: boolean;
+  options?: string[];
+  rows?: number;
+}
+
+interface IntakeSection {
+  no: string;
+  title: string;
+  fields: IntakeField[];
+}
+
+const PSYCH_OPTIONS = ["طبیعی", "مشکل خفیف", "مشکل متوسط", "مشکل شدید"];
+
+const SECTIONS: IntakeSection[] = [
+  { no: "۱", title: "اطلاعات مراجع", fields: [
+    { key: "identity_full_name", label: "نام و نام خانوادگی", type: "text", required: true },
+    { key: "identity_gender", label: "جنسیت", type: "select", options: ["زن", "مرد"] },
+    { key: "identity_birth_date", label: "تاریخ تولد", type: "jalali" },
+    { key: "identity_marital", label: "وضعیت تأهل", type: "select", options: ["مجرد", "متأهل", "طلاق‌گرفته", "بیوه"] },
+    { key: "identity_separation", label: "علت جدایی (در صورت طلاق)", type: "text" },
+    { key: "identity_education", label: "تحصیلات", type: "select", options: ["زیر دیپلم", "دیپلم", "کاردانی", "کارشناسی", "کارشناسی ارشد", "دکتری", "سایر"] },
+    { key: "identity_phone", label: "شماره تماس", type: "text" },
+    { key: "identity_first_visit", label: "تاریخ اولین مراجعه", type: "jalali" },
+    { key: "identity_address", label: "آدرس", type: "multiline", rows: 2 },
+    { key: "identity_reason", label: "دلیل مراجعه به مشاوره", type: "multiline", rows: 2 },
   ]},
-  { title: "اطلاعات اولیه", fields: [
-    ["initial_problem_summary", "شرح مختصری از مشکل یا مسئله", true],
-    ["initial_duration", "مدت زمانی که با این مشکل درگیر هستید"],
-    ["initial_past_therapy", "سابقه روان‌درمانی (در صورت مصرف دارو ذکر کنید)"],
-    ["initial_medications", "مصرف دارو"],
-    ["initial_physical", "سابقه بیماری جسمی"],
+  { no: "۲", title: "اطلاعات اولیه", fields: [
+    { key: "initial_problem_summary", label: "شرح مختصری از مشکل یا مسئله", type: "multiline", rows: 3, required: true },
+    { key: "initial_duration", label: "مدت زمانی که با این مشکل درگیر هستید", type: "text" },
+    { key: "initial_past_therapy", label: "سابقه روان‌درمانی (در صورت مصرف دارو ذکر کنید)", type: "multiline", rows: 2 },
+    { key: "initial_medications", label: "مصرف دارو", type: "multiline", rows: 2 },
+    { key: "initial_physical", label: "سابقه بیماری جسمی", type: "multiline", rows: 2 },
   ]},
-  { title: "اطلاعات خانوادگی", fields: [
-    ["family_relations", "نظرات درباره ارتباط اعضای خانواده با یکدیگر و نوع روابط خانوادگی"],
-    ["family_siblings", "تعداد خواهران و برادران"],
+  { no: "۳", title: "اطلاعات خانوادگی", fields: [
+    { key: "family_siblings", label: "تعداد خواهران و برادران", type: "number" },
+    { key: "family_relations", label: "نظرات درباره ارتباط اعضای خانواده با یکدیگر و نوع روابط خانوادگی", type: "multiline", rows: 3 },
   ]},
-  { title: "اطلاعات اجتماعی", fields: [
-    ["social_relations", "کیفیت روابط اجتماعی (رابطه با همکاران، دوستان و...)"],
-    ["social_support", "میزان حمایت اجتماعی (خانواده، دوستان)"],
-    ["social_interests", "علاقه‌ها و سرگرمی‌ها"],
+  { no: "۴", title: "اطلاعات اجتماعی", fields: [
+    { key: "social_relations", label: "کیفیت روابط اجتماعی (رابطه با همکاران، دوستان و...)", type: "multiline", rows: 2 },
+    { key: "social_support", label: "میزان حمایت اجتماعی (خانواده، دوستان)", type: "select", options: ["کم", "متوسط", "زیاد"] },
+    { key: "social_interests", label: "علاقه‌ها و سرگرمی‌ها", type: "multiline", rows: 2 },
   ]},
-  { title: "ارزیابی روان‌شناختی", fields: [
-    ["psych_emotion", "وضعیت عاطفه و احساس شما در طول زمان"],
-    ["psych_anxiety", "وضعیت اضطراب (چه چیزی شما را نگران می‌کند)"],
-    ["psych_sleep", "وضعیت خواب"],
-    ["psych_appetite", "وضعیت اشتها"],
-    ["psych_concentration", "وضعیت تمرکز و توجه"],
-    ["psych_memory", "وضعیت حافظه"],
-    ["psych_thinking", "وضعیت تفکر و ادراک"],
+  { no: "۵", title: "ارزیابی روان‌شناختی", fields: [
+    { key: "psych_emotion", label: "وضعیت عاطفه و احساس در طول زمان", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_anxiety", label: "وضعیت اضطراب", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_sleep", label: "وضعیت خواب", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_appetite", label: "وضعیت اشتها", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_concentration", label: "وضعیت تمرکز و توجه", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_memory", label: "وضعیت حافظه", type: "select", options: PSYCH_OPTIONS },
+    { key: "psych_thinking", label: "وضعیت تفکر و ادراک", type: "select", options: PSYCH_OPTIONS },
   ]},
-  { title: "برنامه‌ریزی", fields: [
-    ["planning_goals", "اهداف مشاوره", true],
-    ["planning_sessions", "تعداد جلسات مورد نیاز"],
-    ["planning_approach", "نوع رویکرد درمانی"],
-    ["planning_homework", "تکالیف بین جلسات"],
+  { no: "۶", title: "برنامه‌ریزی درمان", fields: [
+    { key: "planning_goals", label: "اهداف مشاوره", type: "multiline", rows: 3, required: true },
+    { key: "planning_sessions", label: "تعداد جلسات مورد نیاز", type: "number" },
+    { key: "planning_approach", label: "نوع رویکرد درمانی", type: "text" },
+    { key: "planning_homework", label: "تکالیف بین جلسات", type: "multiline", rows: 2 },
   ]},
-  { title: "نکات مهم و تأییدیه", fields: [
-    ["important_notes", "نکات مهم"],
-    ["confirmation_counselor", "نام و امضای مشاور"],
-    ["confirmation_client", "نام و امضای مراجع"],
-    ["confirmation_date", "تاریخ"],
+  { no: "۷", title: "نکات مهم و تأییدیه", fields: [
+    { key: "important_notes", label: "نکات مهم", type: "multiline", rows: 3 },
+    { key: "confirmation_counselor", label: "نام و امضای مشاور", type: "text" },
+    { key: "confirmation_client", label: "نام و امضای مراجع", type: "text" },
+    { key: "confirmation_date", label: "تاریخ", type: "jalali" },
   ]},
+];
+
+const REQUIRED_FIELDS: [string, string][] = [
+  ["identity_full_name", "نام و نام خانوادگی"],
+  ["initial_problem_summary", "شرح مشکل"],
+  ["planning_goals", "اهداف مشاوره"],
 ];
 
 export default function IntakeDialog({ row, onClose, onError }: {
@@ -64,6 +91,10 @@ export default function IntakeDialog({ row, onClose, onError }: {
   onClose: () => void;
   onError: (m: string) => void;
 }) {
+  const { user } = useAuth();
+  const roles = user?.roles ?? [];
+  const canWrite = roles.some((r) => ["ORG_MANAGER", "RECEPTION", "COUNSELOR"].includes(r));
+
   const [data, setData] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [meta, setMeta] = useState<string>("");
@@ -86,12 +117,65 @@ export default function IntakeDialog({ row, onClose, onError }: {
     }
   }, [row]);
 
-  const set = (k: string) => (e: { target: { value: string } }) => setData((p) => ({ ...p, [k]: e.target.value }));
+  const set = (k: string) => (e: { target: { value: string } }) =>
+    setData((p) => ({ ...p, [k]: e.target.value }));
+
+  const editable = status !== "final" && canWrite;
+
+  const renderField = (f: IntakeField) => {
+    const label = f.label + (f.required ? " *" : "");
+    if (f.type === "jalali") {
+      return (
+        <JalaliDateField
+          key={f.key}
+          label={label}
+          value={data[f.key] ?? ""}
+          onChange={(iso) => setData((p) => ({ ...p, [f.key]: iso ?? "" }))}
+        />
+      );
+    }
+    if (f.type === "select") {
+      return (
+        <TextField key={f.key} select label={label} value={data[f.key] ?? ""}
+          onChange={set(f.key)} disabled={!editable} fullWidth>
+          <MenuItem value="">—</MenuItem>
+          {f.options!.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+        </TextField>
+      );
+    }
+    if (f.type === "number") {
+      return (
+        <TextField key={f.key} type="number" label={label} value={data[f.key] ?? ""}
+          onChange={set(f.key)} disabled={!editable} fullWidth />
+      );
+    }
+    const isLong = f.type === "multiline";
+    return (
+      <TextField
+        key={f.key}
+        label={label}
+        value={data[f.key] ?? ""}
+        onChange={set(f.key)}
+        multiline={isLong}
+        minRows={f.rows ?? 1}
+        disabled={!editable}
+        fullWidth
+        sx={isLong ? { gridColumn: { sm: "1 / -1" } } : undefined}
+      />
+    );
+  };
 
   const submit = async (e: FormEvent, final: boolean) => {
     e.preventDefault();
     if (!row) return;
     setFormError(null);
+    if (final) {
+      const missing = REQUIRED_FIELDS.filter(([k]) => !(data[k] ?? "").trim()).map(([, l]) => l);
+      if (missing.length > 0) {
+        setFormError("برای نهایی‌سازی، فیلدهای الزامی را تکمیل کنید: " + missing.join("، "));
+        return;
+      }
+    }
     setBusy(true);
     try {
       await saveIntake(row.id, data);
@@ -110,10 +194,8 @@ export default function IntakeDialog({ row, onClose, onError }: {
     }
   };
 
-  const editable = status !== "final";
-
   return (
-    <Dialog open={row !== null} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={row !== null} onClose={onClose} maxWidth="lg" fullWidth>
       <form onSubmit={(e) => submit(e, false)}>
         <DialogTitle>
           پرسشنامه پذیرش مراجع — {row?.full_name ?? ""}
@@ -121,33 +203,35 @@ export default function IntakeDialog({ row, onClose, onError }: {
             <Chip size="small" sx={{ mr: 1 }} color={status === "final" ? "success" : "warning"}
               label={status === "final" ? "نهایی" : "پیش‌نویس"} />
           )}
+          {!canWrite && status !== "final" && (
+            <Chip size="small" sx={{ mr: 1 }} label="فقط مشاهده" />
+          )}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent dividers>
           <Typography variant="caption" color="text.secondary">{meta}</Typography>
           {loading && <CircularProgress size={24} sx={{ mx: "auto", display: "block", my: 2 }} />}
           {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
           {message && <Alert severity="success" sx={{ mt: 2 }}>{message}</Alert>}
           {row && !loading && (
-            <Stack spacing={2} mt={2}>
+            <Stack spacing={2.5} mt={2}>
               {SECTIONS.map((sec) => (
-                <Paper key={sec.title} variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary.main" mb={1.5}>
-                    {sec.title}
-                  </Typography>
-                  <Stack spacing={1.5}>
-                    {sec.fields.map(([key, label, req]) => (
-                      <TextField
-                        key={key}
-                        label={label + (req ? " *" : "")}
-                        value={data[key] ?? ""}
-                        onChange={set(key)}
-                        multiline={label.length > 30 || key.startsWith("psych") || key.startsWith("initial")}
-                        minRows={key.startsWith("initial") || key.startsWith("psych") || key.startsWith("social") || key === "family_relations" || key === "planning_goals" || key === "important_notes" ? 2 : 1}
-                        disabled={!editable}
-                        fullWidth
-                      />
-                    ))}
+                <Paper key={sec.no} variant="outlined"
+                  sx={{ p: 2.5, borderInlineStartWidth: 4, borderColor: "primary.main" }}>
+                  <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                    <Box sx={{
+                      width: 28, height: 28, borderRadius: "50%", bgcolor: "primary.main",
+                      color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14, fontWeight: 700,
+                    }}>
+                      {sec.no}
+                    </Box>
+                    <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+                      {sec.title}
+                    </Typography>
                   </Stack>
+                  <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr" }} gap={2}>
+                    {sec.fields.map(renderField)}
+                  </Box>
                 </Paper>
               ))}
               {status === "final" && (

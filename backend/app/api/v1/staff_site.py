@@ -1,4 +1,5 @@
 """عملیات پنلی مرتبط با سایت عمومی — فاز ۱۰"""
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""پرسشنامه پذیرش مراجع — فرم XLSX کلینیک رز (فاز ۲۰)"""
+"""پرسشنامه پذیرش مراجع — فرم XLSX کلینیک رز (فاز ۲۰ + اصلاح ماتریس دسترسی)"""
 import uuid
 from typing import Any
 
@@ -16,16 +16,23 @@ from app.services.audit import record_audit
 
 router = APIRouter(tags=["intake"])
 
-ALLOWED_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR")
+# خواندن: همه نقش‌های داخلی مرتبط؛ نوشتن/نهایی‌سازی: پذیرش، مدیر سازمان، مشاور
+READ_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN")
+WRITE_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR")
 
 
 def _roles(actor) -> set[str]:
     return {r.code for r in actor.roles}
 
 
-def _check_access(actor) -> None:
-    if not (_roles(actor) & set(ALLOWED_ROLES)):
+def _check_read(actor) -> None:
+    if not (_roles(actor) & set(READ_ROLES)):
         raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
+
+
+def _check_write(actor) -> None:
+    if not (_roles(actor) & set(WRITE_ROLES)):
+        raise HTTPException(status_code=403, detail="ویرایش پرسشنامه برای نقش شما مجاز نیست")
 
 
 def _get_cr_or_404(db: Session, cr_id: uuid.UUID) -> ConsultationRequest:
@@ -56,14 +63,15 @@ class IntakeData(BaseModel):
 
 @router.get("/consultation-requests/{cr_id}/intake")
 def get_intake(cr_id: uuid.UUID, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
-    _check_access(actor)
+    _check_read(actor)
     _get_cr_or_404(db, cr_id)
     return _out(db, _get_or_none(db, cr_id))
 
 
 @router.post("/consultation-requests/{cr_id}/intake")
 def save_intake(cr_id: uuid.UUID, payload: IntakeData, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
-    _check_access(actor)
+    _check_read(actor)
+    _check_write(actor)
     _get_cr_or_404(db, cr_id)
     q = _get_or_none(db, cr_id)
     if q is None:
@@ -82,7 +90,8 @@ def save_intake(cr_id: uuid.UUID, payload: IntakeData, db: Session = Depends(get
 
 @router.post("/consultation-requests/{cr_id}/intake/finalize")
 def finalize_intake(cr_id: uuid.UUID, db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
-    _check_access(actor)
+    _check_read(actor)
+    _check_write(actor)
     _get_cr_or_404(db, cr_id)
     q = _get_or_none(db, cr_id)
     if q is None:
