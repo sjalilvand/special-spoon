@@ -11,6 +11,7 @@ from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Con
 from app.models.clinical import Diagnosis, TreatmentPlan
 from app.models.consultation import ConsultationRequest
 from app.models.import_job import ImportJob, ImportRow
+from app.models.intake import IntakeQuestionnaire
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
 from app.models.recommendation import Recommendation
 from app.models.referral import Referral
@@ -21,8 +22,8 @@ __all__ = [
     "Assessment", "AssessmentStatus", "AuditEvent", "AuthSession",
     "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Consent",
     "ConsultationRequest", "Counselor", "Diagnosis", "FormVersion",
-    "ImportJob", "ImportRow", "OrganizationUnit", "Recommendation",
-    "Referral", "ReviewAction", "Role", "ServiceLocation", "Session",
-    "SessionNoteRevision", "SessionNoteStatus", "TreatmentPlan",
+    "ImportJob", "ImportRow", "IntakeQuestionnaire", "OrganizationUnit",
+    "Recommendation", "Referral", "ReviewAction", "Role", "ServiceLocation",
+    "Session", "SessionNoteRevision", "SessionNoteStatus", "TreatmentPlan",
     "User", "UserScope", "UserStatus", "user_roles_table",
 ]

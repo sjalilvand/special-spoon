@@ -59,3 +59,22 @@ export async function uploadCounselorPhoto(id: string, file: File): Promise<void
     headers: { "Content-Type": "multipart/form-data" },
   });
 }
+
+
+export async function fetchIntake(crId: string): Promise<{
+  exists: boolean;
+  status: string | null;
+  data: Record<string, string | undefined>;
+  filled_by_name: string | null;
+  updated_at: string | null;
+}> {
+  return (await apiClient.get(`/consultation-requests/${crId}/intake`)).data;
+}
+
+export async function saveIntake(crId: string, data: Record<string, unknown>): Promise<unknown> {
+  return (await apiClient.post(`/consultation-requests/${crId}/intake`, { data })).data;
+}
+
+export async function finalizeIntake(crId: string): Promise<unknown> {
+  return (await apiClient.post(`/consultation-requests/${crId}/intake/finalize`, {})).data;
+}

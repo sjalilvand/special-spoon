@@ -17,6 +17,7 @@ import { convertConsultationRequest } from "../api/referrals";
 import { fetchCounselorOptions } from "../api/cases";
 import type { OptionRow } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import IntakeDialog from "../components/IntakeDialog";
 import JalaliDateField from "../components/JalaliDateField";
 
 const TOPICS = ["مشاوره فردی", "زوج‌درمانی", "مشاوره کودک و نوجوان", "درمان گروهی", "نوروفیدبک", "سایر"];
@@ -34,6 +35,7 @@ export default function ConsultationRequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [convertRow, setConvertRow] = useState<ConsultationRow | null>(null);
   const [followRow, setFollowRow] = useState<ConsultationRow | null>(null);
+  const [intakeRow, setIntakeRow] = useState<ConsultationRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -127,6 +129,8 @@ export default function ConsultationRequestsPage() {
                       )}
                       <Button size="small" onClick={() => setFollowRow(row)}>
                         پیگیری
+                      </Button>                      <Button size="small" variant="outlined" onClick={() => setIntakeRow(row)}>
+                        پرسشنامه پذیرش
                       </Button>
                     </Stack>
                   </TableCell>
@@ -146,6 +150,7 @@ export default function ConsultationRequestsPage() {
         invalidate={invalidate}
         onError={setError}
       />
+      <IntakeDialog row={intakeRow} onClose={() => setIntakeRow(null)} onError={setError} />
       <ConvertDialog
         row={convertRow}
         onClose={() => setConvertRow(null)}
