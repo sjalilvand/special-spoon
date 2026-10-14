@@ -10,7 +10,7 @@
 from typing import Any
 
 FORM_CODE = "RS-PS-04-01"
-FORM_VERSION = 2
+FORM_VERSION = 3
 
 
 def _o(value: str, label: str) -> dict:
