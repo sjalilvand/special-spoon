@@ -65,7 +65,7 @@ def test_booked_slot_removed_from_free_list(env, client):
     login(client, "t_reception")
     f, t = bookable_range()
     days = free_slots(env["db"], env["counselor_b"].id, f, t)
-    day = days[0]
+    day = next((d for d in days if len(d["slots"]) >= 2), days[0])
     slot = day["slots"][1]
     payload = {
         "full_name": "مراجع دوم",
