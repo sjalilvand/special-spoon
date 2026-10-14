@@ -1,10 +1,21 @@
 """فاز ۲۱ - تست رزرو آنلاین اسلات از سایت عمومی"""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
+from app.api.v1 import public as public_mod
 from app.core.booking import CLOSED_WEEKDAYS, bookable_range, free_slots
 from app.models.consultation import ConsultationRequest
 
 from conftest import login
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limiter():
+    """لیمیت ۵/ساعت عمومی در حافظه است - برای تست‌ها پاک می‌شود"""
+    public_mod._req_ip.clear()
+    yield
+    public_mod._req_ip.clear()
 
 
 def test_bookable_range_starts_tomorrow(env):
@@ -76,7 +87,8 @@ def test_booked_slot_removed_from_free_list(env, client):
     }
     r = client.post("/api/v1/public/consultation-requests", json=payload)
     assert r.status_code == 201, r.text
-    after = free_slots(env["db"], env["counselor_b"].id, day["date"], day["date"])
+    d0 = date.fromisoformat(day["date"])
+    after = free_slots(env["db"], env["counselor_b"].id, d0, d0)
     for d2 in after:
         assert all(s2["start_at"] != slot["start_at"] for s2 in d2["slots"])
 
