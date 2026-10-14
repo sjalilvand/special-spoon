@@ -15,6 +15,8 @@ export interface ConsultationRow {
   contact_attempts: number;
   city: string | null;
   referral_source: string | null;
+  preferred_counselor_id: string | null;
+  preferred_start_at: string | null;
 }
 
 export const CONSULT_STATUS_META: Record<string, { label: string; color: "success" | "warning" | "info" | "default" }> = {
@@ -59,7 +61,6 @@ export async function uploadCounselorPhoto(id: string, file: File): Promise<void
     headers: { "Content-Type": "multipart/form-data" },
   });
 }
-
 
 export async function fetchIntake(crId: string): Promise<{
   exists: boolean;

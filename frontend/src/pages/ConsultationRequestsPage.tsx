@@ -89,9 +89,7 @@ export default function ConsultationRequestsPage() {
             )}
             {data?.items.map((row) => {
               const m = CONSULT_STATUS_META[row.status] ?? { label: row.status, color: "default" as const };
-              const canConvert = (row.status === "new" || row.status === "in_review") && (
-    roles.includes("ORG_MANAGER") || roles.includes("RECEPTION") || roles.includes("COUNSELOR")
-  );
+              const canConvert = (row.status === "new" || row.status === "in_review") && canCreate;
               return (
                 <TableRow key={row.id}>
                   <TableCell>
@@ -118,6 +116,11 @@ export default function ConsultationRequestsPage() {
                   </TableCell>
                   <TableCell>
                     {row.created_at ? new Date(row.created_at).toLocaleString("fa-IR") : "—"}
+                    {row.preferred_start_at && (
+                      <Typography variant="caption" color="primary" display="block">
+                        🗓 نوبت درخواستی: {new Date(row.preferred_start_at.slice(0, 16)).toLocaleString("fa-IR")}
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
                   <TableCell>
@@ -127,9 +130,8 @@ export default function ConsultationRequestsPage() {
                           تبدیل
                         </Button>
                       )}
-                      <Button size="small" onClick={() => setFollowRow(row)}>
-                        پیگیری
-                      </Button>                      <Button size="small" variant="outlined" onClick={() => setIntakeRow(row)}>
+                      <Button size="small" onClick={() => setFollowRow(row)}>پیگیری</Button>
+                      <Button size="small" variant="outlined" onClick={() => setIntakeRow(row)}>
                         پرسشنامه پذیرش
                       </Button>
                     </Stack>
@@ -292,7 +294,8 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
   useEffect(() => {
     if (row) {
       setCreateCase(true); setCounselorId(""); setServiceLocationId("");
-      setFirstAppt(""); setFormError(null); setSuccess(null);
+      setFirstAppt(row.preferred_start_at ? row.preferred_start_at.slice(0, 16) : "");
+      setFormError(null); setSuccess(null);
     }
   }, [row]);
 
@@ -338,6 +341,12 @@ function ConvertDialog({ row, onClose, invalidate, onError }: {
               <Typography variant="body2" color="text.secondary">
                 نام: <b>{row.full_name}</b> | موبایل: <b>{row.mobile}</b> | موضوع: <b>{row.topic}</b>
               </Typography>
+              {row.preferred_start_at && (
+                <Alert severity="info">
+                  نوبت درخواستی مراجع: {new Date(row.preferred_start_at.slice(0, 16)).toLocaleString("fa-IR")}
+                  {" "}— در فیلد نوبت اولیه پیش‌پر شده است.
+                </Alert>
+              )}
               <FormControlLabel
                 control={<Checkbox checked={createCase} onChange={(e) => setCreateCase(e.target.checked)} />}
                 label="تشکیل پرونده جدید"

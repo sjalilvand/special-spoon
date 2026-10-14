@@ -1,0 +1,135 @@
+"""خدمات رزرو آنلاین اسلات - فاز ۲۱
+
+قرارداد زمانی سیستم (مانند بقیه ماژول‌ها): ساعت محلی ایران به‌صورت
+naive در ستون timestamptz با آفست UTC ذخیره می‌شود؛ یعنی «09:00» ثبت‌شده
+نماینده ساعت ۹ صبح محلی است. برای مقایسه «اکنون» آفست +03:30 اعمال می‌شود.
+
+پیش‌فرض‌ها: شنبه تا چهارشنبه ۹-۱۷، پنجشنبه ۹-۱۳، جمعه تعطیل،
+طول هر اسلات ۶۰ دقیقه، بازه قابل رزرو از فردا تا ۳۰ روز آینده.
+"""
+from datetime import date, datetime, time, timedelta, timezone
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.appointment import Appointment, AppointmentStatus
+from app.models.consultation import ConsultationRequest
+
+UTC = timezone.utc
+WALL_OFFSET = timedelta(hours=3, minutes=30)  # آفست ثابت ایران (بدون ساعت تابستانی)
+
+SLOT_MINUTES = 60
+DAYS_AHEAD = 30
+
+WORK_HOURS = {
+    5: (time(9, 0), time(17, 0)),   # شنبه
+    6: (time(9, 0), time(17, 0)),   # یکشنبه
+    0: (time(9, 0), time(17, 0)),   # دوشنبه
+    1: (time(9, 0), time(17, 0)),   # سه‌شنبه
+    2: (time(9, 0), time(17, 0)),   # چهارشنبه
+    3: (time(9, 0), time(13, 0)),   # پنجشنبه
+}
+CLOSED_WEEKDAYS = {4}  # جمعه
+
+
+def _now_wall() -> datetime:
+    """«اکنون» با قرارداد ذخیره‌سازی سیستم"""
+    return datetime.now(UTC) + WALL_OFFSET
+
+
+def _slot_starts(day: date) -> list[datetime]:
+    if day.weekday() in CLOSED_WEEKDAYS:
+        return []
+    open_t, close_t = WORK_HOURS[day.weekday()]
+    out: list[datetime] = []
+    cur = datetime.combine(day, open_t, tzinfo=UTC)
+    close = datetime.combine(day, close_t, tzinfo=UTC)
+    while cur + timedelta(minutes=SLOT_MINUTES) <= close:
+        out.append(cur)
+        cur += timedelta(minutes=SLOT_MINUTES)
+    return out
+
+
+def bookable_range() -> tuple[date, date]:
+    today = _now_wall().date()
+    return today + timedelta(days=1), today + timedelta(days=DAYS_AHEAD)
+
+
+def _busy_intervals(db: Session, counselor_id, from_day: date, to_day: date) -> list[tuple[datetime, datetime]]:
+    start_dt = datetime.combine(from_day, time.min, tzinfo=UTC)
+    end_dt = datetime.combine(to_day + timedelta(days=1), time.min, tzinfo=UTC)
+
+    out: list[tuple[datetime, datetime]] = []
+    rows = db.scalars(
+        select(Appointment).where(
+            Appointment.counselor_id == counselor_id,
+            Appointment.status == AppointmentStatus.SCHEDULED,
+            Appointment.scheduled_at >= start_dt,
+            Appointment.scheduled_at < end_dt,
+        )
+    ).all()
+    for a in rows:
+        dur = a.duration_minutes or SLOT_MINUTES
+        s = a.scheduled_at
+        if s.tzinfo is None:
+            s = s.replace(tzinfo=UTC)
+        out.append((s, s + timedelta(minutes=dur)))
+
+    pending = db.scalars(
+        select(ConsultationRequest).where(
+            ConsultationRequest.preferred_counselor_id == counselor_id,
+            ConsultationRequest.status.in_(("new", "in_review")),
+            ConsultationRequest.preferred_start_at.is_not(None),
+            ConsultationRequest.preferred_start_at >= start_dt,
+            ConsultationRequest.preferred_start_at < end_dt,
+        )
+    ).all()
+    for r in pending:
+        s = r.preferred_start_at
+        if s.tzinfo is None:
+            s = s.replace(tzinfo=UTC)
+        out.append((s, s + timedelta(minutes=SLOT_MINUTES)))
+    return out
+
+
+def free_slots(db: Session, counselor_id, from_day: date, to_day: date) -> list[dict]:
+    """لیست روزها و اسلات‌های آزاد مشاور در بازه داده‌شده"""
+    if (to_day - from_day).days > 31:
+        to_day = from_day + timedelta(days=31)
+    busy = _busy_intervals(db, counselor_id, from_day, to_day)
+    now = _now_wall()
+    days: list[dict] = []
+    day = from_day
+    while day <= to_day:
+        slots = []
+        for s in _slot_starts(day):
+            if s <= now:
+                continue
+            s_end = s + timedelta(minutes=SLOT_MINUTES)
+            if any(s < e and b < s_end for b, e in busy):
+                continue
+            slots.append({"start_at": s.isoformat(), "label": s.strftime("%H:%M")})
+        if slots:
+            days.append({"date": day.isoformat(), "slots": slots})
+        day += timedelta(days=1)
+    return days
+
+
+def validate_slot(db: Session, counselor_id, raw: datetime) -> datetime | None:
+    """اعتبارسنجی اسلات انتخاب کاربر؛ نامعتبر/اشغال/خارج بازه => None"""
+    if raw.tzinfo is None:
+        raw = raw.replace(tzinfo=UTC)
+    s = raw
+    day = s.date()
+    if day.weekday() in CLOSED_WEEKDAYS:
+        return None
+    if all(x != s for x in _slot_starts(day)):
+        return None
+    f, t = bookable_range()
+    if not (f <= day <= t):
+        return None
+    busy = _busy_intervals(db, counselor_id, day - timedelta(days=1), day + timedelta(days=1))
+    s_end = s + timedelta(minutes=SLOT_MINUTES)
+    if any(s < e and b < s_end for b, e in busy):
+        return None
+    return s

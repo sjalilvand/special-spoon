@@ -19,7 +19,7 @@ services:
 
   api:
     build: ./backend
-    image: rosepsy/api:0.1.0
+    image: rosepsy/api:0.21.0
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -39,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    image: rosepsy/web:0.1.0
+    image: rosepsy/web:0.21.0
     restart: unless-stopped
     ports:
       - "8080:80"

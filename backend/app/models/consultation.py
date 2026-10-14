@@ -11,7 +11,7 @@ from app.db.base import Base
 
 
 class ConsultationRequest(Base):
-    """درخواست مشاوره از سایت عمومی (فاز ۱۰)"""
+    """درخواست مشاوره از سایت عمومی (فاز ۱۰) - فاز ۲۱: رزرو اسلات"""
 
     __tablename__ = "consultation_requests"
     __table_args__ = (
@@ -44,4 +44,9 @@ class ConsultationRequest(Base):
     contact_attempts: Mapped[int] = mapped_column(Integer, default=0)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     referral_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # فاز ۲۱ - رزرو آنلاین اسلات
+    preferred_counselor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("counselors.id", ondelete="SET NULL"), nullable=True
+    )
+    preferred_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

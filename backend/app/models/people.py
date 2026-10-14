@@ -74,6 +74,7 @@ class Counselor(Base):
         UUID(as_uuid=True), ForeignKey("service_locations.id", ondelete="SET NULL"), nullable=True
     )
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="active")
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True

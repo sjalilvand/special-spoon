@@ -31,12 +31,19 @@ export default function Header() {
             {n.label}
           </Button>
         ))}
-        {/* ناوبری سخت با اسلش — /panel بدون اسلش به location / می‌افتد */}
+        <Button
+          href="/booking"
+          variant="outlined"
+          size="small"
+          sx={{ borderColor: "primary.main", color: "primary.main", fontWeight: 700 }}
+        >
+          رزرو نوبت
+        </Button>
         <Button
           href="/panel/"
           variant="outlined"
           size="small"
-          sx={{ display: { xs: "none", md: "inline-flex" }, borderColor: "primary.main", color: "primary.main", fontWeight: 700 }}
+          sx={{ display: { xs: "none", md: "inline-flex" }, borderColor: "secondary.main", color: "secondary.main", fontWeight: 700 }}
         >
           ورود به سامانه
         </Button>
