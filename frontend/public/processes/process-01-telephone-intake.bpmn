@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Defs_Process_Telephone_Intake" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Rosepsy" exporterVersion="1">
+  <bpmn:process id="Process_Telephone_Intake" name="فرایند پذیرش اولیه مراجعان تلفنی (RS-PS-01-01)" isExecutable="false">
+    <bpmn:startEvent id="Start_01" name="تماس مراجع">
+      <bpmn:outgoing>F101</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="T1_01" name="ثبت اطلاعات فردی مراجع
+(RS-PS-01-01)">
+      <bpmn:outgoing>F102</bpmn:outgoing>
+      <bpmn:incoming>F101</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T2_01" name="ارزیابی اولیه موضوع مراجعه">
+      <bpmn:outgoing>F103</bpmn:outgoing>
+      <bpmn:incoming>F102</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G1_01" name="مورد حاد/پرخطر؟" default="F104">
+      <bpmn:outgoing>F104</bpmn:outgoing>
+      <bpmn:outgoing>F105</bpmn:outgoing>
+      <bpmn:incoming>F103</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T3_01" name="فعال‌سازی فرایند مورد حاد
+(RS-PS-08-01)">
+      <bpmn:outgoing>F106</bpmn:outgoing>
+      <bpmn:incoming>F104</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="End1_01" name="انتقال به فرایند مورد حاد">
+      <bpmn:incoming>F106</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T4_01" name="تعیین مسیر مراجع
+(حضوری / اطلاع‌رسانی / تماس مجدد)">
+      <bpmn:outgoing>F107</bpmn:outgoing>
+      <bpmn:incoming>F105</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T5_01" name="ثبت فرم پذیرش تلفنی">
+      <bpmn:outgoing>F108</bpmn:outgoing>
+      <bpmn:incoming>F107</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T6_01" name="بازبینی کارشناس نظارت حرفه‌ای">
+      <bpmn:outgoing>F109</bpmn:outgoing>
+      <bpmn:incoming>F108</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="End2_01" name="پایان تماس">
+      <bpmn:incoming>F109</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="F101" sourceRef="Start_01" targetRef="T1_01" />
+    <bpmn:sequenceFlow id="F102" sourceRef="T1_01" targetRef="T2_01" />
+    <bpmn:sequenceFlow id="F103" sourceRef="T2_01" targetRef="G1_01" />
+    <bpmn:sequenceFlow id="F104" sourceRef="G1_01" targetRef="T3_01" name="بله" />
+    <bpmn:sequenceFlow id="F105" sourceRef="G1_01" targetRef="T4_01" name="خیر" />
+    <bpmn:sequenceFlow id="F106" sourceRef="T3_01" targetRef="End1_01" />
+    <bpmn:sequenceFlow id="F107" sourceRef="T4_01" targetRef="T5_01" />
+    <bpmn:sequenceFlow id="F108" sourceRef="T5_01" targetRef="T6_01" />
+    <bpmn:sequenceFlow id="F109" sourceRef="T6_01" targetRef="End2_01" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Process_Telephone_Intake">
+    <bpmndi:BPMNPlane id="Plane_Process_Telephone_Intake" bpmnElement="Process_Telephone_Intake">
+      <bpmndi:BPMNShape id="Start_01_di" bpmnElement="Start_01">
+        <dc:Bounds x="160" y="190" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_01_di" bpmnElement="T1_01">
+        <dc:Bounds x="250" y="168" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T2_01_di" bpmnElement="T2_01">
+        <dc:Bounds x="460" y="168" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_01_di" bpmnElement="G1_01">
+        <dc:Bounds x="670" y="183" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T3_01_di" bpmnElement="T3_01">
+        <dc:Bounds x="780" y="68" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End1_01_di" bpmnElement="End1_01">
+        <dc:Bounds x="1020" y="90" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T4_01_di" bpmnElement="T4_01">
+        <dc:Bounds x="780" y="268" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T5_01_di" bpmnElement="T5_01">
+        <dc:Bounds x="1010" y="268" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T6_01_di" bpmnElement="T6_01">
+        <dc:Bounds x="1210" y="268" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End2_01_di" bpmnElement="End2_01">
+        <dc:Bounds x="1430" y="290" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F101_di" bpmnElement="F101">
+        <di:waypoint x="196" y="208" />
+        <di:waypoint x="250" y="208" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F102_di" bpmnElement="F102">
+        <di:waypoint x="410" y="208" />
+        <di:waypoint x="460" y="208" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F103_di" bpmnElement="F103">
+        <di:waypoint x="620" y="208" />
+        <di:waypoint x="670" y="208" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F104_di" bpmnElement="F104">
+        <di:waypoint x="695" y="183" />
+        <di:waypoint x="695" y="108" />
+        <di:waypoint x="780" y="108" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="683" y="121" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F105_di" bpmnElement="F105">
+        <di:waypoint x="695" y="233" />
+        <di:waypoint x="695" y="308" />
+        <di:waypoint x="780" y="308" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="683" y="271" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F106_di" bpmnElement="F106">
+        <di:waypoint x="960" y="108" />
+        <di:waypoint x="1020" y="108" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F107_di" bpmnElement="F107">
+        <di:waypoint x="960" y="308" />
+        <di:waypoint x="1010" y="308" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F108_di" bpmnElement="F108">
+        <di:waypoint x="1160" y="308" />
+        <di:waypoint x="1210" y="308" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F109_di" bpmnElement="F109">
+        <di:waypoint x="1380" y="308" />
+        <di:waypoint x="1430" y="308" />
+
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

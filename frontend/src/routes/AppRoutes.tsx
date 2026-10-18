@@ -17,6 +17,7 @@ import ImportsPage from "../pages/ImportsPage";
 import LoginPage from "../pages/LoginPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
+import ProcessesPage from "../pages/ProcessesPage";
 import ReviewsPage from "../pages/ReviewsPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import UsersPage from "../pages/UsersPage";
@@ -96,6 +97,9 @@ export default function AppRoutes() {
       } />
       <Route path="/me" element={
         <ProtectedRoute roles={["APPLICANT"]}><Layout><MyPanelPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/processes" element={
+        <ProtectedRoute roles={STAFF_ROLES}><Layout><ProcessesPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

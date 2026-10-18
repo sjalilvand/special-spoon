@@ -39,6 +39,7 @@ export default function CaseAssessments({ caseId }: { caseId: string }) {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell>فرم</TableCell>
               <TableCell>نسخه</TableCell>
               <TableCell>وضعیت</TableCell>
               <TableCell>نویسنده</TableCell>
@@ -48,15 +49,23 @@ export default function CaseAssessments({ caseId }: { caseId: string }) {
           </TableHead>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={5} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} align="center"><CircularProgress size={24} /></TableCell></TableRow>
             )}
             {data?.items.length === 0 && (
-              <TableRow><TableCell colSpan={5}>ارزیابی‌ای ثبت نشده است.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>ارزیابی‌ای ثبت نشده است.</TableCell></TableRow>
             )}
             {data?.items.map((row) => {
               const st = ASSESSMENT_STATUS_META[row.status] ?? { label: row.status, color: "default" as const };
               return (
                 <TableRow key={row.id}>
+                  <TableCell>
+                    <Chip size="small" variant="outlined" label={row.form_code ?? "—"} />
+                    {row.form_title && (
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        {row.form_title}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{row.version_no}</TableCell>
                   <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
                   <TableCell>{row.author_name ?? "—"}</TableCell>

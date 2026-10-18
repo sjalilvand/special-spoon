@@ -4,12 +4,13 @@ import {
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import {
   ASSESSMENT_STATUS_META, approveAssessment, createAssessmentDraft, createRevision,
-  fetchAssessment, fetchFormDefinition, finalizeAssessment, returnAssessment, saveAssessmentDraft,
+  fetchAssessment, fetchFormDefinition, fetchFormHead, fetchForms, finalizeAssessment,
+  returnAssessment, saveAssessmentDraft,
 } from "../api/assessments";
 import type { FormDefinition, FormFieldDef, FormSectionDef } from "../api/assessments";
 import { fetchCase } from "../api/cases";
@@ -18,6 +19,7 @@ import { printAssessment } from "../api/reports";
 export default function AssessmentFormPage() {
   const params = useParams<{ id?: string; caseId?: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { user } = useAuth();
 
@@ -33,9 +35,28 @@ export default function AssessmentFormPage() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnComment, setReturnComment] = useState("");
 
+  // انتخاب فرم هنگام ایجاد جدید (از query یا پیش‌فرض RS-PS-04-01)
+  const isCreateMode = !currentId;
+  const [selectedFormCode, setSelectedFormCode] = useState<string>(
+    searchParams.get("form") || "RS-PS-04-01"
+  );
+
+  const { data: formsList } = useQuery({
+    queryKey: ["forms-list"],
+    queryFn: fetchForms,
+    enabled: isCreateMode,
+  });
+
+  const { data: formHead } = useQuery({
+    queryKey: ["form-head", selectedFormCode],
+    queryFn: () => fetchFormHead(selectedFormCode),
+    enabled: isCreateMode,
+  });
+
   const { data: headDef, isLoading: defLoading } = useQuery({
-    queryKey: ["form-def"],
-    queryFn: fetchFormDefinition,
+    queryKey: ["form-def", selectedFormCode],
+    queryFn: () => fetchFormDefinition(selectedFormCode),
+    enabled: isCreateMode,
   });
 
   const { data: existing, isLoading: existingLoading } = useQuery({
@@ -53,7 +74,9 @@ export default function AssessmentFormPage() {
   // رندر نسخه‌ای: ارزیابی قدیمی با تعریف نسخه خودش نمایش داده می‌شود
   const def: FormDefinition | undefined = existing?.form_definition
     ? existing.form_definition
-    : headDef;
+    : (formHead
+        ? { code: formHead.code, version: formHead.version, sections: formHead.definition.sections }
+        : headDef);
 
   useEffect(() => {
     if (existing && loadedFor !== existing.id) {
@@ -87,7 +110,7 @@ export default function AssessmentFormPage() {
 
   const ensureSaved = async (): Promise<{ id: string; rowVersion: number }> => {
     if (!currentId) {
-      const res = await createAssessmentDraft(params.caseId!, answers);
+      const res = await createAssessmentDraft(params.caseId!, answers, selectedFormCode);
       setCurrentId(res.id);
       navigate(`/assessments/${res.id}`, { replace: true });
       return { id: res.id, rowVersion: res.row_version };
@@ -186,6 +209,7 @@ export default function AssessmentFormPage() {
   const st = ASSESSMENT_STATUS_META[status] ?? { label: status, color: "default" as const };
   const headerCaseNumber = existing?.case_number ?? caseInfo?.case_number ?? "—";
   const headerApplicant = existing?.applicant_name ?? caseInfo?.applicant_name ?? "—";
+  const formTitle = existing?.form_title ?? formHead?.title ?? null;
 
   return (
     <Stack spacing={2}>
@@ -193,6 +217,7 @@ export default function AssessmentFormPage() {
         <Typography variant="h6" fontWeight={700}>
           فرم {def.code} — نسخه {def.version}
         </Typography>
+        {formTitle && <Typography variant="body2" color="text.secondary">{formTitle}</Typography>}
         <Chip size="small" color={st.color} label={st.label} />
         <Typography variant="body2" color="text.secondary">
           پرونده {headerCaseNumber} — {headerApplicant}
@@ -238,6 +263,41 @@ export default function AssessmentFormPage() {
       )}
       {message && <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert>}
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+
+      {isCreateMode && (
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle1" fontWeight={700} mb={1}>انتخاب فرم ارزیابی</Typography>
+          <Typography variant="body2" color="text.secondary" mb={1.5}>
+            نوع فرم را پیش از شروع ثبت انتخاب کنید؛ پس از ذخیره پیش‌نویس، نوع فرم قابل تغییر نیست.
+          </Typography>
+          <Box display="flex" gap={2} flexWrap="wrap" alignItems="flex-start">
+            <TextField
+              select
+              sx={{ minWidth: 320 }}
+              size="small"
+              label="نوع فرم"
+              value={selectedFormCode}
+              onChange={(e) => {
+                setSelectedFormCode(e.target.value);
+                setSearchParams({ form: e.target.value }, { replace: true });
+              }}
+            >
+              {(formsList?.items ?? []).map((f) => (
+                <MenuItem key={f.code} value={f.code}>
+                  {f.code} — {f.title} (نسخه {f.version})
+                </MenuItem>
+              ))}
+            </TextField>
+            {formHead && (
+              <Box sx={{ flex: 1, minWidth: 280 }}>
+                <Typography variant="body2" fontWeight={600}>{formHead.title}</Typography>
+                <Typography variant="caption" color="text.secondary">{formHead.description}</Typography>
+                <Typography variant="caption" display="block" color="primary">جایگاه در گردش کار: {formHead.usage}</Typography>
+              </Box>
+            )}
+          </Box>
+        </Paper>
+      )}
 
       {def.sections.map((sec: FormSectionDef) => (
         <Paper key={sec.key} sx={{ p: 2 }}>

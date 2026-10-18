@@ -84,3 +84,11 @@
 - API عمومی: GET /public/booking/slots و رزرو در POST /consultation-requests (ایندکس یکتای جزئی ضد دوباره‌رزرو)
 - کارتابل پذیرش: نمایش «نوبت درخواستی» و پیش‌پر شدن نوبت اولیه هنگام تبدیل
 - رفع باگ پنهان فاز ۱۰: photo_path در مدل Counselor (خطای ۵۰۰ در /public/counselors)
+
+## فاز ۲۲ — فرم‌های چندگانه و نمایش فرایندها با BPMN (v0.22.0)
+- رجیستری فرم‌های بالینی در backend/app/core/forms.py (افزودن فرم جدید = ماژول + یک سطر)
+- فرم RS-PS-01-01 «پذیرش اولیه مراجعان تلفنی» با تعیین مسیر مراجع
+- فرم RS-PS-08-01 «ارزیابی و مدیریت مورد حاد / پر خطر» با سطوح فوریت و قاعده ارجاع سطح ۳
+- API: GET /forms و GET /forms/{form_code}؛ POST ارزیابی با form_code (پیش‌فرض RS-PS-04-01)
+- صفحه «فرایندها (BPMN)» در /processes با bpmn-js و چهار نمودار BPMN 2.0
+- مستندات: docs/multi-forms-and-bpmn.md — آزمون‌ها: backend/tests/test_multi_forms.py

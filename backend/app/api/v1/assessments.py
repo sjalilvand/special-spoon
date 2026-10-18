@@ -6,8 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
-from app.core.form_rs_ps_04_01 import (
-    FORM_CODE, FORM_DEFINITION, FORM_VERSION, validate_finalization,
+from app.core.forms import (
+    FORM_REGISTRY, get_form_definition, get_form_meta, get_form_version,
+    list_forms, validate_finalization,
 )
 from app.db.session import get_db
 from app.services.case_access import counselor_can_access
@@ -22,18 +23,30 @@ router = APIRouter(tags=["assessments"])
 
 CLINICAL_ROLES = ("COUNSELOR", "TECHNICAL_SUPERVISOR")
 
+# فرم پیش‌فرض برای سازگاری با نسخه‌های قبلی (RS-PS-04-01)
+DEFAULT_FORM_CODE = "RS-PS-04-01"
+
 
 def _roles(actor) -> set[str]:
     return {r.code for r in actor.roles}
 
 
-def _get_form_version(db: Session) -> FormVersion:
-    """ثبت نسخه فرم در پایگاه داده (بند ۶.۲) - ایجاد تنبل در نخستین استفاده."""
+def _get_form_version(db: Session, form_code: str) -> FormVersion:
+    """ثبت نسخه فرم در پایگاه داده (بند ۶.۲) - ایجاد تنبل در نخستین استفاده.
+
+    برای هر کد فرم، نسخه جاری ماژول تعریف آن فرم ثبت می‌شود؛ اگر قبلاً
+    همان نسخه ثبت شده باشد، همان رکورد بازیافت می‌شود (نسخه‌داری حفظ می‌شود).
+    """
+    meta = get_form_meta(form_code)
+    version = get_form_version(form_code)
     fv = db.scalar(
-        select(FormVersion).where(FormVersion.form_code == FORM_CODE, FormVersion.version == FORM_VERSION)
+        select(FormVersion).where(FormVersion.form_code == form_code, FormVersion.version == version)
     )
     if fv is None:
-        fv = FormVersion(form_code=FORM_CODE, version=FORM_VERSION, definition=FORM_DEFINITION, is_published=True)
+        fv = FormVersion(
+            form_code=form_code, version=version,
+            definition=get_form_definition(form_code), is_published=True,
+        )
         db.add(fv)
         db.commit()
         db.refresh(fv)
@@ -86,14 +99,16 @@ def _assessment_detail(db: Session, a: Assessment) -> dict:
             "reviewer_name": rv.display_name if rv else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         })
+    meta = FORM_REGISTRY.get(fv.form_code if fv else "")
     return {
         "id": str(a.id),
         "case_id": str(a.case_id),
         "case_number": case.case_number if case else None,
         "applicant_name": (f"{applicant.first_name} {applicant.last_name}" if applicant else None),
-        "form_code": fv.form_code if fv else FORM_CODE,
+        "form_code": fv.form_code if fv else None,
+        "form_title": meta.title if meta else None,
         "form_definition": (fv.definition if fv else None),
-        "form_version": fv.version if fv else FORM_VERSION,
+        "form_version": fv.version if fv else None,
         "status": a.status,
         "version_no": a.version_no,
         "row_version": a.row_version,
@@ -108,14 +123,26 @@ def _assessment_detail(db: Session, a: Assessment) -> dict:
     }
 
 
-# ---------- تعریف فرم ----------
+# ---------- تعریف فرم‌ها ----------
+
+@router.get("/forms")
+def get_forms(_actor=Depends(require_roles(*CLINICAL_ROLES))) -> dict:
+    """فهرست فرم‌های بالینی منتشرشده برای انتخاب هنگام ایجاد ارزیابی جدید."""
+    return {"items": list_forms()}
+
 
 @router.get("/forms/{form_code}")
 def get_form(form_code: str, db: Session = Depends(get_db), _actor=Depends(require_roles(*CLINICAL_ROLES))) -> dict:
-    if form_code != FORM_CODE:
-        raise HTTPException(status_code=404, detail="فرم یافت نشد")
-    fv = _get_form_version(db)
-    return {"code": fv.form_code, "version": fv.version, "definition": fv.definition}
+    meta = get_form_meta(form_code)  # 404 اگر فرم ثبت نشده باشد
+    fv = _get_form_version(db, form_code)
+    return {
+        "code": fv.form_code,
+        "title": meta.title,
+        "description": meta.description,
+        "usage": meta.usage,
+        "version": fv.version,
+        "definition": fv.definition,
+    }
 
 
 # ---------- لیست/ایجاد ----------
@@ -133,10 +160,14 @@ def list_case_assessments(case_id: uuid.UUID, db: Session = Depends(get_db), act
     out = []
     for a in items:
         author = db.get(User, a.author_user_id) if a.author_user_id else None
+        fv = db.get(FormVersion, a.form_version_id)
+        meta = FORM_REGISTRY.get(fv.form_code if fv else "")
         out.append({
             "id": str(a.id), "case_id": str(a.case_id),
             "case_number": case.case_number,
             "applicant_name": None,
+            "form_code": fv.form_code if fv else None,
+            "form_title": meta.title if meta else None,
             "version_no": a.version_no, "status": a.status,
             "author_name": author.display_name if author else None,
             "finalized_at": a.finalized_at.isoformat() if a.finalized_at else None,
@@ -153,7 +184,8 @@ def create_assessment(case_id: uuid.UUID, payload: AssessmentCreate, db: Session
     if case.status in (CaseStatus.CLOSED, CaseStatus.ARCHIVED):
         raise HTTPException(status_code=409, detail="برای پرونده بسته یا بایگانی نمی‌توان ارزیابی ثبت کرد")
     _assigned_counselor(db, actor, case)
-    fv = _get_form_version(db)
+    form_code = payload.form_code or DEFAULT_FORM_CODE
+    fv = _get_form_version(db, form_code)
     a = Assessment(
         case_id=case.id, form_version_id=fv.id,
         answers=payload.answers or {},
@@ -218,7 +250,9 @@ def finalize_assessment(assessment_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(status_code=403, detail="فقط نویسنده ارزیابی می‌تواند آن را نهایی کند")
     if a.status not in (AssessmentStatus.DRAFT, AssessmentStatus.RETURNED):
         raise HTTPException(status_code=409, detail="این ارزیابی در وضعیت قابل نهایی‌سازی نیست")
-    errors = validate_finalization(a.answers or {})
+    fv = db.get(FormVersion, a.form_version_id)
+    form_code = fv.form_code if fv else DEFAULT_FORM_CODE
+    errors = validate_finalization(form_code, a.answers or {})
     if errors:
         raise HTTPException(status_code=422, detail={
             "message": "نهایی‌سازی با اطلاعات ناقص مجاز نیست (بند ۶.۲)",
@@ -323,9 +357,13 @@ def supervisor_worklist(db: Session = Depends(get_db), _actor=Depends(require_ro
     ).all()
     items = []
     for a, c, ap, u in rows:
+        fv = db.get(FormVersion, a.form_version_id)
+        meta = FORM_REGISTRY.get(fv.form_code if fv else "")
         items.append({
             "id": str(a.id), "case_id": str(c.id), "case_number": c.case_number,
             "applicant_name": f"{ap.first_name} {ap.last_name}",
+            "form_code": fv.form_code if fv else None,
+            "form_title": meta.title if meta else None,
             "version_no": a.version_no, "status": a.status,
             "author_name": u.display_name if u else None,
             "finalized_at": a.finalized_at.isoformat() if a.finalized_at else None,
@@ -353,9 +391,13 @@ def counselor_worklist(db: Session = Depends(get_db), actor=Depends(require_role
     ).all()
     items = []
     for a, cs, ap, u in rows:
+        fv = db.get(FormVersion, a.form_version_id)
+        meta = FORM_REGISTRY.get(fv.form_code if fv else "")
         items.append({
             "id": str(a.id), "case_id": str(cs.id), "case_number": cs.case_number,
             "applicant_name": f"{ap.first_name} {ap.last_name}",
+            "form_code": fv.form_code if fv else None,
+            "form_title": meta.title if meta else None,
             "version_no": a.version_no, "status": a.status,
             "author_name": u.display_name if u else None,
             "finalized_at": a.finalized_at.isoformat() if a.finalized_at else None,

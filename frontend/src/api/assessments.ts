@@ -20,6 +20,23 @@ export interface FormDefinition {
   sections: FormSectionDef[];
 }
 
+export interface FormSummary {
+  code: string;
+  title: string;
+  description: string;
+  usage: string;
+  version: number;
+}
+
+export interface FormHead {
+  code: string;
+  title: string;
+  description: string;
+  usage: string;
+  version: number;
+  definition: FormDefinition;
+}
+
 export interface ReviewActionRow {
   id: string;
   decision: string;
@@ -33,8 +50,9 @@ export interface AssessmentDetail {
   case_id: string;
   case_number: string | null;
   applicant_name: string | null;
-  form_code: string;
-  form_version: number;
+  form_code: string | null;
+  form_title: string | null;
+  form_version: number | null;
   form_definition: FormDefinition | null;
   status: string;
   version_no: number;
@@ -54,6 +72,8 @@ export interface AssessmentListItem {
   case_id: string;
   case_number: string;
   applicant_name: string | null;
+  form_code: string | null;
+  form_title: string | null;
   version_no: number;
   status: string;
   author_name: string | null;
@@ -69,8 +89,17 @@ export const ASSESSMENT_STATUS_META: Record<string, { label: string; color: "suc
   approved: { label: "تأییدشده", color: "success" },
 };
 
-export async function fetchFormDefinition(): Promise<FormDefinition> {
-  return (await apiClient.get("/forms/RS-PS-04-01")).data;
+export async function fetchForms(): Promise<{ items: FormSummary[] }> {
+  return (await apiClient.get("/forms")).data;
+}
+
+export async function fetchFormHead(code: string): Promise<FormHead> {
+  return (await apiClient.get(`/forms/${encodeURIComponent(code)}`)).data;
+}
+
+export async function fetchFormDefinition(code: string = "RS-PS-04-01"): Promise<FormDefinition> {
+  const head = await fetchFormHead(code);
+  return { code: head.code, version: head.version, sections: head.definition.sections };
 }
 
 export async function fetchCaseAssessments(caseId: string): Promise<{ items: AssessmentListItem[] }> {
@@ -81,8 +110,8 @@ export async function fetchAssessment(id: string): Promise<AssessmentDetail> {
   return (await apiClient.get(`/assessments/${id}`)).data;
 }
 
-export async function createAssessmentDraft(caseId: string, answers: Record<string, unknown>): Promise<AssessmentDetail> {
-  return (await apiClient.post(`/cases/${caseId}/assessments`, { answers })).data;
+export async function createAssessmentDraft(caseId: string, answers: Record<string, unknown>, formCode?: string): Promise<AssessmentDetail> {
+  return (await apiClient.post(`/cases/${caseId}/assessments`, { answers, form_code: formCode || null })).data;
 }
 
 export async function saveAssessmentDraft(id: string, answers: Record<string, unknown>, expectedVersion?: number): Promise<AssessmentDetail> {
