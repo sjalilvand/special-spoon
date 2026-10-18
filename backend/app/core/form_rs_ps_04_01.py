@@ -1,16 +1,29 @@
-"""تعریف فرم RS-PS-04-01 — نسخه ۲ (سند v1.00، اصلاحات روشن اعمال‌شده)
+"""تعریف فرم RS-PS-04-01 — نسخه ۴ (بازبینی فاز ۲۴ مطابق فرم پیوست و سند جامع v0.2)
+
+تغییرات نسخه ۴ (بدون تغییر معنای پاسخ‌های ثبت‌شده در نسخه‌های قبل):
+- افزودن بخش «اطلاعات فردی و اجتماعی» مطابق فرم پیوست (وضعیت تأهل، تحصیلات، شغل،
+  منبع ارجاع، نام مشاور/درمانگر، آدرس و تلفن سکونت) — داده‌های پایه پرونده در
+  سیستم از متقاضی/پرونده خوانده می‌شود؛ این بخش تصویر لحظه‌ای بالینی فرم را کامل می‌کند.
+- افزودن گزینه‌های فرم پیوست در محتوای فکر: کاشتن فکر، هذیان نیستی، هذیان شهوانی،
+  هذیان محرومیت، ترس؛ و «دوگانگی احساس» در عاطفه.
+- اصلاح برچسب‌های نادرست نسخه قبل: «هسته» → آهسته/ملایم، «تلفظ به زمان/مکان/شخص»
+  → جهت‌یابی، و افزودن گزینه‌های فاقد تکلم و سالاد کلمات مطابق فرم پیوست.
+- افزودن «تاریخ فرم» (سربرگ) و سقف طول/قالب فیلدها مطابق بخش ۰۴ سند.
+- اعتبارسنجی نهایی‌سازی نسخه‌آگاه شد (بر اساس تعریف نسخه ذخیره‌شده — B14).
 
 قواعد:
-- نسخه ۱ حفظ شده است؛ ارزیابی‌های قدیمی به نسخه خودشان متصل‌اند و رندرشان
-  با definition همان نسخه انجام می‌شود (تغییر گزینه‌ها معنای پاسخ قبلی را عوض نمی‌کند).
+- نسخه‌های قبلی حفظ شده‌اند؛ ارزیابی‌های قدیمی به تعریف نسخه خودشان متصل‌اند و
+  اعتبارسنجی/رندرشان با همان نسخه انجام می‌شود (تغییر گزینه‌ها معنای پاسخ قبلی را عوض نمی‌کند).
 - «ارزیابی نشده» از «طبیعی» متمایز است؛ «اطلاعات کافی موجود نیست» قابل ثبت است.
 - گزینه‌های علامت‌گذاری‌شده با (نیازمند تأیید تخصصی) پیش از استفاده بالینی نهایی می‌شوند.
 - تشخیص خودکار و نمره خطر خودکار وجود ندارد.
 """
 from typing import Any
 
+from app.core.form_common import canonicalize_answers, format_and_range_errors
+
 FORM_CODE = "RS-PS-04-01"
-FORM_VERSION = 3
+FORM_VERSION = 4
 
 
 def _o(value: str, label: str) -> dict:
@@ -22,8 +35,9 @@ INSUF = _o("insufficient_info", "اطلاعات کافی موجود نیست")
 NORMAL = _o("normal", "طبیعی")
 
 
-def _f(key: str, label: str, ftype: str = "text", required: bool = False, options: list | None = None) -> dict:
-    return {"key": key, "label": label, "type": ftype, "required": required, "options": options or []}
+def _f(key: str, label: str, ftype: str = "text", required: bool = False,
+       options: list | None = None, **extra) -> dict:
+    return {"key": key, "label": label, "type": ftype, "required": required, "options": options or [], **extra}
 
 
 def _sec(key: str, title: str, fields: list) -> dict:
@@ -31,6 +45,22 @@ def _sec(key: str, title: str, fields: list) -> dict:
 
 
 FORM_SECTIONS: list[dict[str, Any]] = [
+    _sec("form_header", "سربرگ فرم", [
+        _f("form_date", "تاریخ فرم (شمسی)", "text", False, max_length=20),
+    ]),
+    _sec("person_snapshot", "اطلاعات فردی و اجتماعی (مطابق فرم پیوست)", [
+        _f("marital_status", "وضعیت تأهل", "select", False, [
+            _o("single", "مجرد"), _o("married", "متأهل"),
+            _o("divorced", "مطلقه"), _o("widowed", "بیوه"),
+        ]),
+        _f("education", "میزان تحصیلات", max_length=100),
+        _f("job", "شغل", max_length=100),
+        _f("referral_source", "منبع ارجاع", max_length=150),
+        _f("counselor_name", "نام مشاور / درمانگر", max_length=150),
+        _f("province", "استان", max_length=50),
+        _f("county", "شهرستان", max_length=50),
+        _f("residence_contact", "آدرس و شماره تلفن محل سکونت", "textarea", False, max_length=500),
+    ]),
     _sec("chief_complaint", "شکایت اصلی", [
         _f("description", "شرح شکایت اصلی", "textarea", True),
         _f("duration", "مدت مشکل"),
@@ -109,16 +139,20 @@ FORM_SECTIONS: list[dict[str, Any]] = [
         _f("note", "توضیحات", "textarea"),
     ]),
     _sec("mse_speech", "MSE — ج) تکلم", [
-        _f("speed", "سرعت", "select", False, [NORMAL, _o("fast", "سریع"), _o("slow", "هسته"), NA]),
+        _f("speed", "سرعت تولید کلام", "select", False, [
+            NORMAL, _o("fast", "سریع"), _o("pressurized", "با فشار"),
+            _o("slow", "آهسته"), _o("pausing", "مکث کردن"), NA,
+        ]),
         _f("amount", "میزان/جریان", "select", False, [
             NORMAL, _o("poverty", "کم‌حرفی"), _o("pressured", "پرگویی"),
             _o("blocking", "قطع‌شدگی/فقر تکلم"), NA,
         ]),
-        _f("loudness", "بلندی صدا", "select", False, [NORMAL, _o("loud", "بلند"), _o("whisper", "هسته"), NA]),
+        _f("loudness", "بلندی صدا", "select", False, [NORMAL, _o("loud", "بلند"), _o("soft", "ملایم"), NA]),
         _f("tone", "آهنگ صدا", "select", False, [NORMAL, _o("monotone", "یک‌نواخت"), _o("pitchy", "نوسانی"), NA]),
         _f("fluency", "روانی تکلم", "select", False, [NORMAL, _o("dysfluent", "ناروان"), _o("stutter", "لکنت"), NA]),
         _f("other_speech", "سایر ویژگی‌های تکلم", "select", False, [
-            _o("echolalia", "تقلید کلمات"), _o("neologism", "کلمات ساختگی"), _o("none", "سایر"), NA,
+            _o("no_speech", "فقدان تکلم"), _o("neologism", "واژه‌سازی (کلمات ساختگی)"),
+            _o("echolalia", "تقلید کلمات"), _o("word_salad", "سالاد کلمات"), _o("none", "سایر"), NA,
         ]),
         _f("note", "توضیحات"),
     ]),
@@ -138,7 +172,10 @@ FORM_SECTIONS: list[dict[str, Any]] = [
             _o("persecution", "هذیان گزند و آسیب"), _o("guilt", "هذیان گناه"),
             _o("poverty", "هذیان فقر"), _o("somatic", "هذیان جسمانی"),
             _o("control", "هذیان کنترل"), _o("thought_withdrawal", "ربایش فکر"),
-            _o("thought_broadcasting", "پخش فکر"), _o("infidelity", "هذیان حسادت/بی‌وفایی"),
+            _o("thought_insertion", "کاشتن فکر"), _o("thought_broadcasting", "پخش فکر"),
+            _o("nihilistic", "هذیان نیستی"), _o("erotomanic", "هذیان شهوانی"),
+            _o("deprivation", "هذیان محرومیت"), _o("fear", "ترس"),
+            _o("infidelity", "هذیان حسادت/بی‌وفایی"),
             _o("disorganized_ideas", "ایده‌های بی‌سازمان (هذیان بی‌سازمان)"),
             _o("hypochondriasis", "هذیان جسمانی (هذیان بیماری)"), _o("other", "سایر"),
         ]),
@@ -149,12 +186,13 @@ FORM_SECTIONS: list[dict[str, Any]] = [
         _f("mood", "خلق", "select", False, [
             NORMAL, _o("depressed", "افسرده"), _o("anxious", "مضطرب"),
             _o("irritable", "تحریک‌پذیر"), _o("angry", "خشمگین"),
-            _o("elevated", "بالا (با سرخوشی)"), _o("subjective", "توصیف مراجع"), _o("other", "سایر"), NA,
+            _o("elevated", "بالا / نشئه"), _o("subjective", "توصیف مراجع"), _o("other", "سایر"), NA,
         ]),
         _f("affect", "عاطفه (مشاهده‌گر)", "select", False, [
             NORMAL, _o("restricted", "محدود"), _o("slowed", "کند"), _o("flat", "تخت"),
             _o("blunted", "کاهش شدید بیان هیجانی"), _o("labile", "بی‌ثبات"),
-            _o("incongruent", "ناهماهنگ با گفتار"), _o("other", "سایر"), NA,
+            _o("incongruent", "ناهماهنگ با گفتار"), _o("ambivalent", "دوگانگی احساس"),
+            _o("other", "سایر"), NA,
         ]),
         _f("note", "توضیحات مشاهده‌گر", "textarea"),
     ]),
@@ -174,13 +212,13 @@ FORM_SECTIONS: list[dict[str, Any]] = [
         _f("memory_immediate", "حافظه فوری", "select", False, [NORMAL, _o("impaired", "مختل"), NA]),
         _f("memory_recent", "حافظه نزدیک", "select", False, [NORMAL, _o("impaired", "مختل"), NA]),
         _f("memory_remote", "حافظه دور", "select", False, [NORMAL, _o("impaired", "مختل"), NA]),
-        _f("orientation_time", "تلفظ به زمان", "select", False, [
+        _f("orientation_time", "جهت‌یابی به زمان", "select", False, [
             _o("intact", "درست"), _o("partial", "ناقص"), _o("impaired", "مختل"), NA,
         ]),
-        _f("orientation_place", "تلفظ به مکان", "select", False, [
+        _f("orientation_place", "جهت‌یابی به مکان", "select", False, [
             _o("intact", "درست"), _o("partial", "ناقص"), _o("impaired", "مختل"), NA,
         ]),
-        _f("orientation_person", "تلفظ به شخص", "select", False, [
+        _f("orientation_person", "جهت‌یابی به شخص", "select", False, [
             _o("intact", "درست"), _o("partial", "ناقص"), _o("impaired", "مختل"), NA,
         ]),
         _f("consciousness", "سطح هوشیاری", "select", False, [
@@ -267,8 +305,13 @@ REQUIRED_AT_FINALIZE: list[tuple[str, str]] = [
 ]
 
 
-def validate_finalization(answers: dict) -> list[dict]:
-    """اعتبارسنجی سمت سرور هنگام نهایی‌سازی."""
+def normalize_answers(answers: dict, definition: dict | None = None) -> dict:
+    """نرمال‌سازی پاسخ‌ها (ارقام فارسی، حذف فاصله‌های زائد) بر اساس تعریف نسخه."""
+    return canonicalize_answers(answers, definition or FORM_DEFINITION)
+
+
+def validate_finalization(answers: dict, definition: dict | None = None) -> list[dict]:
+    """اعتبارسنجی سمت سرور هنگام نهایی‌سازی — الزامات + قالب/سقف طول نسخه‌آگاه."""
     errors: list[dict] = []
     for path, label in REQUIRED_AT_FINALIZE:
         v = answers.get(path)
@@ -280,4 +323,5 @@ def validate_finalization(answers: dict) -> list[dict]:
         if t is None or (isinstance(t, str) and not t.strip()):
             errors.append({"field": "diagnosis.title", "label": "عنوان تشخیص",
                            "error": "با انتخاب وضعیت تشخیص، عنوان تشخیص الزامی است"})
+    errors += format_and_range_errors(answers, definition or FORM_DEFINITION)
     return errors

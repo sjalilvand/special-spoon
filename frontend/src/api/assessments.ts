@@ -6,6 +6,11 @@ export interface FormFieldDef {
   type: "text" | "textarea" | "select" | "multiselect" | "boolean";
   required: boolean;
   options: { value: string; label: string }[];
+  // فاز ۲۴ — قواعد قالب و سقف طول (بخش ۰۴ سند جامع)
+  max_length?: number | null;
+  format?: string | null;
+  min?: number;
+  max?: number;
 }
 
 export interface FormSectionDef {

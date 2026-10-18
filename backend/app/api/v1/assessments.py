@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.core.forms import (
     FORM_REGISTRY, get_form_definition, get_form_meta, get_form_version,
-    list_forms, validate_finalization,
+    list_forms, normalize_answers, validate_finalization,
 )
 from app.db.session import get_db
 from app.services.case_access import counselor_can_access
@@ -188,7 +188,8 @@ def create_assessment(case_id: uuid.UUID, payload: AssessmentCreate, db: Session
     fv = _get_form_version(db, form_code)
     a = Assessment(
         case_id=case.id, form_version_id=fv.id,
-        answers=payload.answers or {},
+        # نرمال‌سازی پاسخ‌ها بر اساس قالب فیلدهای نسخه فرم (بخش ۰۴ سند جامع)
+        answers=normalize_answers(form_code, payload.answers or {}, fv.definition),
         status=AssessmentStatus.DRAFT,
         version_no=_next_version_no(db, case.id),
         author_user_id=actor.id,
@@ -229,7 +230,9 @@ def update_assessment(assessment_id: uuid.UUID, payload: AssessmentUpdate, db: S
         raise HTTPException(status_code=409, detail="فرم نهایی بی‌ردپا تغییر نمی‌کند؛ برای اصلاح، نسخه جدید بسازید")
     if payload.expected_version is not None and payload.expected_version != a.row_version:
         raise HTTPException(status_code=409, detail="این ارزیابی توسط کاربر دیگری تغییر کرده است؛ صفحه را بازخوانی کنید")
-    a.answers = payload.answers
+    fv_cur = db.get(FormVersion, a.form_version_id)
+    form_code_cur = fv_cur.form_code if fv_cur else DEFAULT_FORM_CODE
+    a.answers = normalize_answers(form_code_cur, payload.answers, fv_cur.definition if fv_cur else None)
     a.row_version += 1
     db.commit()
     record_audit(db, action="assessment.updated", actor_user_id=actor.id,
@@ -252,7 +255,7 @@ def finalize_assessment(assessment_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="این ارزیابی در وضعیت قابل نهایی‌سازی نیست")
     fv = db.get(FormVersion, a.form_version_id)
     form_code = fv.form_code if fv else DEFAULT_FORM_CODE
-    errors = validate_finalization(form_code, a.answers or {})
+    errors = validate_finalization(form_code, a.answers or {}, fv.definition if fv else None)
     if errors:
         raise HTTPException(status_code=422, detail={
             "message": "نهایی‌سازی با اطلاعات ناقص مجاز نیست (بند ۶.۲)",

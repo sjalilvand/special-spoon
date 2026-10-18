@@ -30,12 +30,19 @@
 (اورژانس اجتماعی / پزشکی)">
       <bpmn:outgoing>F308</bpmn:outgoing>
       <bpmn:incoming>F305</bpmn:incoming>
+      <bpmn:incoming>F314</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T7_08" name="کارتابل هشدار سطح ۳ —
+بررسی و تأیید مسئول فنی">
+      <bpmn:outgoing>F314</bpmn:outgoing>
+      <bpmn:outgoing>F315</bpmn:outgoing>
+      <bpmn:incoming>F308</bpmn:incoming>
     </bpmn:task>
     <bpmn:exclusiveGateway id="G2_08" name="ادغام مسیرها" default="F309">
       <bpmn:outgoing>F309</bpmn:outgoing>
       <bpmn:incoming>F306</bpmn:incoming>
       <bpmn:incoming>F307</bpmn:incoming>
-      <bpmn:incoming>F308</bpmn:incoming>
+      <bpmn:incoming>F315</bpmn:incoming>
     </bpmn:exclusiveGateway>
     <bpmn:task id="T5_08" name="ثبت نتیجه تماس و پذیرش مقصد">
       <bpmn:outgoing>F310</bpmn:outgoing>
@@ -61,7 +68,9 @@
     <bpmn:sequenceFlow id="F305" sourceRef="G1_08" targetRef="T4_08" name="سطح ۳" />
     <bpmn:sequenceFlow id="F306" sourceRef="T2_08" targetRef="G2_08" />
     <bpmn:sequenceFlow id="F307" sourceRef="T3_08" targetRef="G2_08" />
-    <bpmn:sequenceFlow id="F308" sourceRef="T4_08" targetRef="G2_08" />
+    <bpmn:sequenceFlow id="F308" sourceRef="T4_08" targetRef="T7_08" name="نهایی‌سازی سطح ۳" />
+    <bpmn:sequenceFlow id="F314" sourceRef="T7_08" targetRef="T4_08" name="برگشت برای اصلاح" />
+    <bpmn:sequenceFlow id="F315" sourceRef="T7_08" targetRef="G2_08" name="تأیید" />
     <bpmn:sequenceFlow id="F309" sourceRef="G2_08" targetRef="T5_08" />
     <bpmn:sequenceFlow id="F310" sourceRef="T5_08" targetRef="T6_08" />
     <bpmn:sequenceFlow id="F311" sourceRef="T6_08" targetRef="G3_08" />
@@ -87,6 +96,9 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="T4_08_di" bpmnElement="T4_08">
         <dc:Bounds x="570" y="400" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T7_08_di" bpmnElement="T7_08">
+        <dc:Bounds x="830" y="415" width="180" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="G2_08_di" bpmnElement="G2_08">
         <dc:Bounds x="800" y="295" width="50" height="50" />
@@ -152,9 +164,31 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F308_di" bpmnElement="F308">
         <di:waypoint x="750" y="440" />
-        <di:waypoint x="825" y="440" />
+        <di:waypoint x="830" y="455" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="750" y="435" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F314_di" bpmnElement="F314">
+        <di:waypoint x="920" y="495" />
+        <di:waypoint x="920" y="540" />
+        <di:waypoint x="660" y="540" />
+        <di:waypoint x="660" y="480" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="750" y="501" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F315_di" bpmnElement="F315">
+        <di:waypoint x="920" y="415" />
+        <di:waypoint x="920" y="370" />
+        <di:waypoint x="825" y="370" />
         <di:waypoint x="825" y="345" />
 
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="832" y="363" width="80" height="24" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F309_di" bpmnElement="F309">
         <di:waypoint x="850" y="320" />

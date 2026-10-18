@@ -1,6 +1,7 @@
-"""تعریف فرم RS-PS-08-01 — فرم ارزیابی و مدیریت مورد حاد / پر خطر (نسخه ۱)
+"""تعریف فرم RS-PS-08-01 — فرم ارزیابی و مدیریت مورد حاد / پر خطر (نسخه ۲)
 
-مطابق سند فرم پیوست (کد فرم: RS-PS-08-01 — نسخه کدگذاری‌شده فرم):
+مطابق فرم پیوست (کد فرم: RS-PS-08-01 — نسخه کدگذاری‌شده فرم) و سند جامع v0.2 بخش ۰۴:
+- سربرگ: تاریخ فرم
 - اطلاعات فردی: نام و نام خانوادگی، سن، کد ملی، شماره تماس، استان، شهرستان، آدرس
 - ارزیابی اولیه: کد مورد حاد، نوع خطر (چندگزینه‌ای)، شدت و فوریت (سه سطح)،
   افکار یا رفتار خطرناک فعلی، سابقه قبلی (اختلالات روانپزشکی، بستری، اقدام به خودکشی)،
@@ -9,26 +10,32 @@
   نتیجه تماس و پذیرش مقصد، مسئول پیگیری، زمان پیگیری، وضعیت نهایی
 - کارشناس نظارت حرفه‌ای: نام و نام خانوادگی
 
+تغییرات نسخه ۲ (فاز ۲۴ — بدون تغییر معنای پاسخ‌های ثبت‌شده):
+- افزودن فیلد «تاریخ فرم» مطابق سربرگ فرم پیوست
+- افزودن سقف طول و قالب فیلدها (تماس، کد ملی با رقم کنترل، سن عددی) مطابق بخش ۰۴ سند
+- اعتبارسنجی نهایی‌سازی نسخه‌آگاه بر اساس تعریف نسخه ذخیره‌شده همان ارزیابی (B14)
+
 قواعد:
 - «شدت و فوریت» سه سطح دارد: سطح ۱ (نیازمند پایش)، سطح ۲ (متوسط)، سطح ۳ (بالا).
-- تشخیص خودکار و نمره خطر خودکار وجود ندارد؛ سطح فوریت به‌صورت حرفه‌ای توسط کارشناس
-  تعیین می‌شود. تنها قاعده ساختاری: با ثبت سطح ۳، تکمیل اطلاعات ارجاع (مسئول اطلاع‌رسانی،
-  مرجع ارجاع‌شده و نتیجه تماس) برای نهایی‌سازی الزامی است — این قاعده «تشخیص» نیست و
-  صرفاً کامل‌بودن سند اقدام فوری را تضمین می‌کند.
-- نسخه‌داری: پاسخ‌های ثبت‌شده به تعریف نسخه خودشان متصل می‌مانند.
+- تشخیص خودکار و نمره خطر خودکار وجود ندارد؛ تنها قاعده ساختاری: با ثبت سطح ۳،
+  تکمیل اطلاعات ارجاع برای نهایی‌سازی الزامی است.
+- هشدار سطح ۳ به‌صورت خودکار در کارتابل مسئول فنی (فاز ۲۳) ظاهر می‌شود.
 """
 from typing import Any
 
+from app.core.form_common import canonicalize_answers, format_and_range_errors
+
 FORM_CODE = "RS-PS-08-01"
-FORM_VERSION = 1
+FORM_VERSION = 2
 
 
 def _o(value: str, label: str) -> dict:
     return {"value": value, "label": label}
 
 
-def _f(key: str, label: str, ftype: str = "text", required: bool = False, options: list | None = None) -> dict:
-    return {"key": key, "label": label, "type": ftype, "required": required, "options": options or []}
+def _f(key: str, label: str, ftype: str = "text", required: bool = False,
+       options: list | None = None, **extra) -> dict:
+    return {"key": key, "label": label, "type": ftype, "required": required, "options": options or [], **extra}
 
 
 def _sec(key: str, title: str, fields: list) -> dict:
@@ -36,17 +43,20 @@ def _sec(key: str, title: str, fields: list) -> dict:
 
 
 FORM_SECTIONS: list[dict[str, Any]] = [
+    _sec("form_header", "سربرگ فرم", [
+        _f("form_date", "تاریخ فرم (شمسی)", "text", False, max_length=20),
+    ]),
     _sec("person_info", "اطلاعات فردی", [
-        _f("full_name", "نام و نام خانوادگی", "text", True),
-        _f("age", "سن"),
-        _f("national_id", "کد ملی"),
-        _f("phone", "شماره تماس", "text", True),
-        _f("province", "استان", "text", True),
-        _f("county", "شهرستان"),
-        _f("address", "آدرس", "textarea"),
+        _f("full_name", "نام و نام خانوادگی", "text", True, max_length=150),
+        _f("age", "سن", "text", False, format="integer", min=0, max=120, max_length=3),
+        _f("national_id", "کد ملی", "text", False, format="national_id", max_length=10),
+        _f("phone", "شماره تماس", "text", True, format="phone", max_length=11),
+        _f("province", "استان", "text", True, max_length=50),
+        _f("county", "شهرستان", "text", False, max_length=50),
+        _f("address", "آدرس", "textarea", False, max_length=500),
     ]),
     _sec("initial_assessment", "ارزیابی اولیه", [
-        _f("acute_code", "کد مورد حاد"),
+        _f("acute_code", "کد مورد حاد", max_length=50),
         _f("risk_types", "نوع خطر", "multiselect", True, [
             _o("suicidal_ideation", "افکار خودکشی یا آسیب به خود"),
             _o("suicide_attempt", "قصد یا اقدام به خودکشی"),
@@ -56,7 +66,7 @@ FORM_SECTIONS: list[dict[str, Any]] = [
             _o("severe_crisis", "بحران شدید"),
             _o("other", "سایر"),
         ]),
-        _f("risk_types_other", "شرح نوع خطر سایر"),
+        _f("risk_types_other", "شرح نوع خطر سایر", max_length=255),
         _f("severity", "شدت و فوریت", "select", True, [
             _o("level_1", "سطح ۱ (نیازمند پایش)"),
             _o("level_2", "سطح ۲ (متوسط)"),
@@ -71,16 +81,16 @@ FORM_SECTIONS: list[dict[str, Any]] = [
         _f("immediate_action", "اقدام فوری انجام‌شده", "textarea", True),
     ]),
     _sec("referral_info", "اطلاعات ارجاع", [
-        _f("referral_responsible", "مسئول اطلاع‌رسانی یا ارجاع"),
-        _f("referral_datetime", "روز و ساعت ارجاع"),
-        _f("referral_destination", "مرجع ارجاع‌شده"),
+        _f("referral_responsible", "مسئول اطلاع‌رسانی یا ارجاع", max_length=150),
+        _f("referral_datetime", "روز و ساعت ارجاع", max_length=100),
+        _f("referral_destination", "مرجع ارجاع‌شده", max_length=150),
         _f("referral_result", "نتیجه تماس و پذیرش مقصد", "textarea"),
-        _f("followup_responsible", "مسئول پیگیری"),
-        _f("followup_time", "زمان پیگیری"),
+        _f("followup_responsible", "مسئول پیگیری", max_length=150),
+        _f("followup_time", "زمان پیگیری", max_length=100),
         _f("final_status", "وضعیت نهایی", "textarea"),
     ]),
     _sec("supervision", "نظارت حرفه‌ای", [
-        _f("supervisor_name", "نام و نام خانوادگی کارشناس نظارت حرفه‌ای"),
+        _f("supervisor_name", "نام و نام خانوادگی کارشناس نظارت حرفه‌ای", max_length=150),
         _f("supervisor_note", "ملاحظات کارشناس نظارت حرفه‌ای", "textarea"),
     ]),
 ]
@@ -99,8 +109,13 @@ REQUIRED_AT_FINALIZE: list[tuple[str, str]] = [
 ]
 
 
-def validate_finalization(answers: dict) -> list[dict]:
-    """اعتبارسنجی سمت سرور هنگام نهایی‌سازی."""
+def normalize_answers(answers: dict, definition: dict | None = None) -> dict:
+    """نرمال‌سازی پاسخ‌ها (ارقام فارسی، قالب تلفن/کد ملی، حذف فاصله‌های زائد)."""
+    return canonicalize_answers(answers, definition or FORM_DEFINITION)
+
+
+def validate_finalization(answers: dict, definition: dict | None = None) -> list[dict]:
+    """اعتبارسنجی سمت سرور هنگام نهایی‌سازی — الزامات + قالب/سقف طول نسخه‌آگاه."""
     errors: list[dict] = []
     for path, label in REQUIRED_AT_FINALIZE:
         v = answers.get(path)
@@ -129,4 +144,5 @@ def validate_finalization(answers: dict) -> list[dict]:
                     "field": path, "label": label,
                     "error": "با ثبت سطح فوریت ۳ (بالا)، تکمیل اطلاعات ارجاع برای نهایی‌سازی الزامی است",
                 })
+    errors += format_and_range_errors(answers, definition or FORM_DEFINITION)
     return errors

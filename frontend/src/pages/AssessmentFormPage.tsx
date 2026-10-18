@@ -438,12 +438,25 @@ function FieldInput({
   if (field.type === "textarea") {
     return (
       <TextField fullWidth multiline minRows={2} size="small" label={label}
+        inputProps={{ maxLength: field.max_length ?? undefined }}
         value={(value as string) ?? ""}
         onChange={(e) => onChange(path, e.target.value || undefined)} />
     );
   }
+  const FORMAT_PLACEHOLDER: Record<string, string> = {
+    phone: "09121234567 یا 02112345678",
+    mobile: "09121234567",
+    national_id: "کد ملی ۱۰ رقمی",
+    integer: field.min !== undefined && field.max !== undefined ? `${field.min} تا ${field.max}` : "عدد",
+  };
+  const isNumericFormat = ["phone", "mobile", "national_id", "integer"].includes(field.format ?? "");
   return (
     <TextField fullWidth size="small" label={label}
+      inputProps={{
+        maxLength: field.max_length ?? undefined,
+        inputMode: isNumericFormat ? "numeric" : undefined,
+        placeholder: field.format ? FORMAT_PLACEHOLDER[field.format] : undefined,
+      }}
       value={(value as string) ?? ""}
       onChange={(e) => onChange(path, e.target.value || undefined)} />
   );

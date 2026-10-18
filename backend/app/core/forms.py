@@ -1,15 +1,17 @@
-"""رجیستری فرم‌های بالینی نسخه‌دار سامانه (بند ۶.۲ سند)
+"""رجیستری فرم‌های بالینی نسخه‌دار سامانه (بند ۶.۲ سند و B14 سند جامع v0.2)
 
 هر فرم با کد یکتای RS-PS-XX-XX در این رجیستری ثبت می‌شود:
 - تعریف فرم از ماژول همان فرم خوانده می‌شود (نسخه‌داری حفظ می‌شود).
-- API ارزیابی‌ها بر اساس این رجیستری، تعریف فرم را سرو و اعتبارسنجی
-  نهایی‌سازی را به ماژول همان فرم واگذار می‌کند.
+- API ارزیابی‌ها بر اساس این رجیستری، تعریف فرم را سرو، پاسخ‌ها را نرمال‌سازی و
+  اعتبارسنجی نهایی‌سازی را به ماژول همان فرم واگذار می‌کند.
+- اعتبارسنجی قالب/سقف طول «نسخه‌آگاه» است: قواعد بر اساس تعریف نسخه ذخیره‌شده‌ی
+  همان ارزیابی اعمال می‌شود، نه نسخه جاری ماژول (پاسخ‌ها به نسخه خودشان متصل می‌مانند).
 - افزودن فرم جدید = افزودن ماژول تعریف + یک سطر در FORM_REGISTRY.
 
-فرم‌های پیاده‌سازی‌شده:
-- RS-PS-01-01: فرم پذیرش اولیه مراجعان تلفنی
-- RS-PS-04-01: فرم پذیرش و تشکیل پرونده مراجع (نسخه ۳ — از قبل موجود)
-- RS-PS-08-01: فرم ارزیابی و مدیریت مورد حاد / پر خطر
+فرم‌های پیاده‌سازی‌شده (نسخه جاری):
+- RS-PS-01-01 v2: فرم پذیرش اولیه مراجعان تلفنی
+- RS-PS-04-01 v4: فرم پذیرش و تشکیل پرونده مراجع
+- RS-PS-08-01 v2: فرم ارزیابی و مدیریت مورد حاد / پر خطر
 """
 from dataclasses import dataclass
 from importlib import import_module
@@ -98,10 +100,27 @@ def get_form_version(form_code: str) -> int:
     return get_form_module(form_code).FORM_VERSION
 
 
-def validate_finalization(form_code: str, answers: dict) -> list[dict]:
-    """اعتبارسنجی نهایی‌سازی به قواعد اختصاصی همان فرم واگذار می‌شود."""
+def validate_finalization(form_code: str, answers: dict, definition: dict | None = None) -> list[dict]:
+    """اعتبارسنجی نهایی‌سازی به قواعد اختصاصی همان فرم واگذار می‌شود.
+
+    definition (در صورت ارسال) تعریف نسخه ذخیره‌شده‌ی همان ارزیابی است؛
+    قواعد قالب/سقف طول بر اساس همان نسخه اعمال می‌شود (نسخه‌آگاه — B14).
+    """
     mod = get_form_module(form_code)
-    fn: Callable[[dict], list[dict]] = getattr(mod, "validate_finalization", None)
+    fn: Callable = getattr(mod, "validate_finalization", None)
     if fn is None:
         return []
-    return fn(answers or {})
+    try:
+        return fn(answers or {}, definition)
+    except TypeError:
+        # سازگاری با ماژول‌های فرم با امضای قدیمی (بدون پارامتر definition)
+        return fn(answers or {})
+
+
+def normalize_answers(form_code: str, answers: dict, definition: dict | None = None) -> dict:
+    """نرمال‌سازی پاسخ‌ها بر اساس قالب فیلدهای نسخه فرم (ارقام فارسی، تلفن، کد ملی)."""
+    mod = get_form_module(form_code)
+    fn = getattr(mod, "normalize_answers", None)
+    if fn is None:
+        return answers or {}
+    return fn(answers or {}, definition)
