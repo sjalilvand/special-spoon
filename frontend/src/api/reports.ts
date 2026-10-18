@@ -57,3 +57,40 @@ export async function fetchAuditEvents(params: {
 export async function printAssessment(id: string): Promise<void> {
   await apiClient.post(`/assessments/${id}/print`, {});
 }
+
+// ---------------- فاز ۲۶ - B24 داشبورد مدیر ----------------
+
+export interface TrendPoint { date: string; count: number }
+
+export interface AdminDashboardData {
+  days: number;
+  generated_at: string;
+  kpis: {
+    applicants_total: number;
+    users_active: number;
+    counselors_active: number;
+    cases_total: number;
+    cases_by_status: Record<string, number>;
+    assessments_pending_review: number;
+    assessments_approved: number;
+    avg_review_hours: number | null;
+    appointments_window: number;
+    appointments_done: number;
+    appointments_cancelled: number;
+    appointments_no_show: number;
+    no_show_rate: number;
+    appointments_upcoming_7d: number;
+    consultations_total: number;
+    consultations_with_slot: number;
+    consultations_by_status: Record<string, number>;
+    booking_active_holds: number;
+    booking_confirmed_holds: number;
+    sessions_count: number;
+  };
+  trends: { cases: TrendPoint[]; bookings: TrendPoint[] };
+  counselor_workload: CounselorWorkloadRow[];
+}
+
+export async function fetchAdminDashboard(days: number): Promise<AdminDashboardData> {
+  return (await apiClient.get("/reports/admin-dashboard", { params: { days } })).data;
+}

@@ -15,6 +15,7 @@ import {
 import type { FormDefinition, FormFieldDef, FormSectionDef } from "../api/assessments";
 import { fetchCase } from "../api/cases";
 import { printAssessment } from "../api/reports";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function AssessmentFormPage() {
   const params = useParams<{ id?: string; caseId?: string }>();
@@ -334,7 +335,7 @@ export default function AssessmentFormPage() {
                   label={r.decision === "approved" ? "تأیید" : "برگشت"} />
                 <Typography variant="body2">{r.reviewer_name ?? "—"}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {r.created_at ? new Date(r.created_at).toLocaleString("fa-IR") : "—"}
+                  {r.created_at ? formatJalaliDateTime(r.created_at) : "—"}
                 </Typography>
                 {r.comment && <Typography variant="body2">توضیح: {r.comment}</Typography>}
               </Stack>

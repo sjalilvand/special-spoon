@@ -21,6 +21,7 @@ import CaseAppointments from "../components/CaseAppointments";
 import CaseSessions from "../components/CaseSessions";
 import CaseRecommendations from "../components/CaseRecommendations";
 import CaseFiles from "../components/CaseFiles";
+import { formatJalali, formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,7 +53,7 @@ export default function CaseDetailPage() {
     <Stack spacing={2}>
       {c.status === "closed" && (
         <Alert severity="warning">
-          این پرونده بسته شده است — علت: {c.close_reason ?? "—"} ({c.close_date ? new Date(c.close_date).toLocaleDateString("fa-IR") : "—"})
+          این پرونده بسته شده است — علت: {c.close_reason ?? "—"} ({c.close_date ? formatJalali(c.close_date) : "—"})
         </Alert>
       )}
 
@@ -85,7 +86,7 @@ export default function CaseDetailPage() {
         <Stack spacing={0.5}>
           <InfoRow label="متقاضی" value={c.applicant_name} />
           <InfoRow label="کد ملی" value={c.applicant_national_id} />
-          <InfoRow label="تاریخ پذیرش" value={new Date(c.acceptance_date).toLocaleDateString("fa-IR")} />
+          <InfoRow label="تاریخ پذیرش" value={formatJalali(c.acceptance_date)} />
           <InfoRow label="محل ارائه خدمت" value={c.service_location_title} />
           <InfoRow label="نوع خدمت" value={c.service_type} />
           <InfoRow label="مشاور اصلی" value={c.primary_counselor_name} />
@@ -115,8 +116,8 @@ export default function CaseDetailPage() {
                   <TableCell>
                     {a.counselor_name} {a.role === "collaborator" && <Chip size="small" label="همکار" variant="outlined" />}
                   </TableCell>
-                  <TableCell>{a.start_at ? new Date(a.start_at).toLocaleString("fa-IR") : "—"}</TableCell>
-                  <TableCell>{a.end_at ? new Date(a.end_at).toLocaleString("fa-IR") : "—"}</TableCell>
+                  <TableCell>{a.start_at ? formatJalaliDateTime(a.start_at) : "—"}</TableCell>
+                  <TableCell>{a.end_at ? formatJalaliDateTime(a.end_at) : "—"}</TableCell>
                   <TableCell>{a.reason ?? "—"}</TableCell>
                   <TableCell>{a.end_reason ?? "—"}</TableCell>
                   <TableCell>
@@ -162,11 +163,11 @@ export default function CaseDetailPage() {
                       <Chip size="small" color={m.color} label={m.label} />
                       {x.revoked_at && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                          ابطال: {new Date(x.revoked_at).toLocaleDateString("fa-IR")} — {x.revoke_reason ?? "—"}
+                          ابطال: {formatJalali(x.revoked_at)} — {x.revoke_reason ?? "—"}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>{x.consent_date ? new Date(x.consent_date).toLocaleDateString("fa-IR") : "—"}</TableCell>
+                    <TableCell>{x.consent_date ? formatJalali(x.consent_date) : "—"}</TableCell>
                     <TableCell>{x.recorded_by_name ?? "—"}</TableCell>
                     <TableCell>{x.note ?? "—"}</TableCell>
                     <TableCell align="left">

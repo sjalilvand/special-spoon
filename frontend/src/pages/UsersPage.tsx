@@ -34,6 +34,7 @@ import {
   updateUserStatus,
 } from "../api/auth";
 import type { UserRow } from "../api/auth";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 const STATUS_META: Record<string, { label: string; color: "success" | "warning" | "default" }> = {
   active: { label: "فعال", color: "success" },
@@ -129,7 +130,7 @@ export default function UsersPage() {
                     <Chip label={meta.label} color={meta.color} size="small" />
                   </TableCell>
                   <TableCell>
-                    {row.last_login_at ? new Date(row.last_login_at).toLocaleString("fa-IR") : "—"}
+                    {row.last_login_at ? formatJalaliDateTime(row.last_login_at) : "—"}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1}>
@@ -173,7 +174,7 @@ export default function UsersPage() {
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
             این توکن فقط یک بار نمایش داده می‌شود. آن را به روش مورد تأیید سازمان برای کاربر ارسال کنید.
-            انقضا: {tokenInfo ? new Date(tokenInfo.expires_at).toLocaleString("fa-IR") : ""}
+            انقضا: {tokenInfo ? formatJalaliDateTime(tokenInfo.expires_at) : ""}
           </Alert>
           <TextField
             fullWidth

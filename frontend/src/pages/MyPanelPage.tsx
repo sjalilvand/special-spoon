@@ -10,6 +10,7 @@ import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import {
   fetchMyAppointments, fetchMyCases, fetchMyProfile, fetchMyRecommendations,
 } from "../api/me";
+import { formatJalali, formatJalaliDateTime } from "../utils/jalali";
 
 function isNotFound(e: unknown): boolean {
   const anyE = e as { response?: { status?: number } };
@@ -103,7 +104,7 @@ export default function MyPanelPage() {
                 return (
                   <TableRow key={row.id}>
                     <TableCell>{row.case_number}</TableCell>
-                    <TableCell>{new Date(row.acceptance_date).toLocaleDateString("fa-IR")}</TableCell>
+                    <TableCell>{formatJalali(row.acceptance_date)}</TableCell>
                     <TableCell>{row.counselor_name ?? "—"}</TableCell>
                     <TableCell><Chip size="small" color={cs.color} label={cs.label} /></TableCell>
                     <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
@@ -136,7 +137,7 @@ export default function MyPanelPage() {
                 return (
                   <TableRow key={row.id}>
                     <TableCell>{row.case_number}</TableCell>
-                    <TableCell>{new Date(row.scheduled_at).toLocaleString("fa-IR")}</TableCell>
+                    <TableCell>{formatJalaliDateTime(row.scheduled_at)}</TableCell>
                     <TableCell>{row.location ?? "—"}</TableCell>
                     <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
                   </TableRow>
@@ -156,7 +157,7 @@ export default function MyPanelPage() {
           {recs?.items.map((r) => (
             <Box key={r.id} sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.5 }}>
               <Typography variant="caption" color="text.secondary">
-                پرونده {r.case_number} — {r.published_at ? new Date(r.published_at).toLocaleString("fa-IR") : ""}
+                پرونده {r.case_number} — {r.published_at ? formatJalaliDateTime(r.published_at) : ""}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>{r.content}</Typography>
             </Box>

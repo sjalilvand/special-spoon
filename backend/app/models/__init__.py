@@ -7,6 +7,8 @@ from app.models.appointment import (
 )
 from app.models.assessment import Assessment, AssessmentStatus, FormVersion, ReviewAction
 from app.models.audit import AuditEvent
+from app.models.booking import SlotClaim, SlotClaimStatus
+from app.models.otp import OtpChallenge, OtpPurpose
 from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Consent
 from app.models.clinical import Diagnosis, TreatmentPlan
 from app.models.consent import CONSENT_KINDS, ConsentVersion
@@ -28,7 +30,8 @@ __all__ = [
     "Diagnosis", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Notification",
     "OrganizationUnit", "Recommendation", "Referral", "ReviewAction", "Role",
+    "OtpChallenge", "OtpPurpose",
     "ServiceLocation", "Session", "SessionNoteRevision", "SessionNoteStatus",
-    "StoredFile", "TreatmentPlan", "User", "UserScope", "UserStatus",
-    "user_roles_table",
+    "SlotClaim", "SlotClaimStatus", "StoredFile", "TreatmentPlan", "User",
+    "UserScope", "UserStatus", "user_roles_table",
 ]

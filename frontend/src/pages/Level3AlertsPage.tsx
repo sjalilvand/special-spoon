@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@mui/material";
 import { fetchLevel3Cartable } from "../api/assessments";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 /**
  * کارتابل هشدار سطح ۳ مسئول فنی (فاز ۲۳) — چرخه فرم مورد حاد RS-PS-08-01
@@ -112,7 +113,7 @@ export default function Level3AlertsPage() {
                   <Stack spacing={0.5}>
                     <Typography variant="caption">{row.author_name ?? "—"}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {row.finalized_at ? new Date(row.finalized_at).toLocaleString("fa-IR") : "—"}
+                      {row.finalized_at ? formatJalaliDateTime(row.finalized_at) : "—"}
                     </Typography>
                   </Stack>
                 </TableCell>

@@ -13,6 +13,7 @@ import {
   finalizeSessionNote, saveSessionNote,
 } from "../api/schedule";
 import type { SessionRow } from "../api/schedule";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseSessions({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -151,7 +152,7 @@ export default function CaseSessions({ caseId }: { caseId: string }) {
               return (
                 <TableRow key={row.id}>
                   <TableCell>{row.session_number}</TableCell>
-                  <TableCell>{new Date(row.occurred_at).toLocaleString("fa-IR")}</TableCell>
+                  <TableCell>{formatJalaliDateTime(row.occurred_at)}</TableCell>
                   <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
                   <TableCell>{row.note_version}</TableCell>
                   <TableCell>
@@ -187,7 +188,7 @@ export default function CaseSessions({ caseId }: { caseId: string }) {
               <MenuItem value="">— بدون اتصال —</MenuItem>
               {openAppts?.items.map((a) => (
                 <MenuItem key={a.id} value={a.id}>
-                  {new Date(a.scheduled_at).toLocaleString("fa-IR")}
+                  {formatJalaliDateTime(a.scheduled_at)}
                 </MenuItem>
               ))}
             </TextField>

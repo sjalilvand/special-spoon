@@ -2,29 +2,38 @@
 import re
 import time
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.booking import bookable_range, free_slots, validate_slot
+from app.core.config import get_settings
 from app.core.dates import normalize_digits
 from app.db.session import get_db
+from app.models.booking import SlotClaim, SlotClaimStatus
 from app.models.consultation import ConsultationRequest
 from app.models.people import Counselor
+from app.services import booking_hold, otp as otp_service
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/public", tags=["public"])
+settings = get_settings()
 
 # محدودسازی نرخ ثبت درخواست: حداکثر ۵ درخواست در ساعت از هر IP
 _req_ip: dict[str, list[float]] = {}
 _RATE = 5
 _WINDOW = 3600.0
+
+# محدودسازی نرخ ساخت نگهداشت: حداکثر ۱۲ در ساعت از هر IP (فاز ۲۶ - B09)
+_hold_ip: dict[str, list[float]] = {}
+_HOLD_RATE = 12
+_HOLD_WINDOW = 3600.0
 
 
 def _rate_ok(ip: str) -> bool:
@@ -46,12 +55,28 @@ def _client_ip(request: Request) -> str:
 
 
 def _normalize_mobile(raw: str) -> str:
-    s = normalize_digits(raw).replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if s.startswith("+98"):
-        s = "0" + s[3:]
-    elif s.startswith("98") and len(s) == 12:
-        s = "0" + s[2:]
-    return s
+    return otp_service.normalize_mobile(raw)
+
+
+def _hold_rate_ok(ip: str) -> bool:
+    now = time.monotonic()
+    lst = [t for t in _hold_ip.get(ip, []) if now - t < _HOLD_WINDOW]
+    if len(lst) >= _HOLD_RATE:
+        _hold_ip[ip] = lst
+        return False
+    lst.append(now)
+    _hold_ip[ip] = lst
+    return True
+
+
+def _active_holds_for_ip(db: Session, ip: str) -> int:
+    return int(db.scalar(
+        select(func.count()).select_from(SlotClaim).where(
+            SlotClaim.ip == ip,
+            SlotClaim.status == SlotClaimStatus.ACTIVE,
+            SlotClaim.expires_at > datetime.now(timezone.utc),
+        )
+    ) or 0)
 
 
 class ConsultationCreate(BaseModel):
@@ -67,6 +92,9 @@ class ConsultationCreate(BaseModel):
     # فاز ۲۱ - رزرو آنلاین اسلات
     counselor_id: uuid.UUID | None = None
     start_at: str | None = Field(default=None, max_length=64)
+    # فاز ۲۶ - B09/B02: توکن نگهداشت اسلات + توکن اثبات تأیید موبایل
+    hold_token: str | None = Field(default=None, max_length=100)
+    otp_token: str | None = Field(default=None, max_length=100)
 
 
 @router.get("/counselors")
@@ -129,6 +157,78 @@ def booking_slots(
     }
 
 
+# ---------------- فاز ۲۶ - B09: نگهداشت موقت اسلات ----------------
+
+class HoldCreate(BaseModel):
+    counselor_id: uuid.UUID
+    start_at: str = Field(max_length=64)
+
+
+@router.post("/booking-holds", status_code=201)
+def create_booking_hold(payload: HoldCreate, request: Request, db: Session = Depends(get_db)) -> dict:
+    """نگهداشت موقت اسلات برای تکمیل فرم (پیش‌فرض ۱۰ دقیقه)."""
+    ip = _client_ip(request)
+    if not _hold_rate_ok(ip):
+        raise HTTPException(status_code=429, detail="تلاش‌های نگهداشت زیاد است؛ کمی بعد دوباره تلاش کنید")
+    if _active_holds_for_ip(db, ip) >= settings.booking_hold_max_per_ip:
+        raise HTTPException(status_code=429, detail="نگهداشت‌های فعال شما زیاد است؛ یکی را تکمیل یا رها کنید")
+
+    counselor = db.get(Counselor, payload.counselor_id)
+    if counselor is None or counselor.status != "active":
+        raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+    try:
+        raw = datetime.fromisoformat(payload.start_at)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="زمان رزرو نامعتبر است")
+
+    booking_hold.expire_stale_holds(db)
+    normalized = validate_slot(db, counselor.id, raw)
+    if normalized is None:
+        raise HTTPException(status_code=409, detail="این زمان در دسترس نیست؛ اسلات دیگری انتخاب کنید")
+
+    res = booking_hold.create_hold(db, counselor.id, normalized, ip=ip)
+    if res["conflict"]:
+        raise HTTPException(status_code=409, detail="این اسلات هم‌اکنون توسط کاربر دیگری نگه داشته شده است")
+    hold = res["hold"]
+    record_audit(db, action="public.booking_hold_created",
+                 entity_type="slot_claim", entity_id=str(hold.id), ip=ip)
+    return {
+        "hold_id": str(hold.id),
+        "hold_token": res["token"],
+        "expires_at": hold.expires_at.isoformat(),
+        "remaining_seconds": booking_hold.remaining_seconds(hold),
+        "counselor": {"id": str(counselor.id), "name": f"{counselor.first_name} {counselor.last_name}"},
+        "start_at": normalized.isoformat(),
+        "hold_minutes": settings.booking_hold_minutes,
+    }
+
+
+@router.get("/booking-holds/{hold_token}")
+def get_booking_hold(hold_token: str, db: Session = Depends(get_db)) -> dict:
+    """وضعیت نگهداشت برای همگام‌سازی شمارش معکوس سمت کاربر."""
+    hold = booking_hold.get_hold_by_token(db, hold_token)
+    if hold is None:
+        raise HTTPException(status_code=404, detail="نگهداشت یافت نشد")
+    st = booking_hold.effective_status(hold)
+    c = db.get(Counselor, hold.counselor_id)
+    return {
+        "status": st,
+        "start_at": hold.start_at.isoformat(),
+        "expires_at": hold.expires_at.isoformat(),
+        "remaining_seconds": booking_hold.remaining_seconds(hold),
+        "counselor_name": f"{c.first_name} {c.last_name}" if c else None,
+    }
+
+
+@router.delete("/booking-holds/{hold_token}", status_code=204)
+def release_booking_hold(hold_token: str, db: Session = Depends(get_db)) -> Response:
+    hold = booking_hold.get_hold_by_token(db, hold_token)
+    if hold is None:
+        raise HTTPException(status_code=404, detail="نگهداشت یافت نشد")
+    booking_hold.release_hold(db, hold)
+    return Response(status_code=204)
+
+
 @router.post("/consultation-requests", status_code=201)
 def submit_consultation(payload: ConsultationCreate, request: Request, db: Session = Depends(get_db)) -> dict:
     ip = _client_ip(request)
@@ -142,6 +242,15 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
     if not re.fullmatch(r"09\d{9}", mobile):
         raise HTTPException(status_code=422, detail="شماره موبایل معتبر نیست (نمونه: 09121234567)")
 
+    # فاز ۲۶ - B02: تأیید موبایل با کد یک‌بارمصرف (الزامی وقتی BOOKING_REQUIRE_OTP=true)
+    otp_ok = False
+    if payload.otp_token:
+        if not otp_service.consume_verify_token(db, payload.otp_token, mobile):
+            raise HTTPException(status_code=403, detail="تأیید موبایل نامعتبر یا منقضی است؛ کد جدید بگیرید")
+        otp_ok = True
+    elif settings.booking_require_otp:
+        raise HTTPException(status_code=403, detail="تأیید موبایل با کد یک‌بارمصرف الزامی است")
+
     preferred = None
     if payload.preferred_date:
         try:
@@ -149,26 +258,44 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         except ValueError:
             raise HTTPException(status_code=422, detail="تاریخ نامعتبر است")
 
-    # فاز ۲۱ - اعتبارسنجی رزرو اسلات
+    # فاز ۲۱/۲۶ - اعتبارسنجی رزرو اسلات (با یا بدون نگهداشت)
     preferred_counselor_id = None
     preferred_start = None
     slot_label = payload.preferred_slot
-    if payload.counselor_id is not None or payload.start_at:
-        if payload.counselor_id is None or not payload.start_at:
-            raise HTTPException(status_code=422, detail="برای رزرو، انتخاب مشاور و زمان هر دو الزامی است")
-        counselor = db.get(Counselor, payload.counselor_id)
-        if counselor is None or counselor.status != "active":
-            raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
-        try:
-            raw = datetime.fromisoformat(payload.start_at)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="زمان رزرو نامعتبر است")
-        normalized = validate_slot(db, counselor.id, raw)
-        if normalized is None:
-            raise HTTPException(status_code=409, detail="این زمان دیگر در دسترس نیست؛ لطفاً اسلات دیگری انتخاب کنید")
-        preferred_counselor_id = counselor.id
-        preferred_start = normalized
-        slot_label = normalized.strftime("%H:%M")
+    hold = None
+    if payload.counselor_id is not None or payload.start_at or payload.hold_token:
+        if payload.hold_token:
+            # مسیر hold: اعتبارسنجی نگهداشت به‌جای اسلات (hold خودش اسلات را رزرو کرده است)
+            if payload.counselor_id is None:
+                raise HTTPException(status_code=422, detail="برای رزرو، انتخاب مشاور و زمان هر دو الزامی است")
+            booking_hold.expire_stale_holds(db)
+            hold = booking_hold.get_hold_by_token(db, payload.hold_token)
+            if hold is None or booking_hold.effective_status(hold) != "active":
+                raise HTTPException(status_code=409, detail="زمان نگهداشت منقضی شده است؛ لطفاً اسلات را دوباره انتخاب کنید")
+            if str(hold.counselor_id) != str(payload.counselor_id):
+                raise HTTPException(status_code=409, detail="نگهداشت با مشاور انتخاب‌شده مطابقت ندارد")
+            counselor = db.get(Counselor, hold.counselor_id)
+            if counselor is None or counselor.status != "active":
+                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+            preferred_counselor_id = counselor.id
+            preferred_start = hold.start_at
+            slot_label = preferred_start.strftime("%H:%M")
+        else:
+            if payload.counselor_id is None or not payload.start_at:
+                raise HTTPException(status_code=422, detail="برای رزرو، انتخاب مشاور و زمان هر دو الزامی است")
+            counselor = db.get(Counselor, payload.counselor_id)
+            if counselor is None or counselor.status != "active":
+                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+            try:
+                raw = datetime.fromisoformat(payload.start_at)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="زمان رزرو نامعتبر است")
+            normalized = validate_slot(db, counselor.id, raw)
+            if normalized is None:
+                raise HTTPException(status_code=409, detail="این زمان دیگر در دسترس نیست؛ لطفاً اسلات دیگری انتخاب کنید")
+            preferred_counselor_id = counselor.id
+            preferred_start = normalized
+            slot_label = normalized.strftime("%H:%M")
 
     r = ConsultationRequest(
         full_name=payload.full_name.strip(),
@@ -190,7 +317,11 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         # ایندکس یکتای جزئی: دو رزرو هم‌زمان روی یک اسلات
         db.rollback()
         raise HTTPException(status_code=409, detail="این زمان هم‌اکنون رزرو شد؛ اسلات دیگری انتخاب کنید")
+    # فاز ۲۶ - B09: تبدیل نگهداشت به رزرو تأییدشده
+    if hold is not None:
+        booking_hold.confirm_hold(db, hold, r.id, mobile)
     record_audit(db, action="public.consultation_requested",
                  entity_type="consultation_request", entity_id=str(r.id), ip=ip,
-                 detail={"booking": preferred_start is not None})
+                 detail={"booking": preferred_start is not None,
+                         "hold": hold is not None, "otp_verified": otp_ok})
     return {"status": "ok", "request_id": str(r.id)}

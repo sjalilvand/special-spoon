@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { errDetail } from "../api/client";
 import { fetchCounselorAppointments } from "../api/schedule";
 import type { CounselorAppointmentRow } from "../api/schedule";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function CounselorWorklistPage() {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export default function CounselorWorklistPage() {
               <TableRow key={row.id}>
                 <TableCell>{row.case_number}</TableCell>
                 <TableCell>{row.applicant_name}</TableCell>
-                <TableCell>{new Date(row.scheduled_at).toLocaleString("fa-IR")}</TableCell>
+                <TableCell>{formatJalaliDateTime(row.scheduled_at)}</TableCell>
                 <TableCell>{row.duration_minutes ?? "—"}</TableCell>
                 <TableCell>{row.location ?? "—"}</TableCell>
                 <TableCell>

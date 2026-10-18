@@ -65,3 +65,34 @@ def parse_date_cell(value) -> date:
         if "قالب" in str(e) or "تاریخ" in str(e):
             raise
         raise ValueError(f"قالب تاریخ نامعتبر: {value} (مجاز: 1403/05/12 شمسی یا 2024-08-02 میلادی)")
+
+
+def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple[int, int, int]:
+    """تبدیل میلادی به شمسی - معکوس دقیق jalali_to_gregorian همین ماژول."""
+    d = date(gy, gm, gd)
+    jy = gy - 621
+    # مبدأ مقایسه: نوروز سال شمسی جاری
+    nowruz = jalali_to_gregorian(jy, 1, 1)
+    if d < nowruz:
+        jy -= 1
+        nowruz = jalali_to_gregorian(jy, 1, 1)
+    delta = (d - nowruz).days  # روز جاری از ابتدای سال شمسی (صفر-مبنا)
+    if delta < 186:
+        jm = delta // 31 + 1
+        jd = delta % 31 + 1
+    else:
+        jm = (delta - 186) // 30 + 7
+        jd = (delta - 186) % 30 + 1
+    return jy, jm, jd
+
+
+def format_jalali(value: date | datetime | str | None) -> str | None:
+    """نمایش شمسی استاندارد «YYYY/MM/DD» - برای خروجی API‌های گزارش/داشبورد."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, str):
+        value = parse_date_cell(value)
+    jy, jm, jd = gregorian_to_jalali(value.year, value.month, value.day)
+    return f"{jy:04d}/{jm:02d}/{jd:02d}"

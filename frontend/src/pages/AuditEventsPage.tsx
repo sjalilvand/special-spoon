@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { errDetail } from "../api/client";
 import { fetchAuditEvents } from "../api/reports";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function AuditEventsPage() {
   const [page, setPage] = useState(0);
@@ -39,7 +40,7 @@ export default function AuditEventsPage() {
             )}
             {data?.items.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString("fa-IR") : "—"}</TableCell>
+                <TableCell>{row.created_at ? formatJalaliDateTime(row.created_at) : "—"}</TableCell>
                 <TableCell>{row.actor_name ?? "سیستم"}</TableCell>
                 <TableCell>{row.action}</TableCell>
                 <TableCell>

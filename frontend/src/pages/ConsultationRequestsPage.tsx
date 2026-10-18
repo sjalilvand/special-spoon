@@ -19,6 +19,7 @@ import type { OptionRow } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
 import IntakeDialog from "../components/IntakeDialog";
 import JalaliDateField from "../components/JalaliDateField";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 const TOPICS = ["مشاوره فردی", "زوج‌درمانی", "مشاوره کودک و نوجوان", "درمان گروهی", "نوروفیدبک", "سایر"];
 const SLOTS = ["صبح", "عصر", "هر زمان"];
@@ -115,7 +116,7 @@ export default function ConsultationRequestsPage() {
                       label={`${(row.contact_attempts ?? 0).toLocaleString("fa-IR")} تماس`} />
                   </TableCell>
                   <TableCell>
-                    {row.created_at ? new Date(row.created_at).toLocaleString("fa-IR") : "—"}
+                    {row.created_at ? formatJalaliDateTime(row.created_at) : "—"}
                     {row.preferred_start_at && (
                       <Typography variant="caption" color="primary" display="block">
                         🗓 نوبت درخواستی: {new Date(row.preferred_start_at.slice(0, 16)).toLocaleString("fa-IR")}

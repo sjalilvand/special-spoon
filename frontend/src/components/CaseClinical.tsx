@@ -11,6 +11,7 @@ import {
   DX_STATUS_META, PLAN_APPROACH_LABELS, createDiagnosis, createTreatmentPlan,
   fetchDiagnoses, fetchTreatmentPlans,
 } from "../api/clinical";
+import { formatJalali, formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseClinical({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -79,7 +80,7 @@ export default function CaseClinical({ caseId }: { caseId: string }) {
                     <TableCell>{row.comorbid ?? "—"}</TableCell>
                     <TableCell>{row.recorded_by_name ?? "—"}</TableCell>
                     <TableCell>
-                      {row.created_at ? new Date(row.created_at).toLocaleDateString("fa-IR") : "—"}
+                      {row.created_at ? formatJalali(row.created_at) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -109,7 +110,7 @@ export default function CaseClinical({ caseId }: { caseId: string }) {
                 {t.protocol_name && <Chip size="small" variant="outlined" label={t.protocol_name} />}
                 <Box flexGrow={1} />
                 <Typography variant="caption" color="text.secondary">
-                  {t.updated_at ? new Date(t.updated_at).toLocaleString("fa-IR") : ""} — {t.recorded_by_name ?? ""}
+                  {t.updated_at ? formatJalaliDateTime(t.updated_at) : ""} — {t.recorded_by_name ?? ""}
                 </Typography>
               </Stack>
               <Stack mt={1} spacing={0.5}>
@@ -122,7 +123,7 @@ export default function CaseClinical({ caseId }: { caseId: string }) {
                   <Typography variant="body2"><b>ارجاع خارجی:</b> {t.external_referral}</Typography>
                 )}
                 <Typography variant="body2">
-                  <b>بازبینی:</b> {t.review_date ? new Date(t.review_date).toLocaleDateString("fa-IR") : "—"}
+                  <b>بازبینی:</b> {t.review_date ? formatJalali(t.review_date) : "—"}
                 </Typography>
               </Stack>
             </Box>

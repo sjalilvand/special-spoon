@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { finalizeIntake, fetchIntake, saveIntake } from "../api/siteops";
 import type { ConsultationRow } from "../api/siteops";
 import JalaliDateField from "./JalaliDateField";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 type FieldType = "text" | "multiline" | "select" | "jalali" | "number";
 
@@ -110,7 +111,7 @@ export default function IntakeDialog({ row, onClose, onError }: {
         .then((res) => {
           setData((res.data ?? {}) as Record<string, string>);
           setStatus(res.exists ? res.status : null);
-          setMeta(res.updated_at ? `آخرین تغییر: ${new Date(res.updated_at).toLocaleString("fa-IR")}${res.filled_by_name ? " — " + res.filled_by_name : ""}` : "پرسشنامه‌ای ثبت نشده");
+          setMeta(res.updated_at ? `آخرین تغییر: ${formatJalaliDateTime(res.updated_at)}${res.filled_by_name ? " — " + res.filled_by_name : ""}` : "پرسشنامه‌ای ثبت نشده");
         })
         .catch((e) => setFormError(errDetail(e)))
         .finally(() => setLoading(false));

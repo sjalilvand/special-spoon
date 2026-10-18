@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ASSESSMENT_STATUS_META, fetchCounselorWorklist } from "../api/assessments";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function MyAssessmentsPage() {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ export default function MyAssessmentsPage() {
                   <TableCell>{row.version_no}</TableCell>
                   <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
                   <TableCell>
-                    {row.updated_at ? new Date(row.updated_at).toLocaleString("fa-IR") : "—"}
+                    {row.updated_at ? formatJalaliDateTime(row.updated_at) : "—"}
                   </TableCell>
                   <TableCell>
                     <Button size="small" variant="outlined" onClick={() => navigate(`/assessments/${row.id}`)}>

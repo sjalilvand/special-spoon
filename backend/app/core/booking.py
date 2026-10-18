@@ -89,6 +89,10 @@ def _busy_intervals(db: Session, counselor_id, from_day: date, to_day: date) -> 
         if s.tzinfo is None:
             s = s.replace(tzinfo=UTC)
         out.append((s, s + timedelta(minutes=SLOT_MINUTES)))
+
+    # فاز ۲۶ - B09: اسلات‌های نگه‌داشت‌شده (hold فعال) هم اشغال محسوب می‌شوند
+    from app.services.booking_hold import active_hold_intervals
+    out.extend(active_hold_intervals(db, counselor_id, from_day, to_day))
     return out
 
 

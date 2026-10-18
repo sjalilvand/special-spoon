@@ -40,3 +40,81 @@ export async function postConsultation(payload: Record<string, unknown>): Promis
   }
   return (await r.json()) as BookingResult;
 }
+
+// ---------------- فاز ۲۶ - نگهداشت موقت اسلات (B09) ----------------
+
+export interface BookingHold {
+  hold_id: string;
+  hold_token: string;
+  expires_at: string;
+  remaining_seconds: number;
+  counselor: { id: string; name: string };
+  start_at: string;
+  hold_minutes: number;
+}
+
+export interface HoldStatus {
+  status: "active" | "confirmed" | "released" | "expired";
+  remaining_seconds: number;
+  expires_at: string;
+  start_at: string;
+  counselor_name: string | null;
+}
+
+export async function createBookingHold(counselorId: string, startAt: string): Promise<BookingHold> {
+  const r = await fetch("/api/v1/public/booking-holds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ counselor_id: counselorId, start_at: startAt }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => null);
+    throw new Error((d && d.detail) || "خطا در نگهداشت نوبت");
+  }
+  return (await r.json()) as BookingHold;
+}
+
+export async function fetchBookingHold(token: string): Promise<HoldStatus> {
+  const r = await fetch(`/api/v1/public/booking-holds/${encodeURIComponent(token)}`);
+  if (!r.ok) throw new Error("خطا در بررسی وضعیت نگهداشت");
+  return (await r.json()) as HoldStatus;
+}
+
+export async function releaseBookingHold(token: string): Promise<void> {
+  await fetch(`/api/v1/public/booking-holds/${encodeURIComponent(token)}`, { method: "DELETE" }).catch(() => undefined);
+}
+
+// ---------------- فاز ۲۶ - کد یک‌بارمصرف (B02-lite) ----------------
+
+export interface OtpRequestResult {
+  status: string;
+  expires_in: number;
+  dev_code?: string;
+  dev_notice?: string;
+}
+
+export async function requestOtp(mobile: string): Promise<OtpRequestResult> {
+  const r = await fetch("/api/v1/auth/otp/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mobile, purpose: "booking" }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => null);
+    throw new Error((d && d.detail) || "خطا در ارسال کد تأیید");
+  }
+  return (await r.json()) as OtpRequestResult;
+}
+
+export async function verifyOtp(mobile: string, code: string): Promise<{ verify_token: string }> {
+  const r = await fetch("/api/v1/auth/otp/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mobile, code, purpose: "booking" }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => null);
+    throw new Error((d && d.detail) || "کد تأیید نامعتبر است");
+  }
+  return (await r.json()) as { verify_token: string };
+}

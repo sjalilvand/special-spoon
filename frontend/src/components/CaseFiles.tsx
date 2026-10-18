@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { errDetail } from "../api/client";
 import { FileItem, downloadFileWithTicket, fetchCaseFiles, uploadCaseFile } from "../api/files";
+import { formatJalali } from "../utils/jalali";
 
 const SCAN_META: Record<string, { label: string; color: "success" | "warning" | "error" | "info" }> = {
   clean: { label: "سالم (اسکن شد)", color: "success" },
@@ -108,7 +109,7 @@ export default function CaseFiles({ caseId }: { caseId: string }) {
                     <Chip size="small" color={scan.color} label={scan.label} variant={quarantined ? "filled" : "outlined"} />
                   </TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
-                    {f.created_at ? new Date(f.created_at).toLocaleDateString("fa-IR") : "—"}
+                    {f.created_at ? formatJalali(f.created_at) : "—"}
                   </TableCell>
                   <TableCell align="left">
                     <Button

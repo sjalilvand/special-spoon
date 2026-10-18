@@ -10,6 +10,7 @@ import {
   createRecommendation, fetchCaseRecommendations, publishRecommendation,
 } from "../api/recommendations";
 import type { RecommendationRow } from "../api/recommendations";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseRecommendations({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -79,7 +80,7 @@ export default function CaseRecommendations({ caseId }: { caseId: string }) {
                 label={row.is_published ? "منتشرشده" : "پیش‌نویس"} />
               {row.is_published && (
                 <Typography variant="caption" color="text.secondary">
-                  {row.published_at ? new Date(row.published_at).toLocaleString("fa-IR") : ""}
+                  {row.published_at ? formatJalaliDateTime(row.published_at) : ""}
                 </Typography>
               )}
               <Box flexGrow={1} />

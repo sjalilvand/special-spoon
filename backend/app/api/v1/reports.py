@@ -9,9 +9,10 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.services.case_access import counselor_can_access
 from app.models.appointment import Appointment, Session as SessionModel
-from app.models.assessment import Assessment, AssessmentStatus
+from app.models.assessment import Assessment, AssessmentStatus, ReviewAction
 from app.models.audit import AuditEvent
 from app.models.case import Case, CaseStatus
+from app.models.consultation import ConsultationRequest
 from app.models.import_job import ImportJob
 from app.models.people import Applicant, Counselor
 from app.models.user import User
@@ -148,6 +149,164 @@ def report_summary(
             "sessions_count": sessions_count,
         }]
     return out
+
+
+@router.get("/reports/admin-dashboard")
+def admin_dashboard(
+    days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    actor=Depends(get_current_user),
+) -> dict:
+    """B24 سند جامع - داشبورد مدیر: KPI شفاف، روند پرونده/رزرو، عملکرد مشاوران.
+
+    تجمیعی و بی‌نام (بند ۱۵): هیچ محتوای بالینی فردی در خروجی نیست.
+    """
+    roles = _roles(actor)
+    if not roles & {"ORG_MANAGER", "SYSTEM_ADMIN"}:
+        raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
+
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+    day_start = now - timedelta(days=days)
+
+    # ---- KPIها ----
+    cases_by_status = {s: int(n) for s, n in db.execute(
+        select(Case.status, func.count()).group_by(Case.status)
+    ).all()}
+
+    approved_count = int(db.scalar(
+        select(func.count()).select_from(Assessment).where(Assessment.status == AssessmentStatus.APPROVED)
+    ) or 0)
+    pending_review = int(db.scalar(
+        select(func.count()).select_from(Assessment).where(Assessment.status == AssessmentStatus.PENDING_REVIEW)
+    ) or 0)
+
+    # میانگین زمان اولین بررسی (نهایی‌سازی → اولین تصمیم داوری) - KPI شفاف B24
+    first_review = (
+        select(ReviewAction.assessment_id, func.min(ReviewAction.created_at).label("first_at"))
+        .group_by(ReviewAction.assessment_id)
+        .subquery()
+    )
+    avg_review_hours = db.scalar(
+        select(func.avg(func.extract("epoch", first_review.c.first_at - Assessment.finalized_at) / 3600.0))
+        .select_from(Assessment)
+        .join(first_review, Assessment.id == first_review.c.assessment_id)
+        .where(Assessment.finalized_at.is_not(None), first_review.c.first_at >= since)
+    )
+    avg_review_hours = round(float(avg_review_hours), 1) if avg_review_hours is not None else None
+
+    appts_window = select(func.count()).select_from(Appointment).where(Appointment.scheduled_at >= since)
+    appts_total_w = int(db.scalar(appts_window) or 0)
+    appts_done = int(db.scalar(
+        select(func.count()).select_from(Appointment)
+        .where(Appointment.scheduled_at >= since, Appointment.status == "done")) or 0)
+    appts_cancelled = int(db.scalar(
+        select(func.count()).select_from(Appointment)
+        .where(Appointment.scheduled_at >= since, Appointment.status == "cancelled")) or 0)
+    appts_no_show = int(db.scalar(
+        select(func.count()).select_from(Appointment)
+        .where(Appointment.scheduled_at >= since, Appointment.status == "no_show")) or 0)
+    appts_upcoming_7d = int(db.scalar(
+        select(func.count()).select_from(Appointment)
+        .where(Appointment.scheduled_at >= now,
+               Appointment.scheduled_at <= now + timedelta(days=7),
+               Appointment.status == "scheduled")) or 0)
+
+    consult_total = int(db.scalar(
+        select(func.count()).select_from(ConsultationRequest).where(ConsultationRequest.created_at >= since)) or 0)
+    consult_with_slot = int(db.scalar(
+        select(func.count()).select_from(ConsultationRequest)
+        .where(ConsultationRequest.created_at >= since,
+               ConsultationRequest.preferred_start_at.is_not(None))) or 0)
+    consult_by_status = {s: int(n) for s, n in db.execute(
+        select(ConsultationRequest.status, func.count())
+        .where(ConsultationRequest.created_at >= since)
+        .group_by(ConsultationRequest.status)
+    ).all()}
+
+    from app.models.booking import SlotClaim, SlotClaimStatus
+    active_holds = int(db.scalar(
+        select(func.count()).select_from(SlotClaim)
+        .where(SlotClaim.status == SlotClaimStatus.ACTIVE,
+               SlotClaim.expires_at > now)) or 0)
+    confirmed_holds = int(db.scalar(
+        select(func.count()).select_from(SlotClaim)
+        .where(SlotClaim.status == SlotClaimStatus.CONFIRMED,
+               SlotClaim.created_at >= since)) or 0)
+
+    # ---- روند روزانه (پرونده جدید / درخواست رزرو) ----
+    case_trend = {r[0]: int(r[1]) for r in db.execute(
+        select(func.date(Case.created_at), func.count())
+        .where(Case.created_at >= day_start)
+        .group_by(func.date(Case.created_at))
+    ).all()}
+    consult_trend = {r[0]: int(r[1]) for r in db.execute(
+        select(func.date(ConsultationRequest.created_at), func.count())
+        .where(ConsultationRequest.created_at >= day_start)
+        .group_by(func.date(ConsultationRequest.created_at))
+    ).all()}
+
+    def _series(src: dict) -> list[dict]:
+        out = []
+        for i in range(days):
+            d = (now - timedelta(days=days - 1 - i)).date()
+            key = d.isoformat()
+            out.append({"date": key, "count": int(src.get(d, src.get(key, 0)))})
+        return out
+
+    # ---- بار کاری مشاوران ----
+    counselors = db.scalars(
+        select(Counselor).where(Counselor.status == "active").order_by(Counselor.last_name)
+    ).all()
+    active_counts = dict(db.execute(
+        select(Case.primary_counselor_id, func.count())
+        .where(Case.status == CaseStatus.ACTIVE)
+        .group_by(Case.primary_counselor_id)
+    ).all())
+    sess_counts = dict(db.execute(
+        select(SessionModel.counselor_id, func.count())
+        .where(SessionModel.occurred_at >= since)
+        .group_by(SessionModel.counselor_id)
+    ).all())
+    workload = [{
+        "counselor_id": str(c.id),
+        "counselor_name": f"{c.first_name} {c.last_name}",
+        "active_cases": int(active_counts.get(c.id, 0)),
+        "sessions_count": int(sess_counts.get(c.id, 0)),
+    } for c in counselors]
+
+    return {
+        "days": days,
+        "generated_at": now.isoformat(),
+        "kpis": {
+            "applicants_total": int(db.scalar(select(func.count()).select_from(Applicant)) or 0),
+            "users_active": int(db.scalar(select(func.count()).select_from(User).where(User.status == "active")) or 0),
+            "counselors_active": int(db.scalar(select(func.count()).select_from(Counselor).where(Counselor.status == "active")) or 0),
+            "cases_total": sum(cases_by_status.values()),
+            "cases_by_status": cases_by_status,
+            "assessments_pending_review": pending_review,
+            "assessments_approved": approved_count,
+            "avg_review_hours": avg_review_hours,
+            "appointments_window": appts_total_w,
+            "appointments_done": appts_done,
+            "appointments_cancelled": appts_cancelled,
+            "appointments_no_show": appts_no_show,
+            "no_show_rate": round(100 * appts_no_show / appts_total_w, 1) if appts_total_w else 0.0,
+            "appointments_upcoming_7d": appts_upcoming_7d,
+            "consultations_total": consult_total,
+            "consultations_with_slot": consult_with_slot,
+            "consultations_by_status": consult_by_status,
+            "booking_active_holds": active_holds,
+            "booking_confirmed_holds": confirmed_holds,
+            "sessions_count": int(db.scalar(
+                select(func.count()).select_from(SessionModel).where(SessionModel.occurred_at >= since)) or 0),
+        },
+        "trends": {
+            "cases": _series(case_trend),
+            "bookings": _series(consult_trend),
+        },
+        "counselor_workload": workload,
+    }
 
 
 @router.get("/audit-events")

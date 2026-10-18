@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { errDetail } from "../api/client";
 import { CASE_STATUS_META } from "../api/cases";
 import { fetchSupervisedCases } from "../api/supervisor";
+import { formatJalali } from "../utils/jalali";
 
 export default function SupervisorCasesPage() {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function SupervisorCasesPage() {
                   <TableCell>{row.case_number}</TableCell>
                   <TableCell>{row.applicant_name}</TableCell>
                   <TableCell>{row.counselor_name ?? "—"}</TableCell>
-                  <TableCell>{new Date(row.acceptance_date).toLocaleDateString("fa-IR")}</TableCell>
+                  <TableCell>{formatJalali(row.acceptance_date)}</TableCell>
                   <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
                   <TableCell>
                     <Button size="small" onClick={() => navigate(`/cases/${row.id}`)}>باز کردن</Button>

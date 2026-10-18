@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -254,3 +255,57 @@ def activate(payload: ActivateRequest, db: Session = Depends(get_db)) -> dict:
     db.commit()
     record_audit(db, action="auth.activated", actor_user_id=user.id)
     return {"status": "ok"}
+
+
+# ---------------- فاز ۲۶ - B02-lite: کد یک‌بارمصرف (OTP) ----------------
+
+class OtpRequestPayload(BaseModel):
+    mobile: str = Field(min_length=10, max_length=20)
+    purpose: str = Field(default="booking", pattern=r"^(booking|login)$")
+
+
+class OtpVerifyPayload(BaseModel):
+    mobile: str = Field(min_length=10, max_length=20)
+    code: str = Field(min_length=4, max_length=8)
+    purpose: str = Field(default="booking", pattern=r"^(booking|login)$")
+
+
+@router.post("/otp/request")
+def otp_request(payload: OtpRequestPayload, request: Request, db: Session = Depends(get_db)) -> dict:
+    """صدور کد یک‌بارمصرف - در حالت توسعه کد در پاسخ برمی‌گردد (آماده‌سازی D04)."""
+    from app.services.otp import is_valid_mobile, normalize_mobile, request_otp
+
+    mobile = normalize_mobile(payload.mobile)
+    if not is_valid_mobile(mobile):
+        raise HTTPException(status_code=422, detail="شماره موبایل معتبر نیست (نمونه: 09121234567)")
+    res = request_otp(db, mobile, payload.purpose, ip=_client_ip(request))
+    if res["rate_limited"]:
+        raise HTTPException(status_code=429, detail="تعداد درخواست کد زیاد است؛ کمی بعد دوباره تلاش کنید")
+    out: dict = {
+        "status": "sent",
+        "expires_in": settings.otp_code_ttl_seconds,
+    }
+    if res["dev_code"] is not None:
+        out["dev_code"] = res["dev_code"]
+        out["dev_notice"] = "حالت توسعه: کد به‌جای پیامک در پاسخ نمایش داده می‌شود"
+    return out
+
+
+@router.post("/otp/verify")
+def otp_verify(payload: OtpVerifyPayload, db: Session = Depends(get_db)) -> dict:
+    """بررسی کد؛ در موفقیت توکن اثبات تأیید موبایل (یک‌بارمصرف) برمی‌گردد."""
+    from app.services.otp import is_valid_mobile, normalize_mobile, verify_otp
+
+    mobile = normalize_mobile(payload.mobile)
+    if not is_valid_mobile(mobile):
+        raise HTTPException(status_code=422, detail="شماره موبایل معتبر نیست")
+    res = verify_otp(db, mobile, payload.purpose, payload.code)
+    if res.get("reason") == "locked":
+        raise HTTPException(status_code=429, detail="تلاش‌های ناموفق زیاد است؛ کد جدید درخواست کنید")
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail="کد وارد شده نادرست یا منقضی است")
+    return {
+        "status": "verified",
+        "verify_token": res["verify_token"],
+        "expires_in": settings.otp_verify_token_seconds,
+    }

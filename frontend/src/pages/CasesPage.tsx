@@ -12,6 +12,7 @@ import {
   createCase, fetchApplicantOptions, fetchCases, fetchCounselorOptions,
 } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import { formatJalali } from "../utils/jalali";
 
 export default function CasesPage() {
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ export default function CasesPage() {
                   onClick={() => navigate(`/cases/${row.id}`)}>
                   <TableCell>{row.case_number}</TableCell>
                   <TableCell>{row.applicant_name ?? "—"}</TableCell>
-                  <TableCell>{new Date(row.acceptance_date).toLocaleDateString("fa-IR")}</TableCell>
+                  <TableCell>{formatJalali(row.acceptance_date)}</TableCell>
                   <TableCell>{row.primary_counselor_name ?? "—"}</TableCell>
                   <TableCell>{PRIORITY_LABELS[row.priority] ?? row.priority}</TableCell>
                   <TableCell><Chip size="small" color={cs.color} label={cs.label} /></TableCell>

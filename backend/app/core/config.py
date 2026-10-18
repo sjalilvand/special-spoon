@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.25.0"
+    app_version: str = "0.26.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -20,6 +20,20 @@ class Settings(BaseSettings):
     activation_token_expire_hours: int = 24
     login_max_attempts: int = 5
     login_attempt_window_minutes: int = 15
+
+    # فاز ۲۶ - B09: نگهداشت موقت اسلات
+    booking_hold_minutes: int = 10
+    booking_hold_max_per_ip: int = 5
+
+    # فاز ۲۶ - B02-lite: کد یک‌بارمصرف
+    # در حالت توسعه کد در پاسخ API و لاگ نمایش داده می‌شود (آماده‌سازی D04)
+    otp_dev_mode: bool = True
+    otp_code_ttl_seconds: int = 180
+    otp_max_attempts: int = 3
+    otp_request_max: int = 3
+    otp_request_window_seconds: int = 600
+    otp_verify_token_seconds: int = 600
+    booking_require_otp: bool = False  # سخت‌گیری کامل پس از تصمیم D04
 
     # B39 سند جامع - فایل امن
     upload_dir: str = "./uploads"

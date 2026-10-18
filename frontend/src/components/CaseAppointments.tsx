@@ -11,6 +11,7 @@ import {
   APPOINTMENT_STATUS_META, createAppointment, fetchAppointments, updateAppointment,
 } from "../api/schedule";
 import type { AppointmentRow } from "../api/schedule";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseAppointments({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -97,7 +98,7 @@ export default function CaseAppointments({ caseId }: { caseId: string }) {
               const m = APPOINTMENT_STATUS_META[row.status] ?? { label: row.status, color: "default" as const };
               return (
                 <TableRow key={row.id}>
-                  <TableCell>{new Date(row.scheduled_at).toLocaleString("fa-IR")}</TableCell>
+                  <TableCell>{formatJalaliDateTime(row.scheduled_at)}</TableCell>
                   <TableCell>{row.duration_minutes ?? "—"}</TableCell>
                   <TableCell>{row.location ?? "—"}</TableCell>
                   <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>

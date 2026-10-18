@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ASSESSMENT_STATUS_META, fetchSupervisorWorklist } from "../api/assessments";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function ReviewsPage() {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export default function ReviewsPage() {
                   <TableCell>{row.version_no}</TableCell>
                   <TableCell>{row.author_name ?? "—"}</TableCell>
                   <TableCell>
-                    {row.finalized_at ? new Date(row.finalized_at).toLocaleString("fa-IR") : "—"}
+                    {row.finalized_at ? formatJalaliDateTime(row.finalized_at) : "—"}
                   </TableCell>
                   <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
                   <TableCell>

@@ -14,6 +14,7 @@ import type { ReferralRow } from "../api/referrals";
 import { fetchCounselorOptions } from "../api/cases";
 import type { OptionRow } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
+import { formatJalali } from "../utils/jalali";
 
 export default function CaseReferrals({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -60,7 +61,7 @@ export default function CaseReferrals({ caseId }: { caseId: string }) {
                 )}
                 <Box flexGrow={1} />
                 <Typography variant="caption" color="text.secondary">
-                  {row.referral_date ? new Date(row.referral_date).toLocaleDateString("fa-IR") : "—"} — {row.requested_by_name ?? ""}
+                  {row.referral_date ? formatJalali(row.referral_date) : "—"} — {row.requested_by_name ?? ""}
                 </Typography>
               </Stack>
               <Typography variant="body2" mt={0.5}>
@@ -74,7 +75,7 @@ export default function CaseReferrals({ caseId }: { caseId: string }) {
               {row.outcome && (
                 <Typography variant="body2" color="primary.main">
                   <b>نتیجه:</b> {row.outcome}
-                  {row.outcome_date ? ` (${new Date(row.outcome_date).toLocaleDateString("fa-IR")})` : ""}
+                  {row.outcome_date ? ` (${formatJalali(row.outcome_date)})` : ""}
                 </Typography>
               )}
               {canWrite && !["completed", "cancelled"].includes(row.status) && (

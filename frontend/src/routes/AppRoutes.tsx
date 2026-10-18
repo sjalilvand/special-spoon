@@ -3,6 +3,7 @@ import { CircularProgress } from "@mui/material";
 import Layout from "../components/Layout";
 import { useAuth } from "../auth/AuthContext";
 import ActivatePage from "../pages/ActivatePage";
+import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApplicantsPage from "../pages/ApplicantsPage";
 import AssessmentFormPage from "../pages/AssessmentFormPage";
 import AuditEventsPage from "../pages/AuditEventsPage";
@@ -46,6 +47,9 @@ export default function AppRoutes() {
       <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={
         <ProtectedRoute roles={STAFF_ROLES}><Layout><DashboardPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/admin-dashboard" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}><Layout><AdminDashboardPage /></Layout></ProtectedRoute>
       } />
       <Route path="/audit-events" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><AuditEventsPage /></Layout></ProtectedRoute>

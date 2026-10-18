@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import { ASSESSMENT_STATUS_META, fetchCaseAssessments } from "../api/assessments";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 export default function CaseAssessments({ caseId }: { caseId: string }) {
   const { user } = useAuth();
@@ -70,7 +71,7 @@ export default function CaseAssessments({ caseId }: { caseId: string }) {
                   <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
                   <TableCell>{row.author_name ?? "—"}</TableCell>
                   <TableCell>
-                    {row.updated_at ? new Date(row.updated_at).toLocaleString("fa-IR") : "—"}
+                    {row.updated_at ? formatJalaliDateTime(row.updated_at) : "—"}
                   </TableCell>
                   <TableCell>
                     <Button size="small" onClick={() => navigate(`/assessments/${row.id}`)}>

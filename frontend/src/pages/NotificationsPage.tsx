@@ -8,6 +8,7 @@ import DoneAllIcon from "@mui/icons-material/DoneAll";
 import {
   NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead, severityColor,
 } from "../api/notifications";
+import { formatJalaliDateTime } from "../utils/jalali";
 
 const CATEGORY_LABEL: Record<string, string> = {
   assessment: "فرم",
@@ -116,7 +117,7 @@ export default function NotificationsPage() {
                     <Chip size="small" color={severityColor[n.severity]} label={SEVERITY_LABEL[n.severity] ?? n.severity} variant="outlined" />
                   </TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
-                    {n.created_at ? new Date(n.created_at).toLocaleString("fa-IR") : "—"}
+                    {n.created_at ? formatJalaliDateTime(n.created_at) : "—"}
                   </TableCell>
                   <TableCell>
                     {n.read_at
