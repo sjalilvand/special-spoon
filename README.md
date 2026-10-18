@@ -92,3 +92,10 @@
 - API: GET /forms و GET /forms/{form_code}؛ POST ارزیابی با form_code (پیش‌فرض RS-PS-04-01)
 - صفحه «فرایندها (BPMN)» در /processes با bpmn-js و چهار نمودار BPMN 2.0
 - مستندات: docs/multi-forms-and-bpmn.md — آزمون‌ها: backend/tests/test_multi_forms.py
+
+## فاز ۲۳ — کارتابل هشدار سطح ۳ مسئول فنی (v0.23.0)
+- API: GET /api/v1/worklists/level3 (نقش مسئول فنی) — فرم‌های RS-PS-08-01 نهایی‌شده با فوریت سطح ۳
+- صف هشدار: قدیمی‌ترین اول، شمارش کل هشدارهای سطح ۳، جزئیات فوری (نوع خطر، اقدام فوری، ارجاع) از پاسخ‌های JSONB
+- صفحه «هشدار سطح ۳» در /level3-alerts با بازخوانی خودکار هر ۳۰ ثانیه و استایل فوری
+- بدون migration جدید — پرس‌وجوی JSONB روی answers؛ معماری نسخه‌داری فرم‌ها دست‌نخورده
+- آزمون‌ها: backend/tests/test_level3_cartable.py — مستندات: docs/multi-forms-and-bpmn.md (بخش ۸)

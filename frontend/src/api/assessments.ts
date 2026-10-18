@@ -134,6 +134,25 @@ export async function createRevision(id: string): Promise<AssessmentDetail> {
   return (await apiClient.post(`/assessments/${id}/revisions`, {})).data;
 }
 
+export interface Level3CartItem extends AssessmentListItem {
+  severity_label: string | null;
+  person_name: string | null;
+  person_phone: string | null;
+  risk_types: string[];
+  immediate_action: string | null;
+  referral_destination: string | null;
+  referral_result: string | null;
+}
+
+export interface Level3CartResponse {
+  items: Level3CartItem[];
+  total_level3: number;
+}
+
+export async function fetchLevel3Cartable(): Promise<Level3CartResponse> {
+  return (await apiClient.get("/worklists/level3")).data;
+}
+
 export async function fetchSupervisorWorklist(): Promise<{ items: AssessmentListItem[] }> {
   return (await apiClient.get("/worklists/supervisor")).data;
 }

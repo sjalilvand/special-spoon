@@ -344,6 +344,86 @@ def create_revision(assessment_id: uuid.UUID, db: Session = Depends(get_db), act
 
 # ---------- کارتابل‌ها (بند ۹.۱ و ۹.۴) ----------
 
+# ثابت‌های کارتابل هشدار سطح ۳ (فرم مورد حاد RS-PS-08-01)
+ACUTE_FORM_CODE = "RS-PS-08-01"
+ACUTE_SEVERITY_KEY = "initial_assessment.severity"
+ACUTE_SEVERITY_LABELS = {
+    "level_1": "سطح ۱ (نیازمند پایش)",
+    "level_2": "سطح ۲ (متوسط)",
+    "level_3": "سطح ۳ (بالا)",
+}
+ACUTE_RISK_TYPE_LABELS = {
+    "suicidal_ideation": "افکار خودکشی یا آسیب به خود",
+    "suicide_attempt": "قصد یا اقدام به خودکشی",
+    "harm_to_others": "آسیب به دیگران",
+    "child_abuse": "کودک‌آزاری",
+    "violence": "خشونت",
+    "severe_crisis": "بحران شدید",
+    "other": "سایر",
+}
+
+
+def _level3_condition():
+    """شرط JSONB: سطح فوریت ۳ در پاسخ‌های فرم مورد حاد (کلیدهای تخت نقطه‌دار)."""
+    return (
+        FormVersion.form_code == ACUTE_FORM_CODE,
+        Assessment.answers[ACUTE_SEVERITY_KEY].as_string() == "level_3",
+    )
+
+
+@router.get("/worklists/level3")
+def level3_alert_worklist(db: Session = Depends(get_db), _actor=Depends(require_roles("TECHNICAL_SUPERVISOR"))) -> dict:
+    """کارتابل هشدار سطح ۳ مسئول فنی — چرخه فرم مورد حاد را کامل می‌کند (فاز ۲۳).
+
+    - items: فرم‌های RS-PS-08-01 نهایی‌شده با سطح فوریت ۳ که در انتظار بررسی
+      (pending_review) هستند؛ قدیمی‌ترین هشدار اول تا هیچ موردی جا نماند.
+    - total_level3: مجموع همه هشدارهای سطح ۳ ثبت‌شده (هر وضعیتی) برای نمایش در سربرگ.
+    - خروجی شامل جزئیات فوری از پاسخ‌هاست: فرد در فرم، نوع خطر، اقدام فوری،
+      مقصد و نتیجه ارجاع — بدون نیاز به باز کردن هر فرم.
+    """
+    rows = db.execute(
+        select(Assessment, Case, Applicant, User, FormVersion)
+        .join(Case, Assessment.case_id == Case.id)
+        .join(Applicant, Case.applicant_id == Applicant.id)
+        .outerjoin(User, Assessment.author_user_id == User.id)
+        .join(FormVersion, Assessment.form_version_id == FormVersion.id)
+        .where(*_level3_condition(), Assessment.status == AssessmentStatus.PENDING_REVIEW)
+        .order_by(Assessment.finalized_at.asc())
+        .limit(50)
+    ).all()
+    total_level3 = db.scalar(
+        select(func.count())
+        .select_from(Assessment)
+        .join(FormVersion, Assessment.form_version_id == FormVersion.id)
+        .where(*_level3_condition())
+    ) or 0
+    acute_meta = FORM_REGISTRY.get(ACUTE_FORM_CODE)
+    items = []
+    for a, c, ap, u, fv in rows:
+        answers = a.answers or {}
+        risk = answers.get("initial_assessment.risk_types")
+        items.append({
+            "id": str(a.id),
+            "case_id": str(c.id),
+            "case_number": c.case_number,
+            "applicant_name": f"{ap.first_name} {ap.last_name}",
+            "form_code": fv.form_code,
+            "form_title": acute_meta.title if acute_meta else None,
+            "status": a.status,
+            "version_no": a.version_no,
+            "author_name": u.display_name if u else None,
+            "finalized_at": a.finalized_at.isoformat() if a.finalized_at else None,
+            "severity_label": ACUTE_SEVERITY_LABELS.get(answers.get(ACUTE_SEVERITY_KEY), answers.get(ACUTE_SEVERITY_KEY)),
+            "person_name": answers.get("person_info.full_name"),
+            "person_phone": answers.get("person_info.phone"),
+            "risk_types": [ACUTE_RISK_TYPE_LABELS.get(v, v) for v in risk] if isinstance(risk, list) else [],
+            "immediate_action": answers.get("initial_assessment.immediate_action"),
+            "referral_destination": answers.get("referral_info.referral_destination"),
+            "referral_result": answers.get("referral_info.referral_result"),
+        })
+    return {"items": items, "total_level3": int(total_level3)}
+
+
 @router.get("/worklists/supervisor")
 def supervisor_worklist(db: Session = Depends(get_db), _actor=Depends(require_roles("TECHNICAL_SUPERVISOR"))) -> dict:
     rows = db.execute(
