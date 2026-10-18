@@ -88,6 +88,7 @@ class Consent(Base):
         CheckConstraint("status IN ('granted','revoked')", name="ck_consents_status"),
         # هر ثبت یک نسخه جدید؛ سوابق حفظ می‌شوند (بند ۷.۲)
         CheckConstraint("version >= 1", name="ck_consents_version"),
+        CheckConstraint("kind IN ('treatment','psych_test','data_share','marketing')", name="ck_consents_kind"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -101,4 +102,14 @@ class Consent(Base):
     recorded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # B41 سند جامع: نوع رضایت، اتصال به متن نسخه‌دار و ابطال با حفظ سابقه
+    kind: Mapped[str] = mapped_column(String(30), default="treatment")
+    consent_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consent_versions.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

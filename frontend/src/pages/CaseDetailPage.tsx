@@ -10,7 +10,7 @@ import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import {
   CASE_STATUS_META, CONSENT_META, PRIORITY_LABELS,
-  addConsent, assignCounselor, closeCase, fetchCase, fetchCounselorOptions, reopenCase, updateCase,
+  addConsent, assignCounselor, closeCase, fetchCase, fetchCounselorOptions, reopenCase, revokeConsent, updateCase,
 } from "../api/cases";
 import type { CaseDetail } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
@@ -20,6 +20,7 @@ import CaseAssessments from "../components/CaseAssessments";
 import CaseAppointments from "../components/CaseAppointments";
 import CaseSessions from "../components/CaseSessions";
 import CaseRecommendations from "../components/CaseRecommendations";
+import CaseFiles from "../components/CaseFiles";
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -136,25 +137,43 @@ export default function CaseDetailPage() {
             <TableHead>
               <TableRow>
                 <TableCell>نسخه</TableCell>
+                <TableCell>نوع</TableCell>
                 <TableCell>وضعیت</TableCell>
                 <TableCell>تاریخ</TableCell>
                 <TableCell>ثبت‌کننده</TableCell>
                 <TableCell>توضیح</TableCell>
+                <TableCell align="left">عمل</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {c.consents.length === 0 && (
-                <TableRow><TableCell colSpan={5}>رضایتی ثبت نشده است.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7}>رضایتی ثبت نشده است.</TableCell></TableRow>
               )}
               {c.consents.map((x) => {
                 const m = CONSENT_META[x.status] ?? { label: x.status, color: "default" as const };
+                const kindLabel: Record<string, string> = {
+                  treatment: "درمان", psych_test: "تست روان", data_share: "اشتراک داده", marketing: "تبلیغاتی",
+                };
                 return (
                   <TableRow key={x.id}>
                     <TableCell>{x.version}</TableCell>
-                    <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
+                    <TableCell>{kindLabel[x.kind] ?? x.kind}</TableCell>
+                    <TableCell>
+                      <Chip size="small" color={m.color} label={m.label} />
+                      {x.revoked_at && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          ابطال: {new Date(x.revoked_at).toLocaleDateString("fa-IR")} — {x.revoke_reason ?? "—"}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{x.consent_date ? new Date(x.consent_date).toLocaleDateString("fa-IR") : "—"}</TableCell>
                     <TableCell>{x.recorded_by_name ?? "—"}</TableCell>
                     <TableCell>{x.note ?? "—"}</TableCell>
+                    <TableCell align="left">
+                      {x.status === "granted" && (canManage || roles.includes("TECHNICAL_SUPERVISOR")) && (
+                        <RevokeConsentButton consentId={x.id} caseId={c.id} />
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -164,6 +183,7 @@ export default function CaseDetailPage() {
       </Paper>
 
       <CaseAssessments caseId={c.id} />
+      <CaseFiles caseId={c.id} />
       <CaseClinical caseId={c.id} />
       <CaseReferrals caseId={c.id} />
       <CaseAppointments caseId={c.id} />
@@ -410,6 +430,7 @@ function ActionDialog({ mode, caseData, onClose }: { mode: "close" | "reopen"; c
 function ConsentDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("granted");
+  const [kind, setKind] = useState("treatment");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -419,7 +440,7 @@ function ConsentDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: (
     setFormError(null);
     setBusy(true);
     try {
-      await addConsent(caseData.id, { status, note: note.trim() || undefined });
+      await addConsent(caseData.id, { status, kind, note: note.trim() || undefined });
       await queryClient.invalidateQueries({ queryKey: ["case", caseData.id] });
       onClose();
     } catch (err) {
@@ -442,7 +463,16 @@ function ConsentDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: (
             <FormControlLabel value="granted" control={<Radio />} label="ثبت رضایت" />
             <FormControlLabel value="revoked" control={<Radio />} label="پس‌گرفتن رضایت" />
           </RadioGroup>
-          <TextField fullWidth multiline minRows={2} label="توضیح (اختیاری)"
+          <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+            <InputLabel>نوع رضایت</InputLabel>
+            <Select value={kind} onChange={(e) => setKind(e.target.value)} label="نوع رضایت">
+              <MenuItem value="treatment">درمان</MenuItem>
+              <MenuItem value="psych_test">تست روان</MenuItem>
+              <MenuItem value="data_share">اشتراک داده</MenuItem>
+              <MenuItem value="marketing">تبلیغاتی</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField fullWidth multiline minRows={2} label="توضیح (اختیاری)" sx={{ mt: 2 }}
             value={note} onChange={(e) => setNote(e.target.value)} />
         </DialogContent>
         <DialogActions>
@@ -451,5 +481,61 @@ function ConsentDialog({ caseData, onClose }: { caseData: CaseDetail; onClose: (
         </DialogActions>
       </form>
     </Dialog>
+  );
+}
+
+/** دکمه ابطال رضایت با دلیل - B41: ابطال آینده را قطع می‌کند و سابقه حفظ می‌شود */
+function RevokeConsentButton({ consentId, caseId }: { consentId: string; caseId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (reason.trim().length < 3) {
+      setErr("ثبت دلیل ابطال الزامی است");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await revokeConsent(consentId, reason.trim());
+      await queryClient.invalidateQueries({ queryKey: ["case", caseId] });
+      setOpen(false);
+      setReason("");
+    } catch (e) {
+      setErr(errDetail(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Button size="small" color="warning" onClick={() => setOpen(true)}>ابطال</Button>
+      {open && (
+        <Dialog open onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>ابطال رضایت</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              ابطال، آینده را قطع می‌کند و سابقه رضایت حفظ می‌شود (B41 سند جامع).
+            </Typography>
+            {err && <Alert severity="error" sx={{ mt: 2 }}>{err}</Alert>}
+            <TextField
+              fullWidth multiline minRows={2} sx={{ mt: 2 }}
+              label="دلیل ابطال (الزامی)"
+              value={reason} onChange={(e) => setReason(e.target.value)}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpen(false)}>انصراف</Button>
+            <Button color="warning" variant="contained" disabled={busy} onClick={submit}>
+              {busy ? "در حال ثبت…" : "ثبت ابطال"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
   );
 }

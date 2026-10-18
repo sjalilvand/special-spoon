@@ -34,3 +34,6 @@ class CaseActionRequest(BaseModel):
 class ConsentCreate(BaseModel):
     status: str = Field(pattern="^(granted|revoked)$")
     note: str | None = Field(default=None, max_length=1000)
+    # B41 سند جامع: نوع رضایت و اتصال به متن نسخه‌دار
+    kind: str = Field(default="treatment", pattern="^(treatment|psych_test|data_share|marketing)$")
+    consent_version_id: uuid.UUID | None = None

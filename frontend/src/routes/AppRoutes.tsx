@@ -15,6 +15,7 @@ import CounselorsPage from "../pages/CounselorsPage";
 import DashboardPage from "../pages/DashboardPage";
 import ImportsPage from "../pages/ImportsPage";
 import Level3AlertsPage from "../pages/Level3AlertsPage";
+import NotificationsPage from "../pages/NotificationsPage";
 import LoginPage from "../pages/LoginPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
@@ -86,6 +87,9 @@ export default function AppRoutes() {
       } />
       <Route path="/reviews" element={
         <ProtectedRoute roles={["TECHNICAL_SUPERVISOR"]}><Layout><ReviewsPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute><Layout><NotificationsPage /></Layout></ProtectedRoute>
       } />
       <Route path="/level3-alerts" element={
         <ProtectedRoute roles={["TECHNICAL_SUPERVISOR"]}><Layout><Level3AlertsPage /></Layout></ProtectedRoute>

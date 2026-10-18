@@ -18,6 +18,7 @@ from app.models.people import Applicant, Counselor
 from app.models.user import User
 from app.schemas.assessment import AssessmentCreate, AssessmentUpdate, ReviewDecision
 from app.services.audit import record_audit
+from app.services.notifications import notify_roles, notify_user
 
 router = APIRouter(tags=["assessments"])
 
@@ -265,6 +266,22 @@ def finalize_assessment(assessment_id: uuid.UUID, db: Session = Depends(get_db),
     a.finalized_by = actor.id
     a.finalized_at = datetime.now(timezone.utc)
     a.row_version += 1
+    # B12: اعلان کارتابل مسئول فنی - سطح ۳ حاد = critical
+    _answers = a.answers or {}
+    _sev = (_answers.get("initial_assessment") or {}).get("severity") \
+        if isinstance(_answers.get("initial_assessment"), dict) else _answers.get("initial_assessment.severity")
+    if form_code == ACUTE_FORM_CODE and _sev == "level_3":
+        notify_roles(db, role_codes=("TECHNICAL_SUPERVISOR",), event_code="assessment.level3",
+                     title="هشدار سطح ۳ - مورد حاد نیاز به بررسی فوری دارد",
+                     body=f"فرم مورد حاد پرونده {case.case_number if case else '-'} نهایی شد؛ به کارتابل هشدار سطح ۳ مراجعه کنید.",
+                     category="assessment", severity="critical",
+                     entity_type="assessment", entity_id=str(a.id))
+    else:
+        notify_roles(db, role_codes=("TECHNICAL_SUPERVISOR",), event_code="assessment.finalized",
+                     title="فرم جدید در انتظار بررسی فنی",
+                     body=None if case is None else f"فرم {form_code} پرونده {case.case_number} نهایی شد.",
+                     category="assessment", severity="info",
+                     entity_type="assessment", entity_id=str(a.id))
     db.commit()
     record_audit(db, action="assessment.finalized", actor_user_id=actor.id,
                  entity_type="assessment", entity_id=str(a.id))
@@ -283,12 +300,20 @@ def approve_assessment(assessment_id: uuid.UUID, payload: ReviewDecision, db: Se
     if a.author_user_id == actor.id:
         # بند ۷.۲: مسئول فنی فرم خود را به‌عنوان تأییدکننده مستقل تأیید نمی‌کند
         raise HTTPException(status_code=409, detail="مسئول فنی نمی‌تواند فرم تألیف خود را تأیید کند (بند ۷.۲)")
+    case = db.get(Case, a.case_id)
     a.status = AssessmentStatus.APPROVED
     a.row_version += 1
     db.add(ReviewAction(
         assessment_id=a.id, reviewer_user_id=actor.id,
         decision="approved", comment=(payload.comment or None),
     ))
+    # B12: نویسنده فرم از تأیید مطلع می‌شود
+    if a.author_user_id:
+        notify_user(db, recipient_user_id=a.author_user_id, event_code="assessment.approved",
+                    title="فرم شما تأیید شد",
+                    body=None if case is None else f"فرم ثبت‌شده پرونده {case.case_number} توسط مسئول فنی تأیید شد.",
+                    category="assessment", severity="info",
+                    entity_type="assessment", entity_id=str(a.id))
     db.commit()
     record_audit(db, action="assessment.approved", actor_user_id=actor.id,
                  entity_type="assessment", entity_id=str(a.id))
@@ -311,6 +336,13 @@ def return_assessment(assessment_id: uuid.UUID, payload: ReviewDecision, db: Ses
     a.status = AssessmentStatus.RETURNED
     a.row_version += 1
     db.add(ReviewAction(assessment_id=a.id, reviewer_user_id=actor.id, decision="returned", comment=comment))
+    # B12: نویسنده فرم از برگشت برای اصلاح مطلع می‌شود
+    if a.author_user_id:
+        notify_user(db, recipient_user_id=a.author_user_id, event_code="assessment.returned",
+                    title="فرم برای اصلاح برگشت داده شد",
+                    body=comment[:500],
+                    category="assessment", severity="warning",
+                    entity_type="assessment", entity_id=str(a.id))
     db.commit()
     record_audit(db, action="assessment.returned", actor_user_id=actor.id,
                  entity_type="assessment", entity_id=str(a.id))

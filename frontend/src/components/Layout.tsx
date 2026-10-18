@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppBar, Box, Button, Chip, Container, Toolbar, Typography } from "@mui/material";
 import { useAuth } from "../auth/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -65,6 +66,8 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Button color="inherit" onClick={() => navigate("/audit-events")}>رخدادها</Button>
           )}
           <Box flexGrow={1} />
+          <NotificationBell />
+          <Button color="inherit" onClick={() => navigate("/notifications")}>اعلان‌ها</Button>
           <Button color="inherit" onClick={() => navigate("/change-password")}>تغییر رمز</Button>
           <Chip size="small" sx={{ bgcolor: "rgba(255,255,255,.25)", color: "#fff" }} label={user?.display_name ?? ""} />
           <Button color="inherit" onClick={async () => { await logout(); navigate("/login"); }}>خروج</Button>

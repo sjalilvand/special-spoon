@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_roles
 from app.db.session import get_db
 from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Consent
+from app.models.consent import ConsentVersion
 from app.models.people import Applicant, Counselor, ServiceLocation
 from app.models.user import User
 from app.schemas.case import (
@@ -18,6 +19,7 @@ from app.schemas.case import (
     ConsentCreate,
 )
 from app.services.audit import record_audit
+from app.services.notifications import notify_roles
 from app.services.case_access import counselor_can_access
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -96,6 +98,10 @@ def _detail_out(db: Session, c: Case) -> dict:
             "version": x.version,
             "status": x.status,
             "note": x.note,
+            "kind": x.kind,
+            "consent_version_id": str(x.consent_version_id) if x.consent_version_id else None,
+            "revoked_at": x.revoked_at.isoformat() if x.revoked_at else None,
+            "revoke_reason": x.revoke_reason,
             "consent_date": x.consent_date.isoformat() if x.consent_date else None,
             "recorded_by_name": recorder.display_name if recorder else None,
         })
@@ -422,6 +428,11 @@ def add_consent(
     case = db.get(Case, case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="پرونده یافت نشد")
+    if payload.consent_version_id is not None:
+        cv = db.get(ConsentVersion, payload.consent_version_id)
+        # B41: ثبت رضایت فقط با متن نسخه‌دار معتبر و فعال
+        if cv is None or not cv.is_active:
+            raise HTTPException(status_code=404, detail="نسخه متن رضایت یافت نشد یا غیرفعال است")
     last_version = db.scalar(select(func.max(Consent.version)).where(Consent.case_id == case.id)) or 0
     consent = Consent(
         case_id=case.id,
@@ -430,6 +441,8 @@ def add_consent(
         note=payload.note,
         consent_date=date.today(),
         recorded_by=actor.id,
+        kind=payload.kind,
+        consent_version_id=payload.consent_version_id,
     )
     db.add(consent)
     # پس‌گرفتن رضایت سوابق را حذف نمی‌کند؛ فقط وضعیت جاری تغییر می‌کند (بند ۷.۲)
@@ -438,5 +451,13 @@ def add_consent(
     db.commit()
     record_audit(db, action="case.consent_recorded", actor_user_id=actor.id,
                  entity_type="case", entity_id=str(case.id),
-                 detail={"status": payload.status, "consent_version": consent.version})
+                 detail={"status": payload.status, "consent_version": consent.version,
+                         "kind": consent.kind})
+    if payload.status == "revoked":
+        # B12: اطلاع‌رسانی پس‌گرفتن رضایت به نقش‌های ناظر
+        notify_roles(db, role_codes=("TECHNICAL_SUPERVISOR", "ORG_MANAGER"),
+                     event_code="consent.revoked",
+                     title=f"رضایت پرونده {case.case_number} پس گرفته شد",
+                     category="consent", severity="warning",
+                     entity_type="case", entity_id=str(case.id))
     return _detail_out(db, case)

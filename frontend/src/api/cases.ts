@@ -33,6 +33,10 @@ export interface ConsentRow {
   version: number;
   status: string;
   note: string | null;
+  kind: string;
+  consent_version_id: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
   consent_date: string | null;
   recorded_by_name: string | null;
 }
@@ -106,4 +110,9 @@ export async function reopenCase(id: string, reason: string): Promise<CaseDetail
 
 export async function addConsent(id: string, payload: Record<string, unknown>): Promise<CaseDetail> {
   return (await apiClient.post(`/cases/${id}/consents`, payload)).data;
+}
+
+/** ابطال رضایت با حفظ سابقه - B41 سند جامع */
+export async function revokeConsent(consentId: string, reason: string): Promise<void> {
+  await apiClient.post(`/consents/${consentId}/revoke`, { reason });
 }

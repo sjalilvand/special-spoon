@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.21.0"
+    app_version: str = "0.25.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -20,6 +20,27 @@ class Settings(BaseSettings):
     activation_token_expire_hours: int = 24
     login_max_attempts: int = 5
     login_attempt_window_minutes: int = 15
+
+    # B39 سند جامع - فایل امن
+    upload_dir: str = "./uploads"
+    max_upload_mb: int = 10
+    download_ticket_seconds: int = 120
+    # MIME های مجاز؛ فایل خارج از فهرست در قرنطینه می‌رود
+    allowed_mime_types: str = (
+        "application/pdf,image/png,image/jpeg,image/webp,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
+        "text/plain,text/csv"
+    )
+
+    @property
+    def allowed_mime_list(self) -> list[str]:
+        return [m.strip() for m in self.allowed_mime_types.split(",") if m.strip()]
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
 
     @property
     def cookie_secure(self) -> bool:

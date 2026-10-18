@@ -5,12 +5,15 @@ from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.cases import router as cases_router
+from app.api.v1.consents import router as consents_router
+from app.api.v1.files import router as files_router
 from app.api.v1.counselors import router as counselors_router
 from app.api.v1.clinical import router as clinical_router
 from app.api.v1.health import router as health_router
 from app.api.v1.intake import router as intake_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.me import router as me_router
+from app.api.v1.notifications import router as notifications_router
 from app.api.v1.org import router as org_router
 from app.api.v1.public import router as public_router
 from app.api.v1.recommendations import router as recommendations_router
@@ -40,6 +43,9 @@ app.include_router(applicants_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 app.include_router(cases_router, prefix=settings.api_prefix)
 app.include_router(assessments_router, prefix=settings.api_prefix)
+app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(consents_router, prefix=settings.api_prefix)
+app.include_router(files_router, prefix=settings.api_prefix)
 app.include_router(appointments_router, prefix=settings.api_prefix)
 app.include_router(sessions_router, prefix=settings.api_prefix)
 app.include_router(recommendations_router, prefix=settings.api_prefix)
