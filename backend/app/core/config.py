@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.26.0"
+    app_version: str = "0.27.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -34,6 +34,28 @@ class Settings(BaseSettings):
     otp_request_window_seconds: int = 600
     otp_verify_token_seconds: int = 600
     booking_require_otp: bool = False  # سخت‌گیری کامل پس از تصمیم D04
+
+    # فاز ۲۷ - B39-plus: آنتی‌ویروس واقعی ClamAV
+    # clamav_host خالی = غیرفعال؛ در docker compose مقدار «clamav» است
+    clamav_enabled: bool = True
+    clamav_host: str = ""
+    clamav_port: int = 3310
+    clamav_timeout_seconds: float = 10.0
+    # حذف EXIF/GPS و فراداده تصاویر پیش از ذخیره
+    strip_image_metadata: bool = True
+
+    # فاز ۲۷ - B12+: خروجی اعلان به ایمیل (تصمیم D04 - SMTP)
+    # smtp_enabled=False → صف ایمیل ساخته می‌شود ولی «غیرفعال» علامت می‌خورد
+    smtp_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "rosepsy@clinic.local"
+    smtp_use_tls: bool = True   # STARTTLS
+    smtp_use_ssl: bool = False  # SMTPS 465
+    email_outbox_max_attempts: int = 5
+    notifications_email_enabled: bool = True
 
     # B39 سند جامع - فایل امن
     upload_dir: str = "./uploads"

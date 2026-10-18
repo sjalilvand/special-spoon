@@ -5,7 +5,7 @@ GET  /api/v1/files?case_id=...            فهرست فایل‌های پرون�
 GET  /api/v1/files/{id}                   فراداده فایل
 POST /api/v1/files/{id}/download-ticket   بلیت دانلود کوتاه‌مدت با امضا
 GET  /api/v1/files/{id}/download?ticket=  دانلود فقط با بلیت معتبر؛ قرنطینه‌شده دانلود نمی‌شود
-POST /api/v1/files/{id}/rescan            اجرای دوباره اسکن (پس از اتصال آنتی‌ویروس واقعی)
+POST /api/v1/files/{id}/rescan            اجرای دوباره اسکن (فاز ۲۷: اسکنر واقعی)
 """
 
 import uuid
@@ -21,9 +21,11 @@ from app.db.session import get_db
 from app.models.case import Case
 from app.models.people import Counselor
 from app.models.file import FileScan, StoredFile
+from app.services import av_scan
 from app.services import file_storage as fs
 from app.services.audit import record_audit
 from app.services.case_access import counselor_can_access
+from app.services.image_sanitizer import strip_image_metadata
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -87,8 +89,14 @@ def upload_file(
     mime = (file.content_type or "application/octet-stream").split(";")[0].strip()
     name = (file.filename or "بدون‌نام")[:255]
 
+    # فاز ۲۷ - B39-plus: حذف EXIF/GPS و فراداده تصاویر پیش از ذخیره
+    data, metadata_stripped = strip_image_metadata(data, mime)
+
     storage_key, sha = fs.save_bytes(settings.upload_dir, data)
-    status, detail = fs.run_stub_scan(name, mime, len(data), settings.allowed_mime_list)
+    scan = av_scan.scan_bytes(name, mime, data, settings.allowed_mime_list)
+    status, detail, scanner_name = scan.status, scan.detail, scan.scanner
+    if metadata_stripped:
+        detail = f"{detail} - فراداده تصویر حذف شد"
 
     f = StoredFile(
         case_id=case.id if case else None,
@@ -104,7 +112,7 @@ def upload_file(
     )
     db.add(f)
     db.flush()
-    db.add(FileScan(file_id=f.id, status=status, detail=detail, scanner="builtin-stub"))
+    db.add(FileScan(file_id=f.id, status=status, detail=detail, scanner=scanner_name))
 
     record_audit(
         db,
@@ -113,11 +121,13 @@ def upload_file(
         entity_type="file",
         entity_id=str(f.id),
         detail={"name": name, "size": len(data), "sha256": sha[:16], "scan_status": status,
+                "scanner": scanner_name, "metadata_stripped": metadata_stripped,
                 "case_id": str(case.id) if case else None},
     )
     db.commit()
     out = _file_out(f)
     out["scan_detail"] = detail
+    out["scanner"] = scanner_name
     return out
 
 
@@ -136,6 +146,14 @@ def list_files(
         .order_by(StoredFile.created_at.desc())
     ).all()
     return {"items": [_file_out(f) for f in rows]}
+
+
+@router.get("/scan-status")
+def scan_backend_status(
+    actor=Depends(require_roles("SYSTEM_ADMIN", "TECHNICAL_SUPERVISOR", "ORG_MANAGER")),
+) -> dict:
+    """وضعیت بسترهای اسکن - شفافیت عملیاتی برای گزارش DPO (B41+)."""
+    return av_scan.scanner_status()
 
 
 @router.get("/{file_id}")
@@ -215,23 +233,30 @@ def rescan_file(
     db: Session = Depends(get_db),
     actor=Depends(require_roles("SYSTEM_ADMIN", "TECHNICAL_SUPERVISOR")),
 ) -> dict:
-    """اجرای دوباره اسکن پایه - نقطه اتصال آنتی‌ویروس واقعی در انتشارهای بعد."""
+    """اجرای دوباره اسکن با اسکنر فعال (فاز ۲۷: ClamAV واقعی یا قواعد پایه)."""
     f = db.get(StoredFile, file_id)
     if f is None:
         raise HTTPException(status_code=404, detail="فایل یافت نشد")
     settings = get_settings()
-    status, detail = fs.run_stub_scan(f.original_name, f.mime, f.size_bytes, settings.allowed_mime_list)
-    f.scan_status = status
-    db.add(FileScan(file_id=f.id, status=status, detail=detail, scanner="builtin-stub"))
+    path = fs.storage_path(settings.upload_dir, f.storage_key)
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="محتوای فایل در فضای ذخیره‌سازی یافت نشد")
+    scan = av_scan.scan_bytes(f.original_name, f.mime, data, settings.allowed_mime_list)
+    f.scan_status = scan.status
+    db.add(FileScan(file_id=f.id, status=scan.status, detail=scan.detail, scanner=scan.scanner))
     record_audit(
         db,
         action="file.rescan",
         actor_user_id=actor.id,
         entity_type="file",
         entity_id=str(f.id),
-        detail={"status": status},
+        detail={"status": scan.status, "scanner": scan.scanner},
     )
     db.commit()
     out = _file_out(f)
-    out["scan_detail"] = detail
+    out["scan_detail"] = scan.detail
+    out["scanner"] = scan.scanner
     return out

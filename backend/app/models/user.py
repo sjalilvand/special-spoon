@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-# بند ۳.۱ سند - نقش‌های نسخه اولیه
+# بند ۳.۱ سند - نقش‌های نسخه اولیه (DPO: فاز ۲۷ - حسابرس حفاظت داده)
 ROLE_CODES: dict[str, str] = {
     "SYSTEM_ADMIN": "مدیر سامانه",
     "ORG_MANAGER": "مدیر سازمان",
@@ -17,6 +17,7 @@ ROLE_CODES: dict[str, str] = {
     "COUNSELOR": "مشاور",
     "TECHNICAL_SUPERVISOR": "مسئول فنی",
     "APPLICANT": "متقاضی",
+    "DPO": "حسابرس حفاظت داده (DPO)",
 }
 
 

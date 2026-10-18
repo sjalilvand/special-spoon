@@ -17,16 +17,30 @@ services:
       retries: 10
     # بند ۱۳.۲: PostgreSQL در عملیات پورت عمومی ندارد
 
+  # فاز ۲۷ - B39-plus: آنتی‌ویروس واقعی ClamAV (فقط شبکه داخلی؛ پورت عمومی ندارد)
+  clamav:
+    image: clamav/clamav:1.4.2
+    restart: unless-stopped
+    environment:
+      # سقف INSTREAM بالاتر از سقف آپلود (MAX_UPLOAD_MB)
+      CLAMD_CONF_StreamMaxLength: 100M
+    volumes:
+      - clamav_data:/var/lib/clamav
+
   api:
     build: ./backend
     image: rosepsy/api:0.21.0
     restart: unless-stopped
     env_file: .env
+    environment:
+      CLAMAV_HOST: clamav
     volumes:
       - private_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
       interval: 30s
@@ -74,3 +88,4 @@ services:
 volumes:
   postgres_data:
   private_uploads:
+  clamav_data:

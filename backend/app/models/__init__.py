@@ -13,6 +13,7 @@ from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Con
 from app.models.clinical import Diagnosis, TreatmentPlan
 from app.models.consent import CONSENT_KINDS, ConsentVersion
 from app.models.consultation import ConsultationRequest
+from app.models.email_outbox import EmailOutbox, EmailOutboxStatus
 from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
 from app.models.intake import IntakeQuestionnaire
@@ -27,7 +28,7 @@ __all__ = [
     "Assessment", "AssessmentStatus", "AuditEvent", "AuthSession",
     "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Consent",
     "CONSENT_KINDS", "ConsentVersion", "ConsultationRequest", "Counselor",
-    "Diagnosis", "FileScan", "FormVersion",
+    "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Notification",
     "OrganizationUnit", "Recommendation", "Referral", "ReviewAction", "Role",
     "OtpChallenge", "OtpPurpose",

@@ -94,3 +94,61 @@ export interface AdminDashboardData {
 export async function fetchAdminDashboard(days: number): Promise<AdminDashboardData> {
   return (await apiClient.get("/reports/admin-dashboard", { params: { days } })).data;
 }
+
+// ---------------- فاز ۲۷ - B41+ گزارش انطباق DPO ----------------
+
+export interface DpoReportData {
+  generated_at: string;
+  days: number;
+  generated_by: string;
+  consents: {
+    by_kind: Record<string, { granted_active: number; revoked: number }>;
+    grants_in_window: number;
+    revocations_in_window: number;
+    grants_without_version: number;
+    versions: Record<string, { versions: number; latest: number }>;
+  };
+  access: {
+    distinct_actors: number;
+    login_failed: number;
+    tracked_actions: Record<string, number>;
+    actions_by_count: Record<string, number>;
+  };
+  files: {
+    scan_status: Record<string, number>;
+    scanner_usage: Record<string, number>;
+    uploads_in_window: number;
+    scan_backends: {
+      clamd_configured: boolean;
+      clamd_reachable: boolean;
+      clamscan_available: boolean;
+      fallback: string;
+    };
+  };
+  email_outbox: {
+    by_status: Record<string, number>;
+    smtp_enabled: boolean;
+  };
+  accounts: {
+    users_active: number;
+    users_disabled: number;
+    users_pending: number;
+    active_sessions: number;
+  };
+}
+
+export async function fetchDpoReport(days: number): Promise<DpoReportData> {
+  return (await apiClient.get("/reports/dpo", { params: { days } })).data;
+}
+
+// فاز ۲۷ - وضعیت بسترهای اسکن آنتی‌ویروس (B39-plus)
+export interface ScanBackendStatus {
+  clamd_configured: boolean;
+  clamd_reachable: boolean;
+  clamscan_available: boolean;
+  fallback: string;
+}
+
+export async function fetchScanBackendStatus(): Promise<ScanBackendStatus> {
+  return (await apiClient.get("/files/scan-status")).data;
+}

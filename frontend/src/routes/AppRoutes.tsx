@@ -14,6 +14,7 @@ import ConsultationRequestsPage from "../pages/ConsultationRequestsPage";
 import CounselorWorklistPage from "../pages/CounselorWorklistPage";
 import CounselorsPage from "../pages/CounselorsPage";
 import DashboardPage from "../pages/DashboardPage";
+import DpoReportPage from "../pages/DpoReportPage";
 import ImportsPage from "../pages/ImportsPage";
 import Level3AlertsPage from "../pages/Level3AlertsPage";
 import NotificationsPage from "../pages/NotificationsPage";
@@ -50,6 +51,9 @@ export default function AppRoutes() {
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}><Layout><AdminDashboardPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/dpo-report" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"]}><Layout><DpoReportPage /></Layout></ProtectedRoute>
       } />
       <Route path="/audit-events" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><AuditEventsPage /></Layout></ProtectedRoute>

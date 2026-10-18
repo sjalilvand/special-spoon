@@ -4,7 +4,8 @@
 - شکست یا نبود اعلان هرگز جریان اصلی (پرداخت/نهایی‌سازی) را برنمی‌گرداند؛
   لذا همه emit ها در try/except ایمن شده‌اند.
 - محتوای حساس بالینی در متن اعلان نمی‌آید؛ فقط عنوان کلی و ارجاع.
-- بستر SMS/ایمیل نیازمند تصمیم D04 سند است؛ فعلاً کانال درون‌برنامه‌ای.
+- فاز ۲۷ (B12+): برای گیرنده دارای ایمیل، ردیفی در صف خروجی SMTP ساخته
+  می‌شود؛ ارسال غیرهمگام و شکست آن جریان اصلی را متوقف نمی‌کند.
 """
 
 import uuid
@@ -12,12 +13,36 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.notification import Notification
 from app.models.user import Role, User
 
 # دسته‌بندی‌های مجاز
 CATEGORIES = ("case", "assessment", "appointment", "consent", "system")
 SEVERITIES = ("info", "warning", "critical")
+
+_EMAIL_FOOTER = "این پیام به‌صورت خودکار توسط سامانه Rosepsy ارسال شده است؛ به این ایمیل پاسخ ندهید."
+
+
+def _queue_email_copy(db: Session, user: User, title: str, body: str | None, notification_id) -> None:
+    """B12+ فاز ۲۷: قرار دادن کپی ایمیل اعلان در صف خروجی (بدون توقف جریان)."""
+    try:
+        if not get_settings().notifications_email_enabled:
+            return
+        if not user.email:
+            return
+        from app.services.email_outbox import queue_email
+
+        text = "\n".join(filter(None, [title, body, "", _EMAIL_FOOTER]))
+        queue_email(
+            db,
+            recipient_email=user.email,
+            subject=title[:200],
+            body_text=text[:20000],
+            notification_id=notification_id,
+        )
+    except Exception:
+        pass
 
 
 def notify_user(
@@ -47,6 +72,10 @@ def notify_user(
             )
             db.add(n)
             db.flush()
+            # B12+ فاز ۲۷: کپی ایمیل برای گیرنده دارای ایمیل
+            user = db.get(User, recipient_user_id)
+            if user is not None:
+                _queue_email_copy(db, user, n.title, n.body, n.id)
         return n
     except Exception:
         return None

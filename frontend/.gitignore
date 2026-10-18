@@ -1,0 +1,3 @@
+
+# فایل محلی برای جلوگیری از تداخل postcss اپ والد (commit نمی‌شود)
+postcss.config.mjs

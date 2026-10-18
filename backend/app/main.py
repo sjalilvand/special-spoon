@@ -9,6 +9,8 @@ from app.api.v1.consents import router as consents_router
 from app.api.v1.files import router as files_router
 from app.api.v1.counselors import router as counselors_router
 from app.api.v1.clinical import router as clinical_router
+from app.api.v1.compliance import router as compliance_router
+from app.api.v1.email_outbox import router as email_outbox_router
 from app.api.v1.health import router as health_router
 from app.api.v1.intake import router as intake_router
 from app.api.v1.imports import router as imports_router
@@ -57,6 +59,8 @@ app.include_router(intake_router, prefix=settings.api_prefix)
 app.include_router(referrals_router, prefix=settings.api_prefix)
 app.include_router(public_router, prefix=settings.api_prefix)
 app.include_router(staff_site_router, prefix=settings.api_prefix)
+app.include_router(compliance_router, prefix=settings.api_prefix)
+app.include_router(email_outbox_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
