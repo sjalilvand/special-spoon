@@ -1,5 +1,7 @@
 """فرم‌های چندگانه (RS-PS-01-01 / RS-PS-04-01 / RS-PS-08-01) — رجیستری و گردش ارزیابی"""
-from conftest import API, bearer, login
+from conftest import bearer, login
+
+API = "/api/v1"
 
 
 def _list_forms(client, tok):
@@ -29,10 +31,17 @@ def test_form_definition_by_code_and_unknown_404(client, env):
 
 
 def _new_case(db, env, case_number):
-    """پرونده جدید برای مشاور الف تا نتیجه آزمون‌ها مستقل بماند."""
+    """پرونده جدید با متقاضی مستقل (بدون کاربر) تا خروجی /me/cases متقاضی seed مختل نشود."""
     from datetime import date
     from app.models.case import Case, CaseAssignment
-    case = Case(case_number=case_number, applicant_id=env["applicant_a"].id,
+    from app.models.people import Applicant
+
+    app_row = Applicant(external_id=f"T-EXT-MF-{case_number}",
+                        first_name="متقاضی", last_name="چندفرمی",
+                        status="active", record_source="manual", user_id=None)
+    db.add(app_row)
+    db.flush()
+    case = Case(case_number=case_number, applicant_id=app_row.id,
                 acceptance_date=date.today(), primary_counselor_id=env["counselor_a"].id,
                 status="active", version=1)
     db.add(case)
