@@ -89,6 +89,7 @@ FORM_DEFINITION = {"code": FORM_CODE, "version": FORM_VERSION, "sections": FORM_
 REQUIRED_AT_FINALIZE: list[tuple[str, str]] = [
     ("caller_info.full_name", "نام و نام خانوادگی مراجع"),
     ("caller_info.phone", "شماره تماس"),
+    ("caller_info.province", "استان"),
     ("initial_assessment.subject", "موضوع مراجعه"),
     ("initial_assessment.description", "شرح مختصر مشکل و اقدامات انجام‌شده"),
     ("contact_info.counselor_name", "نام مشاور"),
