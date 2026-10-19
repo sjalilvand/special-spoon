@@ -1,3 +1,7 @@
 
 # فایل محلی برای جلوگیری از تداخل postcss اپ والد (commit نمی‌شود)
 postcss.config.mjs
+
+# فاز ۳۸ - آثار آزمون E2E (Playwright)
+test-results/
+playwright-report/

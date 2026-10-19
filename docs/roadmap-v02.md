@@ -99,12 +99,19 @@
 - [x] **ADR-04 (تصمیم سند):** سرویس ذخیره‌سازی پلاگین‌پذیر `app/services/object_storage.py` — همان الگوی D02/D03/D07/B28 — `storage_backend = local (پیش‌فرض بدون کلید) | s3` (MinIO/هر endpoint سازگار S3 با boto3)؛ نبود کلید/کتابخانه یا خطای سرویس → fallback به local (fail-soft) با گزارش شفاف؛ کلیدها هرگز به کلاینت/لاگ نمی‌رود؛ ستون `files.storage` پروایدر واقعی هر فایل را ثبت می‌کند تا مهاجرت تدریجی بدون توقف سرویس ممکن شود و دانلود همیشه از پروایدرِ ردیف بخواند؛ قرارداد B39 حفظ شد: دانلود فقط با بلیت امضاشده از مسیر سرور (presigned URL عمومی ممنوع)؛ بخش storage در /integrations/config (۶ یکپارچه‌سازی) + سند `docs/adr/ADR-04-object-storage.md` (آستانه اجرا + طرح مهاجرت ۴ گام با اسکریپت idempotent)
 - [x] **گام اول آزمون E2E (دسته ۳/۴/۶ سند):** اسکلت Playwright در `frontend/e2e/` (smoke: ورود → داشبورد → اعلان‌ها + API health) با playwright.config.ts و README اجرا؛ خارج از tsconfig build تا `tsc/vite` سبز بماند؛ اجرای کامل روی سیستم توسعه با `npm i -D @playwright/test && npx playwright test`
 
+### فاز ۳۸ — ✅ انجام شد (ADR-03 پاکت پاسخ با /api/v2 + اجرای کامل E2E + عملیاتی‌سازی MinIO گام ۱–۲)
+- [x] **ADR-03 پاکت پاسخ استاندارد `{data, meta, errors}` با نسخه /api/v2:** میان‌افزار پاکت (`app/core/envelope.py`) فقط روی پیشوند /api/v2 — موفقیت `{data, meta, errors:null}` و خطا `{data:null, meta, errors:[{code,message,details?}]}`؛ meta شامل request_id/timestamp/version/duration_ms + اکوی Idempotency-Key (زمینه‌سازی ADR-05)؛ فهرست‌های `{items,...}` → `data` + `meta.pagination`؛ نگاشت خطاهای FastAPI به کد پایدار (unauthorized/not_found/conflict/validation_error/...)؛ پاسخ غیر JSON (دانلود B39) بدون پاکت عبور می‌کند؛ **v1 بدون هیچ تغییری** (سازگاری فرانت/موبایل) — همین روت‌ها دو بار سوار شده‌اند؛ v2 خارج از OpenAPI؛ سند `docs/adr/ADR-03-response-envelope.md` + نمایه
+- [x] **اجرای کامل E2E:** `npm i -D @playwright/test` + نصب chromium (headless shell 156)؛ اجرای واقعی روی سرورهای در حال اجرا (backend :8000 + vite :5173) — **۴/۴ passed (7.1s)** شامل ورود واقعی کاربر مدیر از /login و بارگذاری اعلان‌ها؛ نتایج در `frontend/e2e/README.md`
+- [x] **ADR-04 گام ۱ (زیرساخت):** سرویس `minio` + `minio-init` (ساخت idempotent bucket + نسخه‌گذاری) در `compose.yml` با پروفایل `storage` (بدون پورت عمومی — بند ۱۳.۲؛ تگ پین‌شده + healthcheck + volume `minio_data`)؛ `compose.dev.yml` پورت ۹۰۰۰/۹۰۰۱ توسعه؛ `S3_ENDPOINT_URL` خودکار در سرویس api؛ کلیدها از .env؛ `.env.example` کامل شد (بخش storage فاز ۳۷ جا مانده بود)
+- [x] **ADR-04 گام ۲ (مهاجرت داده):** سرویس `app/services/storage_migration.py` + اسکریپت idempotent `backend/scripts/migrate_files_to_s3.py` (`--dry-run/--limit/--loop`) — فقط ردیف‌های storage='local'، کنترل checksum قبل از حرکت، put با همان کلید، راستی‌آزمایی با خواندن مجدد، ثبت storage='s3' فقط پس از تأیید، حفظ نسخه محلی (تسویه = گام ۴)، fail-soft در خطای S3، سند ADR-04 به‌روز شد
+- تست‌ها: ۲۳ آزمون جدید فاز ۳۸ (پاکت: ۱۱؛ مهاجرت/compose: ۱۲)؛ کل ۲۸۵ passed، 1 skipped؛ build tsc+vite ✓
+
 ### بدهی فنی (ADRهای سند)
-- [ ] **ADR-03:** پاکت پاسخ استاندارد `{data, meta, errors}` — تغییر شکننده؛ با نسخه /api/v2
+- [x] **ADR-03:** پاکت پاسخ استاندارد `{data, meta, errors}` — **پیاده شد در فاز ۳۸** (`docs/adr/ADR-03-response-envelope.md`)؛ /api/v2 با پاکت + meta (request_id/اکوی Idempotency-Key) + نگاشت خطا به کد پایدار؛ v1 دست‌نخورده؛ مهاجرت کلاینت‌ها (فرانت/موبایل) طبق طرح ۴ گام باقی است
 - [x] **ADR-02:** صف کار (Celery/arq) — **مستند شد در فاز ۳۶** (`docs/adr/ADR-02-task-queue-celery.md`)؛ راه‌حل میانی فعلی: صف پایگاه‌داده email_outbox/sms_outbox + آستانه‌های اجرا و طرح مهاجرت
-- [x] **ADR-04:** Object Storage (MinIO/S3) — **آداپتور پلاگین‌پذیر پیاده شد در فاز ۳۷** (`docs/adr/ADR-04-object-storage.md`)؛ پیش‌فرض local بدون کلید، s3 با config کامل + fallback fail-soft + ستون files.storage برای مهاجرت تدریجی
+- [x] **ADR-04:** Object Storage (MinIO/S3) — **آداپتور پلاگین‌پذیر پیاده شد در فاز ۳۷** (`docs/adr/ADR-04-object-storage.md`)؛ پیش‌فرض local بدون کلید، s3 با config کامل + fallback fail-soft + ستون files.storage برای مهاجرت تدریجی؛ **گام‌های ۱–۲ طرح مهاجرت (سرویس compose MinIO + اسکریپت مهاجرت idempotent) عملیاتی شد در فاز ۳۸** — سوییچ (گام ۳) و تسویه (گام ۴) باقی است
 - [x] **Rate limit سراسری (بند ۱۰ سند) + Idempotency-Key — مستند شد در فاز ۳۶ به‌عنوان ADR-05** (`docs/adr/ADR-05-global-rate-limit.md`)؛ راه‌حل میانی فعلی: سقف‌های per-feature (ورود/OTP/نگهداشت/دستیار) + قیود یکتایی DB برای مالی
-- [ ] دسته‌های آزمون ۳/۴/۶ سند (Contract/E2E/Performance) با Schemathesis/Playwright/k6 — **گام اول E2E (اسکلت Playwright) در فاز ۳۷ انجام شد؛ اجرای کامل و Contract/Performance باقی است**
+- [ ] دسته‌های آزمون ۳/۴/۶ سند (Contract/E2E/Performance) با Schemathesis/Playwright/k6 — **E2E: اسکلت در فاز ۳۷ و اجرای کامل سبز (۴/۴ smoke) در فاز ۳۸ انجام شد؛ Contract (Schemathesis) و Performance (k6) باقی است**
 
 ## زنجیره فازهای انجام‌شده
 - فاز ۲۱ (بالادستی): رزرو عمومی + موتور اسلات
@@ -124,4 +131,5 @@
 - فاز ۳۴: محتوا/دوره/آزمون/گواهی (B33–B36) + صورتحساب دوره‌ای سازمان (B21-plus)
 - فاز ۳۵: پشتیبانی (B23) + تست روان‌شناسی (B37/D08) + دستیار هوشمند (B25–B27/D07)
 - فاز ۳۶: یکپارچه‌سازی‌های بیرونی — پیامک پلاگین‌پذیر (B28) + اپ Flutter (B17) + مستندسازی ADR-02/ADR-05
-- فاز ۳۷ (این فاز): تصمیم ADR-04 — Object Storage پلاگین‌پذیر (local/s3-MinIO) + گام اول E2E (اسکلت Playwright)
+- فاز ۳۷: تصمیم ADR-04 — Object Storage پلاگین‌پذیر (local/s3-MinIO) + گام اول E2E (اسکلت Playwright)
+- فاز ۳۸ (این فاز): ADR-03 پاکت پاسخ استاندارد با /api/v2 + اجرای کامل E2E (۴/۴ سبز) + عملیاتی‌سازی MinIO (گام‌های ۱–۲ طرح ADR-04)

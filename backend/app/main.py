@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.core.envelope import API_V2_PREFIX, EnvelopeMiddleware
+
 from app.api.v1.ai import router as ai_router
 from app.api.v1.applicants import router as applicants_router
 from app.api.v1.appointments import router as appointments_router
@@ -51,46 +53,62 @@ app = FastAPI(
     openapi_url=f"{settings.api_prefix}/openapi.json",
 )
 
-app.include_router(health_router, prefix=settings.api_prefix, tags=["health"])
-app.include_router(auth_router, prefix=settings.api_prefix)
-app.include_router(accounting_router, prefix=settings.api_prefix)
-app.include_router(users_router, prefix=settings.api_prefix)
-app.include_router(org_router, prefix=settings.api_prefix)
-app.include_router(topics_router, prefix=settings.api_prefix)
-app.include_router(organizations_router, prefix=settings.api_prefix)
-app.include_router(counselors_router, prefix=settings.api_prefix)
-app.include_router(applicants_router, prefix=settings.api_prefix)
-app.include_router(imports_router, prefix=settings.api_prefix)
-app.include_router(cases_router, prefix=settings.api_prefix)
-app.include_router(assessments_router, prefix=settings.api_prefix)
-app.include_router(notifications_router, prefix=settings.api_prefix)
-app.include_router(consents_router, prefix=settings.api_prefix)
-app.include_router(files_router, prefix=settings.api_prefix)
-app.include_router(appointments_router, prefix=settings.api_prefix)
-app.include_router(sessions_router, prefix=settings.api_prefix)
-app.include_router(recommendations_router, prefix=settings.api_prefix)
-app.include_router(me_router, prefix=settings.api_prefix)
-app.include_router(supervisor_router, prefix=settings.api_prefix)
-app.include_router(reports_router, prefix=settings.api_prefix)
-app.include_router(clinical_router, prefix=settings.api_prefix)
-app.include_router(intake_router, prefix=settings.api_prefix)
-app.include_router(referrals_router, prefix=settings.api_prefix)
-app.include_router(public_router, prefix=settings.api_prefix)
-app.include_router(staff_site_router, prefix=settings.api_prefix)
-app.include_router(compliance_router, prefix=settings.api_prefix)
-app.include_router(email_outbox_router, prefix=settings.api_prefix)
-app.include_router(catalog_router, prefix=settings.api_prefix)
-app.include_router(verification_router, prefix=settings.api_prefix)
-app.include_router(branches_router, prefix=settings.api_prefix)
-app.include_router(payments_router, prefix=settings.api_prefix)
-app.include_router(wallet_router, prefix=settings.api_prefix)
-app.include_router(discounts_router, prefix=settings.api_prefix)
-app.include_router(refunds_router, prefix=settings.api_prefix)
-app.include_router(learning_router, prefix=settings.api_prefix)
-app.include_router(support_router, prefix=settings.api_prefix)
-app.include_router(psych_tests_router, prefix=settings.api_prefix)
-app.include_router(ai_router, prefix=settings.api_prefix)
-app.include_router(integrations_router, prefix=settings.api_prefix)
+# فاز ۳۸ - ADR-03: همین روت‌ها دو بار سوار می‌شوند — v1 (قرارداد فعلی،
+# سازگاری کامل فرانت/موبایل) و v2 (همان مسیرها با پاکت استاندارد
+# {data, meta, errors}؛ خارج از OpenAPI تا طرح مستندات تمیز بماند).
+_ROUTERS: list[tuple[object, list[str] | None]] = [
+    (health_router, ["health"]),
+    (auth_router, None),
+    (accounting_router, None),
+    (users_router, None),
+    (org_router, None),
+    (topics_router, None),
+    (organizations_router, None),
+    (counselors_router, None),
+    (applicants_router, None),
+    (imports_router, None),
+    (cases_router, None),
+    (assessments_router, None),
+    (notifications_router, None),
+    (consents_router, None),
+    (files_router, None),
+    (appointments_router, None),
+    (sessions_router, None),
+    (recommendations_router, None),
+    (me_router, None),
+    (supervisor_router, None),
+    (reports_router, None),
+    (clinical_router, None),
+    (intake_router, None),
+    (referrals_router, None),
+    (public_router, None),
+    (staff_site_router, None),
+    (compliance_router, None),
+    (email_outbox_router, None),
+    (catalog_router, None),
+    (verification_router, None),
+    (branches_router, None),
+    (payments_router, None),
+    (wallet_router, None),
+    (discounts_router, None),
+    (refunds_router, None),
+    (learning_router, None),
+    (support_router, None),
+    (psych_tests_router, None),
+    (ai_router, None),
+    (integrations_router, None),
+]
+
+for _router, _tags in _ROUTERS:
+    if _tags:
+        app.include_router(_router, prefix=settings.api_prefix, tags=_tags)  # type: ignore[arg-type]
+    else:
+        app.include_router(_router, prefix=settings.api_prefix)
+
+for _router, _ in _ROUTERS:
+    app.include_router(_router, prefix=API_V2_PREFIX, include_in_schema=False)  # type: ignore[arg-type]
+
+app.add_middleware(EnvelopeMiddleware)
 
 
 @app.get("/", include_in_schema=False)

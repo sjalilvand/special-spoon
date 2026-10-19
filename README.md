@@ -192,3 +192,15 @@
 - **B17 اپ Flutter:** کلاینت موبایل در `mobile/` (منبع Dart) — ورود/نشست، پروفایل، نوبت‌های من، اعلان‌ها، سفارش‌های من؛ RTL + Material 3؛ بدون کش داده بالینی روی دستگاه؛ آدرس API با `--dart-define=ROSEPSY_API_BASE`؛ build با Flutter SDK (راهنمای `mobile/README.md`)
 - **بدهی فنی ADR:** پوشه `docs/adr/` — ADR-02 صف کار (Celery/arq با آستانه‌های اجرا و طرح مهاجرت؛ راه‌حل میانی: صف DB) و ADR-05 سقف نرخ سراسری + Idempotency-Key عملیات مالی (راه‌حل میانی: سقف‌های per-feature) + نمایه ADR
 - Migration: 0024_phase36_integrations — آزمون‌ها: test_phase36.py (۱۰ آزمون: آداپتور log، fallback بی‌کلید، ارسال/شکست kavenegar با HTTP موک، disabled، OTP بدون ذخیره کد، کپی اعلان پیامکی، endpointها و دسترسی‌ها، جریان retry، عدم افشای کلید)
+
+## فاز ۳۷ — تصمیم ADR-04: Object Storage پلاگین‌پذیر + اسکلت E2E (v0.37.0)
+- **آداپتور ذخیره‌سازی پلاگین‌پذیر** `app/services/object_storage.py` — همان الگوی D02/D03/D07/B28: `storage_backend = local (پیش‌فرض بدون کلید) | s3` (MinIO/هر endpoint سازگار S3 با boto3)؛ نبود کلید/کتابخانه یا خطای سرویس → fallback به local (fail-soft) با گزارش شفاف؛ کلیدها هرگز به کلاینت/لاگ نمی‌رود
+- ستون `files.storage` (migration 0025) پروایدر واقعی هر فایل را ثبت می‌کند — دانلود/اسکن مجدد همیشه از پروایدر ردیف می‌خواند؛ قرارداد B39 حفظ شد (دانلود فقط با بلیت امضاشده از مسیر سرور؛ presigned URL عمومی ممنوع)
+- بخش storage در `/integrations/config` (۶ یکپارچه‌سازی) + سند `docs/adr/ADR-04-object-storage.md` (آستانه اجرا + طرح مهاجرت ۴ گام)
+- اسکلت Playwright در `frontend/e2e/` (smoke: سلامت API، هدایت احراز، ورود، اعلان‌ها) — خارج از build فرانت
+
+## فاز ۳۸ — پاکت پاسخ استاندارد /api/v2 (ADR-03) + اجرای کامل E2E + عملیاتی‌سازی MinIO (v0.38.0)
+- **ADR-03 پاکت `{data, meta, errors}`:** میان‌افزار پاکت روی `/api/v2` — همان روت‌های v1 با قرارداد استاندارد سند: موفقیت `{data, meta, errors:null}`، خطا `{data:null, meta, errors:[{code,message,details?}]}`؛ meta شامل `request_id/timestamp/version/duration_ms` + اکوی `Idempotency-Key`؛ فهرست‌های `{items,...}` → `data` + `meta.pagination`؛ نگاشت خطاها به کد پایدار؛ دانلود فایل (B39) بدون پاکت؛ **v1 بدون هیچ تغییری** (سازگاری فرانت/موبایل)؛ سند `docs/adr/ADR-03-response-envelope.md`
+- **اجرای کامل E2E:** `@playwright/test` + Chromium — **۴/۴ passed** روی سرورهای در حال اجرا (سلامت API، هدایت احراز، ورود واقعی مدیر از /login، بارگذاری اعلان‌ها)؛ نتایج در `frontend/e2e/README.md`
+- **ADR-04 گام ۱–۲ عملیاتی شد:** سرویس `minio` + `minio-init` (bucket idempotent + نسخه‌گذاری) در compose (پروفایل `storage`، بدون پورت عمومی — بند ۱۳.۲) و در توسعه با پورت ۹۰۰۰/۹۰۰۱؛ اسکریپت مهاجرت idempotent `backend/scripts/migrate_files_to_s3.py` (`--dry-run/--limit/--loop`) با کنترل checksum و راستی‌آزمایی خواندن مجدد؛ سوییچ (گام ۳) و تسویه (گام ۴) پس از پایداری
+- Migration: 0025 (فاز ۳۷) — آزمون‌ها: test_phase38 (۲۳ آزمون: پاکت ۱۱ + مهاجرت/compose ۱۲)؛ کل ۲۸۵ passed، 1 skipped

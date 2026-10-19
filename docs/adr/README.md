@@ -9,7 +9,7 @@
 |---|---|---|---|
 | ADR-01 | معماری نسخه اول تک‌سازمانی (PostgreSQL + FastAPI + React، تک‌مخزن) | پذیرفته‌شده در سند مبدا | — |
 | ADR-02 | صف کار توزیع‌شده (Celery/arq) برای پردازش پس‌زمینه | پذیرفته‌شده به‌عنوان بدهی — راه‌حل میانی: صف پایگاه‌داده | [ADR-02](ADR-02-task-queue-celery.md) |
-| ADR-03 | پاکت پاسخ استاندارد `{data, meta, errors}` | معلق — با نسخه شکننده /api/v2 | در roadmap |
+| ADR-03 | پاکت پاسخ استاندارد `{data, meta, errors}` | پذیرفته‌شده — /api/v2 با پاکت پیاده شد (0.38.0)؛ v1 دست‌نخورده | [ADR-03](ADR-03-response-envelope.md) |
 | ADR-04 | Object Storage (MinIO/S3) جایگزین دایرکتوری محلی فایل‌ها | پذیرفته‌شده — آداپتور پلاگین‌پذیر local/s3 پیاده شد (0.37.0) | [ADR-04](ADR-04-object-storage.md) |
 | ADR-05 | سقف نرخ سراسری (Rate limit) + Idempotency-Key عملیات مالی | پذیرفته‌شده به‌عنوان بدهی — راه‌حل میانی: سقف per-feature | [ADR-05](ADR-05-global-rate-limit.md) |
 
