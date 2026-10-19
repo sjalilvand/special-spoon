@@ -1,3 +1,4 @@
+from app.models.ai import AiChatLog
 from app.models.accounting import (
     Account,
     AccountType,
@@ -68,6 +69,21 @@ from app.models.learning import (
     PublishStatus,
 )
 from app.models.org_statement import OrgStatement, OrgStatementItem, OrgStatementStatus
+from app.models.psych_test import (
+    PsychAttempt,
+    PsychInterpretation,
+    PsychQuestion,
+    PsychStatus,
+    PsychTest,
+)
+from app.models.support import (
+    Complaint,
+    ComplaintStatus,
+    SessionSurvey,
+    Ticket,
+    TicketMessage,
+    TicketStatus,
+)
 from app.models.topics import ServiceTopic, Topic
 from app.models.wallet import (
     Wallet,

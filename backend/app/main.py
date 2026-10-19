@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.v1.ai import router as ai_router
 from app.api.v1.applicants import router as applicants_router
 from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
@@ -25,12 +26,14 @@ from app.api.v1.org import router as org_router
 from app.api.v1.organizations import router as organizations_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.public import router as public_router
+from app.api.v1.psych_tests import router as psych_tests_router
 from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.referrals import router as referrals_router
 from app.api.v1.refunds import router as refunds_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.staff_site import router as staff_site_router
+from app.api.v1.support import router as support_router
 from app.api.v1.supervisor import router as supervisor_router
 from app.api.v1.topics import router as topics_router
 from app.api.v1.users import router as users_router
@@ -83,6 +86,9 @@ app.include_router(wallet_router, prefix=settings.api_prefix)
 app.include_router(discounts_router, prefix=settings.api_prefix)
 app.include_router(refunds_router, prefix=settings.api_prefix)
 app.include_router(learning_router, prefix=settings.api_prefix)
+app.include_router(support_router, prefix=settings.api_prefix)
+app.include_router(psych_tests_router, prefix=settings.api_prefix)
+app.include_router(ai_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

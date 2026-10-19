@@ -71,6 +71,15 @@ export default function Layout({ children }: { children: ReactNode }) {
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]) && (
             <Button color="inherit" onClick={() => navigate("/organizations")}>سازمان‌ها (B21)</Button>
           )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/psych-tests")}>تست روان‌شناسی (B37)</Button>
+          )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/support")}>پشتیبانی (B23)</Button>
+          )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
+            <Button color="inherit" onClick={() => navigate("/assistant")}>دستیار (AI)</Button>
+          )}
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]) && (
             <Button color="inherit" onClick={() => navigate("/branches")}>شعب (B31)</Button>
           )}

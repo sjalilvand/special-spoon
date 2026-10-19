@@ -23,6 +23,9 @@ import InvoicePage from "../pages/InvoicePage";
 import Level3AlertsPage from "../pages/Level3AlertsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import LoginPage from "../pages/LoginPage";
+import SupportPage from "../pages/SupportPage";
+import PsychTestsPage from "../pages/PsychTestsPage";
+import AssistantPage from "../pages/AssistantPage";
 import OrganizationsPage from "../pages/OrganizationsPage";
 import LearningPage from "../pages/LearningPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
@@ -100,6 +103,24 @@ export default function AppRoutes() {
       <Route path="/learning" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
           <Layout><LearningPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۵ - B23: پشتیبانی */}
+      <Route path="/support" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "APPLICANT"]}>
+          <Layout><SupportPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۵ - B37: تست روان‌شناسی (D08) */}
+      <Route path="/psych-tests" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><PsychTestsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۵ - B25–B27: دستیار هوشمند (D07) */}
+      <Route path="/assistant" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "APPLICANT"]}>
+          <Layout><AssistantPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/verification-reviews" element={

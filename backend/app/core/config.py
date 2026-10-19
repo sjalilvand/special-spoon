@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.34.0"
+    app_version: str = "0.35.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # کلیدهای سرویس نقشه؛ خالی = درگاه غیرفعال (کلید هرگز به کلاینت نمی‌رود)
     neshan_api_key: str = ""
     mapir_api_key: str = ""
+
+    # فاز ۳۵ - B25–B27 + تصمیم D07: دستیار هوشمند پلاگین‌پذیر
+    # ai_provider = "rule" (پیش‌فرض: قاعده‌محور، بدون کلید، قطعی) | "llm"
+    ai_provider: str = "rule"
+    # کلید سرویس AI؛ خالی = fallback به rule (fail-soft)؛ کلید هرگز به کلاینت/لاگ نمی‌رود
+    ai_api_key: str = ""
 
     # MIME های مجاز؛ فایل خارج از فهرست در قرنطینه می‌رود
     allowed_mime_types: str = (
