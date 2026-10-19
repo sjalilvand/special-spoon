@@ -22,6 +22,8 @@ class StoredFile(Base):
             name="ck_files_scan_status",
         ),
         CheckConstraint("size_bytes >= 0", name="ck_files_size"),
+        # فاز ۳۷ - ADR-04: پروایدر واقعیِ ذخیره هر فایل (منبع حقیقت دانلود)
+        CheckConstraint("storage IN ('local','s3')", name="ck_files_storage"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -37,6 +39,8 @@ class StoredFile(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64))
     storage_key: Mapped[str] = mapped_column(String(120), unique=True)
+    # فاز ۳۷ - ADR-04: local (پیش‌فرض) | s3 — مهاجرت تدریجی ممکن می‌شود
+    storage: Mapped[str] = mapped_column(String(20), default="local", nullable=False)
     sensitivity: Mapped[str] = mapped_column(String(20), default="confidential")
     scan_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

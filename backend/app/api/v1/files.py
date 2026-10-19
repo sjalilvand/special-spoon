@@ -11,7 +11,8 @@ POST /api/v1/files/{id}/rescan            اجرای دوباره اسکن (فا
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from urllib.parse import quote as url_quote
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,7 @@ from app.models.people import Counselor
 from app.models.file import FileScan, StoredFile
 from app.services import av_scan
 from app.services import file_storage as fs
+from app.services import object_storage as objstore
 from app.services.audit import record_audit
 from app.services.case_access import counselor_can_access
 from app.services.image_sanitizer import strip_image_metadata
@@ -55,6 +57,7 @@ def _file_out(f: StoredFile) -> dict:
         "mime": f.mime,
         "size_bytes": f.size_bytes,
         "sha256": f.sha256,
+        "storage": f.storage,
         "sensitivity": f.sensitivity,
         "scan_status": f.scan_status,
         "created_at": f.created_at.isoformat() if f.created_at else None,
@@ -92,11 +95,15 @@ def upload_file(
     # فاز ۲۷ - B39-plus: حذف EXIF/GPS و فراداده تصاویر پیش از ذخیره
     data, metadata_stripped = strip_image_metadata(data, mime)
 
-    storage_key, sha = fs.save_bytes(settings.upload_dir, data)
+    # فاز ۳۷ - ADR-04: آداپتور پلاگین‌پذیر (local پیش‌فرض | s3 با config کامل؛
+    # خطای سرویس S3 → fallback محلی fail-soft و پروایدر واقعی ثبت می‌شود)
+    provider, storage_key, sha, st_fallback = objstore.store(data, settings)
     scan = av_scan.scan_bytes(name, mime, data, settings.allowed_mime_list)
     status, detail, scanner_name = scan.status, scan.detail, scan.scanner
     if metadata_stripped:
         detail = f"{detail} - فراداده تصویر حذف شد"
+    if st_fallback:
+        detail = f"{detail} - ذخیره‌سازی به محلی بازگشت (سرویس S3 در دسترس نبود)"
 
     f = StoredFile(
         case_id=case.id if case else None,
@@ -107,6 +114,7 @@ def upload_file(
         size_bytes=len(data),
         sha256=sha,
         storage_key=storage_key,
+        storage=provider,
         sensitivity="confidential",
         scan_status=status,
     )
@@ -122,6 +130,7 @@ def upload_file(
         entity_id=str(f.id),
         detail={"name": name, "size": len(data), "sha256": sha[:16], "scan_status": status,
                 "scanner": scanner_name, "metadata_stripped": metadata_stripped,
+                "storage": provider, "storage_fallback": st_fallback,
                 "case_id": str(case.id) if case else None},
     )
     db.commit()
@@ -204,8 +213,12 @@ def download_file(
     file_id: uuid.UUID,
     ticket: str | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> FileResponse:
-    """دانلود با بلیت امضاشده کوتاه‌مدت؛ بدون بلیت/بلیت منقضی = 401."""
+):
+    """دانلود با بلیت امضاشده کوتاه‌مدت؛ بدون بلیت/بلیت منقضی = 401.
+
+    فاز ۳۷ - ADR-04: محتوا از پروایدرِ ردیف فایل خوانده می‌شود (local یا s3)؛
+    URL امضاشده S3 به کاربر داده نمی‌شود تا کنترل مجوز و audit حفظ شود.
+    """
     settings = get_settings()
     if not ticket:
         raise HTTPException(status_code=401, detail="بلیت دانلود الزامی است")
@@ -220,11 +233,22 @@ def download_file(
         raise HTTPException(status_code=404, detail="فایل یافت نشد")
     if f.scan_status == "quarantined":
         raise HTTPException(status_code=403, detail="فایل در قرنطینه است")
-    path = fs.storage_path(settings.upload_dir, f.storage_key)
     try:
+        if f.storage == "s3":
+            data = objstore.open_bytes(settings.upload_dir, "s3", f.storage_key, settings)
+            return Response(
+                content=data,
+                media_type=f.mime,
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{url_quote(f.original_name)}",
+                },
+            )
+        path = fs.storage_path(settings.upload_dir, f.storage_key)
         return FileResponse(path, media_type=f.mime, filename=f.original_name)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="محتوای فایل در فضای ذخیره‌سازی یافت نشد")
+    except Exception:
+        raise HTTPException(status_code=502, detail="خواندن از سرویس ذخیره‌سازی ممکن نشد")
 
 
 @router.post("/{file_id}/rescan")
@@ -238,12 +262,12 @@ def rescan_file(
     if f is None:
         raise HTTPException(status_code=404, detail="فایل یافت نشد")
     settings = get_settings()
-    path = fs.storage_path(settings.upload_dir, f.storage_key)
     try:
-        with open(path, "rb") as fh:
-            data = fh.read()
+        data = objstore.open_bytes(settings.upload_dir, f.storage, f.storage_key, settings)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="محتوای فایل در فضای ذخیره‌سازی یافت نشد")
+    except Exception:
+        raise HTTPException(status_code=502, detail="خواندن از سرویس ذخیره‌سازی ممکن نشد")
     scan = av_scan.scan_bytes(f.original_name, f.mime, data, settings.allowed_mime_list)
     f.scan_status = scan.status
     db.add(FileScan(file_id=f.id, status=scan.status, detail=scan.detail, scanner=scan.scanner))

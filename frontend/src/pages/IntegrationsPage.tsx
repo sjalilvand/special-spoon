@@ -108,6 +108,9 @@ export default function IntegrationsPage() {
             <IntegrationCard title="سرویس نقشه" decision={config.data.maps.decision} st={config.data.maps} />
             <IntegrationCard title="ایمیل (SMTP)" decision={config.data.email.decision} st={config.data.email} />
             <IntegrationCard title="هوش مصنوعی" decision={config.data.ai.decision} st={config.data.ai} />
+            {config.data.storage && (
+              <IntegrationCard title="ذخیره‌سازی فایل" decision={config.data.storage.decision} st={config.data.storage} />
+            )}
           </Box>
         </Box>
       )}

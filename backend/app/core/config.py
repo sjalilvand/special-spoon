@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.36.0"
+    app_version: str = "0.37.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     activation_token_expire_hours: int = 24
     login_max_attempts: int = 5
     login_attempt_window_minutes: int = 15
+
+    # فاز ۳۷ - ADR-04: Object Storage پلاگین‌پذیر (تصمیم سند: MinIO/S3)
+    # همان الگوی D02/D03/D07/B28:
+    # storage_backend = "local" (پیش‌فرض: دایرکتوری volume، بدون کلید) | "s3"
+    # آداپتور s3 فقط با endpoint + bucket + access_key + secret_key فعال می‌شود؛
+    # نبود هر کدام یا خطای سرویس → fallback به local (fail-soft) با گزارش شفاف؛
+    # کلیدها هرگز به کلاینت/لاگ/پاسخ API نمی‌روند.
+    storage_backend: str = "local"
+    s3_endpoint_url: str = ""   # نمونه تولید: http://minio:9000
+    s3_bucket: str = "rosepsy-files"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_connect_timeout_seconds: float = 3.0
 
     # فاز ۲۶ - B09: نگهداشت موقت اسلات
     booking_hold_minutes: int = 10
@@ -57,7 +70,7 @@ class Settings(BaseSettings):
     email_outbox_max_attempts: int = 5
     notifications_email_enabled: bool = True
 
-    # B39 سند جامع - فایل امن
+    # B39 سند جامع - فایل امن (با آداپتور ADR-04: local پیش‌فرض، s3 برای تولید)
     upload_dir: str = "./uploads"
     max_upload_mb: int = 10
     download_ticket_seconds: int = 120

@@ -1,10 +1,11 @@
-"""B39 سند جامع - سرویس ذخیره‌سازی و اسکن فایل.
+"""B39 سند جامع - سرویس ذخیره‌سازی و اسکن فایل (پروایدر محلی آداپتور ADR-04).
 
 - فایل فیزیکی خارج از پایگاه داده (دایرکتوری volume) ذخیره می‌شود؛
   پایگاه داده فقط کلید ذخیره و فراداده نگه می‌دارد.
+- از فاز ۳۷ (ADR-04) این ماژول پروایدر «local» از آداپتور پلاگین‌پذیر
+  object_storage است؛ بک‌اند S3/MinIO در app/services/object_storage.py.
 - checksum به الگوریتم SHA-256 (بند «فایل و امنیت» سند).
-- اسکن بدافزار فعلاً stub است؛ ساختار FileScan برای اتصال به
-  ClamAV یا سرویس بیرونی در انتشارهای بعدی آماده است.
+- بلیت دانلود کوتاه‌مدت HMAC در همین ماژول برای همه پروایدرها یکسان است.
 - فایل نامعتبر/مشکوک وارد قرنطینه می‌شود و دانلود نمی‌شود.
 """
 
@@ -34,11 +35,16 @@ def save_bytes(upload_dir: str, data: bytes) -> tuple[str, str]:
     """ذخیره محتوا و بازگرداندن (کلید ذخیره، sha256)."""
     sha = hashlib.sha256(data).hexdigest()
     key = f"{datetime.now(timezone.utc):%Y/%m}/{uuid_mod.uuid4().hex}"
+    save_bytes_at_key(upload_dir, key, data)
+    return key, sha
+
+
+def save_bytes_at_key(upload_dir: str, key: str, data: bytes) -> None:
+    """ذخیره محتوا با کلید معلوم (مورد استفاده fallback آداپتور ADR-04)."""
     path = storage_path(upload_dir, key)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as fh:
         fh.write(data)
-    return key, sha
 
 
 def remove_file(upload_dir: str, storage_key: str) -> None:

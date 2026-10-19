@@ -307,17 +307,23 @@ def test_b28_integrations_config_never_exposes_keys(st, client, admin_headers):
     st.zarinpal_merchant_id = "super-secret-merchant"
     st.neshan_api_key = "super-secret-map-key"
     st.ai_api_key = "super-secret-ai-key"
+    st.s3_access_key = "super-secret-s3-access"
+    st.s3_secret_key = "super-secret-s3-secret"
     try:
         cfg = integrations_config_out()
-        assert set(cfg.keys()) == {"payment_gateway", "maps", "email", "ai", "sms"}
+        # فاز ۳۷: یکپارچه‌سازی ششم (storage - ADR-04) به قرارداد اضافه شد
+        assert set(cfg.keys()) == {"payment_gateway", "maps", "email", "ai", "sms", "storage"}
         r = client.get("/api/v1/integrations/config", headers=admin_headers)
         assert r.status_code == 200
         text = r.text
         for secret in ("super-secret-sms-key", "super-secret-merchant",
-                       "super-secret-map-key", "super-secret-ai-key"):
+                       "super-secret-map-key", "super-secret-ai-key",
+                       "super-secret-s3-access", "super-secret-s3-secret"):
             assert secret not in text
     finally:
         st.sms_api_key = ""
         st.zarinpal_merchant_id = ""
         st.neshan_api_key = ""
         st.ai_api_key = ""
+        st.s3_access_key = ""
+        st.s3_secret_key = ""

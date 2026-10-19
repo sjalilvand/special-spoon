@@ -14,7 +14,7 @@
 
 GET /integrations/config وضعیت همه یکپارچه‌سازی‌های بیرونی سامانه را بدون
 هیچ کلیدی نشان می‌دهد: پرداخت (D02)، نقشه (D03)، ایمیل (D04)، هوش مصنوعی
-(D07) و پیامک (B28).
+(D07)، پیامک (B28) و ذخیره‌سازی فایل (ADR-04 — فاز ۳۷).
 """
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models.integration import SmsOutbox, SmsOutboxStatus
+from app.services.object_storage import storage_status
 
 SMS_PROVIDERS = ("log", "kavenegar", "smsir")
 
@@ -95,6 +96,9 @@ def integrations_config_out() -> dict:
             "decision": "D07",
         },
         "sms": {**sms_config_out(s), "decision": "B28"},
+        # فاز ۳۷ - ADR-04: ذخیره‌سازی فایل (local پیش‌فرض | s3/MinIO)
+        # همیشه ready: پیش‌فرض local بدون کلید کار می‌کند؛ S3 ناقص → fallback شفاف
+        "storage": {**storage_status(s), "ready": True, "decision": "ADR-04"},
     }
 
 

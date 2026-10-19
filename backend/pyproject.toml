@@ -1,6 +1,6 @@
 [project]
 name = "rosepsy-backend"
-version = "0.31.0"
+version = "0.37.0"
 description = "Rosepsy - سامانه مشاوره روان‌شناختی سازمانی"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
     "PyJWT==2.10.1",
     "openpyxl==3.1.5",
     "python-multipart==0.0.20",
+    "boto3==1.42.85",
 ]
 
 [project.optional-dependencies]

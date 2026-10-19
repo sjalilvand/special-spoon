@@ -21,6 +21,13 @@ export interface IntegrationsConfig {
   email: IntegrationStatus;
   ai: IntegrationStatus;
   sms: SmsStatus;
+  storage: IntegrationStatus & {
+    configured_backend: string;
+    active_backend: string;
+    fallback_applied: boolean;
+    bucket: string;
+    boto3_available: boolean;
+  };
 }
 
 export interface SmsRow {
