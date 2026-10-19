@@ -256,6 +256,10 @@ def verify_payment(db: Session, authority: str, approve: bool = True) -> tuple[P
     order.status = OrderStatus.PAID
     _issue_invoice(db, order)
     _settle_order_side_effects(db, order, payment)
+    # فاز ۳۱ - B22: سند حسابداری خودکار در همان تراکنش (idempotent)؛
+    # شکست سند = شکست verify (همه‌یا‌هیچ) تا دفتر همیشه با پرداخت هم‌تراز بماند.
+    from app.services.accounting import entry_for_payment
+    entry_for_payment(db, payment, order, commit=False)
     db.commit()
     return payment, result
 
@@ -315,6 +319,9 @@ def pay_order_from_wallet(db: Session, order: Order, actor_user) -> Payment:
     db.add(payment)
     order.status = OrderStatus.PAID
     _issue_invoice(db, order)
+    # فاز ۳۱ - B22: سند خودکار پرداخت از کیف پول (همان تراکنش)
+    from app.services.accounting import entry_for_payment
+    entry_for_payment(db, payment, order, commit=False)
     db.commit()
     db.refresh(payment)
     return payment

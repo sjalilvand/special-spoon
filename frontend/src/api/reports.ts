@@ -89,6 +89,7 @@ export interface AdminDashboardData {
     sales_paid_amount: number;
     sales_refunded_amount: number;
     sales_pending_orders: number;
+    finance?: FinanceKpi;
     sessions_count: number;
   };
   trends: { cases: TrendPoint[]; bookings: TrendPoint[]; sales?: SalesTrendPoint[] };
@@ -96,6 +97,16 @@ export interface AdminDashboardData {
 }
 
 export interface SalesTrendPoint { date: string; amount: number }
+
+export interface FinanceKpi {
+  ledger_balanced: boolean;
+  ledger_total_debit: number;
+  ledger_total_credit: number;
+  uncovered_events: number;
+  sales_reconciled: boolean;
+  sales_report_amount: number;
+  journal_revenue_amount: number;
+}
 
 export async function fetchAdminDashboard(days: number): Promise<AdminDashboardData> {
   return (await apiClient.get("/reports/admin-dashboard", { params: { days } })).data;

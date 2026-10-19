@@ -162,6 +162,18 @@ export default function AdminDashboardPage() {
                     value={k.sales_paid_orders ? Math.round(k.sales_paid_amount / k.sales_paid_orders).toLocaleString("fa-IR") : "—"} />
                 </Grid>
               </Grid>
+              {k.finance && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={2}>
+                  <Chip size="small" color={k.finance.ledger_balanced ? "success" : "error"}
+                    label={k.finance.ledger_balanced ? "دفتر متوازن (B22)" : "دفتر نامتوازن!"} />
+                  <Chip size="small" color={k.finance.sales_reconciled ? "success" : "warning"}
+                    label={k.finance.sales_reconciled
+                      ? `فروش با دفتر تطبیق دارد (${Math.round(k.finance.sales_report_amount).toLocaleString("fa-IR")} ریال)`
+                      : `مغایرت فروش/دفتر: ${Math.round(k.finance.sales_report_amount - k.finance.journal_revenue_amount).toLocaleString("fa-IR")} ریال`} />
+                  <Chip size="small" color={k.finance.uncovered_events === 0 ? "success" : "error"}
+                    label={k.finance.uncovered_events === 0 ? "همه رویدادهای مالی سند دارند" : `${k.finance.uncovered_events} رویداد بدون سند`} />
+                </Stack>
+              )}
             </Paper>
           </Box>
 

@@ -71,6 +71,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           {user && (
             <Button color="inherit" onClick={() => navigate("/wallet")}>کیف پول (B18)</Button>
           )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER"]) && (
+            <Button color="inherit" onClick={() => navigate("/accounting")}>حسابداری (B22)</Button>
+          )}
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]) && (
             <Button color="inherit" onClick={() => navigate("/verification-reviews")}>بازبینی صلاحیت</Button>
           )}

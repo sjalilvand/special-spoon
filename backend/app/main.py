@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api.v1.applicants import router as applicants_router
 from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
+from app.api.v1.accounting import router as accounting_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.branches import router as branches_router
 from app.api.v1.cases import router as cases_router
@@ -45,6 +46,7 @@ app = FastAPI(
 
 app.include_router(health_router, prefix=settings.api_prefix, tags=["health"])
 app.include_router(auth_router, prefix=settings.api_prefix)
+app.include_router(accounting_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(org_router, prefix=settings.api_prefix)
 app.include_router(counselors_router, prefix=settings.api_prefix)

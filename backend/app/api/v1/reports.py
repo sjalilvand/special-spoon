@@ -256,6 +256,27 @@ def admin_dashboard(
     ).all()
     sales_trend = {r[0]: float(r[1] or 0) for r in sales_trend_rows}
 
+    # ---- مالی (B24 × B22): فروش گزارش با داده مالی تطبیق کند ----
+    finance_block: dict = {}
+    try:
+        from app.services.accounting import reconciliation as acc_reconciliation
+        recon = acc_reconciliation(db)
+        finance_block = {
+            "ledger_balanced": recon["ledger"]["is_balanced"],
+            "ledger_total_debit": recon["ledger"]["total_debit"],
+            "ledger_total_credit": recon["ledger"]["total_credit"],
+            "uncovered_events": (
+                recon["events"]["payments"]["uncovered"]
+                + recon["events"]["refunds"]["uncovered"]
+                + recon["events"]["wallet_adjustments"]["uncovered"]
+            ),
+            "sales_reconciled": recon["sales_reconciliation"]["reconciled"],
+            "sales_report_amount": recon["sales_reconciliation"]["sales_report_amount"],
+            "journal_revenue_amount": recon["sales_reconciliation"]["journal_revenue_amount"],
+        }
+    except Exception:  # سند هرگز داشبورد را نمی‌شکند
+        finance_block = {}
+
     # ---- روند روزانه (پرونده جدید / درخواست رزرو) ----
     case_trend = {r[0]: int(r[1]) for r in db.execute(
         select(func.date(Case.created_at), func.count())
@@ -332,6 +353,7 @@ def admin_dashboard(
             "sales_paid_amount": paid_amount_window,
             "sales_refunded_amount": refunded_amount_window,
             "sales_pending_orders": pending_orders,
+            "finance": finance_block,
             "sessions_count": int(db.scalar(
                 select(func.count()).select_from(SessionModel).where(SessionModel.occurred_at >= since)) or 0),
         },

@@ -128,6 +128,9 @@ def execute_request(db: Session, req: RefundRequest, *, actor) -> Refund:
             note=f"بازگشت وجه استرداد - سفارش {order.order_number}",
             created_by=actor.id,
         )
+    # فاز ۳۱ - B22: سند خودکار استرداد در همان تراکنش (برگشت از فروش)
+    from app.services.accounting import entry_for_refund
+    entry_for_refund(db, refund, commit=False)
     db.commit()
     db.refresh(refund)
     return refund

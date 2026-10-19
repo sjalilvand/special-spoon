@@ -153,15 +153,22 @@ def adjust_wallet(
     if db.get(User, user_id) is None:
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
     try:
+        # فاز ۳۱ - B22: تعدیل و سند حسابداری آن در یک تراکنش اتمیک
+        entry = None
         if payload.amount > 0:
-            wallet_svc.credit(db, user_id, payload.amount, wallet_svc.WalletEntryReason.ADJUSTMENT,
-                              note=payload.note, created_by=actor.id)
+            entry = wallet_svc.credit(db, user_id, payload.amount, wallet_svc.WalletEntryReason.ADJUSTMENT,
+                                      commit=False, note=payload.note, created_by=actor.id)
         elif payload.amount < 0:
-            wallet_svc.debit(db, user_id, -payload.amount, wallet_svc.WalletEntryReason.ADJUSTMENT,
-                             note=payload.note, created_by=actor.id)
+            entry = wallet_svc.debit(db, user_id, -payload.amount, wallet_svc.WalletEntryReason.ADJUSTMENT,
+                                     commit=False, note=payload.note, created_by=actor.id)
         else:
             raise HTTPException(status_code=422, detail="مبلغ باید غیرصفر باشد")
+        if entry is not None:
+            from app.services.accounting import entry_for_wallet_adjustment
+            entry_for_wallet_adjustment(db, entry, commit=False)
+        db.commit()
     except wallet_svc.WalletError as exc:
+        db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _notify_wallet(db, user_id, "تعدیل کیف پول",
                    f"کیف پول شما به مبلغ {abs(payload.amount):,} ریال "

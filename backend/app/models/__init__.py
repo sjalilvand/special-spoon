@@ -1,3 +1,13 @@
+from app.models.accounting import (
+    Account,
+    AccountType,
+    JournalEntry,
+    JournalLine,
+    JournalSource,
+    Settlement,
+    SettlementItem,
+    SettlementStatus,
+)
 from app.models.appointment import (
     Appointment,
     AppointmentStatus,
@@ -52,8 +62,9 @@ from app.models.wallet import (
 from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus, user_roles_table
 
 __all__ = [
-    "ActivationToken", "Applicant", "Appointment", "AppointmentStatus",
+    "Account", "AccountType", "ActivationToken", "Applicant", "Appointment", "AppointmentStatus",
     "Assessment", "AssessmentStatus", "AuditEvent", "AuthSession",
+    "JournalEntry", "JournalLine", "JournalSource",
     "Branch", "BranchServiceOffering", "BranchStatus",
     "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Clinic", "Consent",
     "CONSENT_KINDS", "ConsentVersion", "ConsultationRequest", "Counselor",
@@ -68,6 +79,7 @@ __all__ = [
     "OtpChallenge", "OtpPurpose",
     "Service", "ServiceLocation", "ServiceSessionType", "ServiceStatus",
     "Session", "SessionNoteRevision", "SessionNoteStatus", "Specialty",
+    "Settlement", "SettlementItem", "SettlementStatus",
     "SlotClaim", "SlotClaimStatus", "StoredFile", "TariffVersion",
     "TreatmentPlan", "User", "UserScope", "UserStatus", "user_roles_table",
     "Wallet", "WalletEntry", "WalletEntryDirection", "WalletEntryReason",

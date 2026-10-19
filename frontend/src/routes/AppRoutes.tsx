@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
 import Layout from "../components/Layout";
 import { useAuth } from "../auth/AuthContext";
+import AccountingPage from "../pages/AccountingPage";
 import ActivatePage from "../pages/ActivatePage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApplicantsPage from "../pages/ApplicantsPage";
@@ -100,6 +101,11 @@ export default function AppRoutes() {
       <Route path="/wallet" element={
         <ProtectedRoute>
           <Layout><WalletPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/accounting" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
+          <Layout><AccountingPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/applicants" element={
