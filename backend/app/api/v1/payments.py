@@ -64,9 +64,17 @@ def _order_out(db: Session, o: Order, with_invoice: bool = True) -> dict:
         "discount_amount": float(o.discount_amount) if o.discount_amount is not None else None,
         "payable_amount": float(o.payable_amount),
         "status": o.status,
+        "kind": getattr(o, "kind", "service"),
+        "discount_code": None,
+        "refunded_amount": float(getattr(o, "refunded_amount", 0) or 0),
         "note": o.note,
         "created_at": o.created_at.isoformat() if o.created_at else None,
     }
+    if getattr(o, "discount_id", None):
+        from app.models.discount import Discount
+
+        disc = db.get(Discount, o.discount_id)
+        data["discount_code"] = disc.code if disc else None
     if with_invoice:
         inv = db.scalars(select(Invoice).where(Invoice.order_id == o.id)).first()
         data["invoice_id"] = str(inv.id) if inv else None
@@ -87,6 +95,7 @@ class OrderCreate(BaseModel):
     case_id: uuid.UUID | None = None
     title: str | None = Field(default=None, max_length=300)
     discount_amount: int | None = Field(default=None, ge=0)
+    discount_code: str | None = Field(default=None, max_length=50)
     note: str | None = Field(default=None, max_length=500)
     owner_user_id: uuid.UUID | None = None
 
@@ -186,6 +195,8 @@ def create_order(
         raise HTTPException(status_code=422, detail="appointment_id یا service_id لازم است")
 
     discount = payload.discount_amount or 0
+    if payload.discount_code and discount:
+        raise HTTPException(status_code=422, detail="کد تخفیف و تخفیف دستی هم‌زمان قابل استفاده نیستند")
     if discount > amount:
         raise HTTPException(status_code=422, detail="تخفیف نمی‌تواند از مبلغ سفارش بیشتر باشد")
 
@@ -212,6 +223,17 @@ def create_order(
     db.add(order)
     db.commit()
     db.refresh(order)
+    # فاز ۳۰ - B19: اعمال کد تخفیف پس از ساخت سفارش (کنترل سقف با قفل ردیف)
+    if payload.discount_code:
+        from app.services.discounts import DiscountError, apply_to_order
+
+        try:
+            apply_to_order(db, order, payload.discount_code, owner)
+        except DiscountError as exc:
+            # rollback، درج سفارش را هم خنثی می‌کند (سفارش بدون کد معتبر نمی‌ماند)
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        db.refresh(order)
     return _order_out(db, order)
 
 
@@ -270,14 +292,19 @@ def verify_payment(
     authority: str,
     approve: bool = True,
     db: Session = Depends(get_db),
-    _actor: User = Depends(require_roles(*CREATE_ROLES)),
+    actor: User = Depends(get_current_user),
 ) -> dict:
-    """تأیید قطعی سمت سرور؛ callback تکراری بی‌اثر (idempotent)."""
+    """تأیید قطعی سمت سرور؛ callback تکراری بی‌اثر (idempotent).
+    دسترسی: کارکنان مجاز یا مالک سفارش (بازگشت کاربر از درگاه)."""
     try:
         payment, result = pay.verify_payment(db, authority, approve=approve)
     except pay.GatewayError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     order = db.get(Order, payment.order_id)
+    if order is not None:
+        allowed = any(r.code in CREATE_ROLES for r in actor.roles) or order.owner_user_id == actor.id
+        if not allowed:
+            raise HTTPException(status_code=403, detail="دسترسی به این تراکنش مجاز نیست")
     if result.ok and order is not None:
         _notify_payment(db, payment, order)
     return {

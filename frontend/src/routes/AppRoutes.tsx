@@ -30,6 +30,7 @@ import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import UsersPage from "../pages/UsersPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
+import WalletPage from "../pages/WalletPage";
 import ProtectedRoute from "./ProtectedRoute";
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
@@ -94,6 +95,11 @@ export default function AppRoutes() {
       <Route path="/invoices/:id" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
           <Layout><InvoicePage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/wallet" element={
+        <ProtectedRoute>
+          <Layout><WalletPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/applicants" element={

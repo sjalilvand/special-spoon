@@ -12,6 +12,7 @@ from app.api.v1.files import router as files_router
 from app.api.v1.counselors import router as counselors_router
 from app.api.v1.clinical import router as clinical_router
 from app.api.v1.compliance import router as compliance_router
+from app.api.v1.discounts import router as discounts_router
 from app.api.v1.email_outbox import router as email_outbox_router
 from app.api.v1.health import router as health_router
 from app.api.v1.intake import router as intake_router
@@ -23,12 +24,14 @@ from app.api.v1.payments import router as payments_router
 from app.api.v1.public import router as public_router
 from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.referrals import router as referrals_router
+from app.api.v1.refunds import router as refunds_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.staff_site import router as staff_site_router
 from app.api.v1.supervisor import router as supervisor_router
 from app.api.v1.users import router as users_router
 from app.api.v1.verification import router as verification_router
+from app.api.v1.wallet import router as wallet_router
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -69,6 +72,9 @@ app.include_router(catalog_router, prefix=settings.api_prefix)
 app.include_router(verification_router, prefix=settings.api_prefix)
 app.include_router(branches_router, prefix=settings.api_prefix)
 app.include_router(payments_router, prefix=settings.api_prefix)
+app.include_router(wallet_router, prefix=settings.api_prefix)
+app.include_router(discounts_router, prefix=settings.api_prefix)
+app.include_router(refunds_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

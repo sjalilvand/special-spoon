@@ -234,14 +234,17 @@ def admin_dashboard(
         .where(SlotClaim.status == SlotClaimStatus.CONFIRMED,
                SlotClaim.created_at >= since)) or 0)
 
-    # ---- فروش (B24 × B10؛ پس از تصمیم D02) ----
+    # ---- فروش (B24 × B10؛ پس از تصمیم D02) — خالص پس از استرداد (فاز ۳۰ B20) ----
     from app.models.payment import Order, OrderStatus, Payment
     from app.models.payment import PaymentStatus as PayStatus
     paid_orders_window = int(db.scalar(
         select(func.count()).select_from(Order)
         .where(Order.status == OrderStatus.PAID, Order.created_at >= since)) or 0)
     paid_amount_window = float(db.scalar(
-        select(func.coalesce(func.sum(Order.payable_amount), 0))
+        select(func.coalesce(func.sum(Order.payable_amount - Order.refunded_amount), 0))
+        .where(Order.status == OrderStatus.PAID, Order.created_at >= since)) or 0)
+    refunded_amount_window = float(db.scalar(
+        select(func.coalesce(func.sum(Order.refunded_amount), 0))
         .where(Order.status == OrderStatus.PAID, Order.created_at >= since)) or 0)
     pending_orders = int(db.scalar(
         select(func.count()).select_from(Order)
@@ -327,6 +330,7 @@ def admin_dashboard(
             "booking_confirmed_holds": confirmed_holds,
             "sales_paid_orders": paid_orders_window,
             "sales_paid_amount": paid_amount_window,
+            "sales_refunded_amount": refunded_amount_window,
             "sales_pending_orders": pending_orders,
             "sessions_count": int(db.scalar(
                 select(func.count()).select_from(SessionModel).where(SessionModel.occurred_at >= since)) or 0),

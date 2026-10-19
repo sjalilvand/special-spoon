@@ -87,6 +87,7 @@ export interface AdminDashboardData {
     booking_confirmed_holds: number;
     sales_paid_orders: number;
     sales_paid_amount: number;
+    sales_refunded_amount: number;
     sales_pending_orders: number;
     sessions_count: number;
   };

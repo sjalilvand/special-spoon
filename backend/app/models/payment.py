@@ -65,6 +65,8 @@ class Order(Base):
         CheckConstraint("amount >= 0", name="ck_orders_amount_nonneg"),
         CheckConstraint("discount_amount IS NULL OR discount_amount >= 0", name="ck_orders_discount_nonneg"),
         CheckConstraint("payable_amount >= 0", name="ck_orders_payable_nonneg"),
+        CheckConstraint("kind IN ('service','topup')", name="ck_orders_kind"),
+        CheckConstraint("refunded_amount >= 0", name="ck_orders_refunded_nonneg"),
         Index("ix_orders_owner", "owner_user_id"),
         Index("ix_orders_status", "status"),
         Index("ix_orders_appointment", "appointment_id"),
@@ -95,6 +97,12 @@ class Order(Base):
     discount_amount: Mapped[int | None] = mapped_column(Numeric(16, 2), nullable=True)
     payable_amount: Mapped[int] = mapped_column(Numeric(16, 2))
     status: Mapped[str] = mapped_column(String(20), default=OrderStatus.PENDING)
+    # فاز ۳۰ - B18/B19: نوع سفارش + مرجع کد تخفیف + استرداد اجراشده
+    kind: Mapped[str] = mapped_column(String(20), default="service")  # service / topup
+    discount_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("discounts.id", ondelete="RESTRICT"), nullable=True
+    )
+    refunded_amount: Mapped[int] = mapped_column(Numeric(16, 2), default=0)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

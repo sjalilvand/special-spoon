@@ -26,6 +26,9 @@ export interface Order {
   discount_amount: number | null;
   payable_amount: number;
   status: "pending" | "paid" | "cancelled" | "failed";
+  kind: "service" | "topup";
+  discount_code: string | null;
+  refunded_amount: number;
   note: string | null;
   created_at: string | null;
   invoice_id: string | null;
@@ -81,6 +84,7 @@ export async function createOrder(payload: {
   appointment_id?: string;
   service_id?: string;
   discount_amount?: number;
+  discount_code?: string;
   note?: string;
 }): Promise<Order> {
   const r = await apiClient.post<Order>("/orders", payload);

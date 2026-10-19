@@ -163,3 +163,13 @@
 - فرانت: صفحه «شعب (B31)» (مدیریت مرکز/شعبه/خدمات شعبه/انتشار) و «سفارش و پرداخت (B10)» (فهرست، سفارش جدید، جریان پرداخت با شبیه‌ساز درگاه، لینک فاکتور)
 - تنظیمات: `PAYMENT_GATEWAY`، `PUBLIC_BASE_URL`، `ZARINPAL_MERCHANT_ID`، `ZARINPAL_SANDBOX` در `.env.example`
 - Migration: 0018_phase29_payments_branches — آزمون‌ها: test_phase29.py (۱۵ آزمون: slug/مختصات/انتشار/قواعد offering، snapshot سفارش، تأیید سروری/idempotent، فاکتور یکتا/منطبق، دسترسی)
+
+## فاز ۳۰ — کیف پول، کد تخفیف و استرداد وجه (v0.30.0)
+- **B19 کد تخفیف:** جداول `discounts` (کد یکتا، نوع amount/percent با CHECK درصد ≤ ۱۰۰، سقف کل و سقف هر کاربر، بازه اعتبار، حداقل مبلغ) + `discount_redemptions` (یکتای سفارش)؛ API: POST/GET/PATCH `/discounts` (کد/مقدار پس از انتشار تغییر نمی‌کند) + POST `/discounts/validate` (پیش‌نمایش برای UI)
+- قاعده پذیرش سند: «مصرف هم‌زمان بیش از سقف پذیرفته نشود» — اعمال کد داخل تراکنش سفارش با **قفل ردیف تخفیف (FOR UPDATE)**؛ شمارش مصرف فقط سفارش‌های مؤثر (pending/paid) است و **لغو/شکست سفارش سهمیه را آزاد می‌کند**؛ ترکیب کد و تخفیف دستی ممنوع
+- **B18 کیف پول:** جداول `wallets` (یک کیف per کاربر، مانده غیرمنفی) + `wallet_entries` (دفتر گردش با `balance_after` و علت topup/payment/refund/adjustment)؛ API: `/wallet`، `/wallet/entries`، POST `/wallet/topup` (سفارش kind='topup' از موتور پرداخت فاز ۲۹ — فاکتور هم دارد)، POST `/orders/{id}/pay-from-wallet`، مدیریتی: `/wallets`، `/wallets/{user}/entries`، POST `/wallets/{user}/adjust` (تعدیل با یادداشت الزامی + اعلان)
+- قاعده پذیرش سند: «مانده با جمع گردش‌ها سازگار و دوباره‌مصرفی ممنوع» — هر تغییر مانده با **SELECT ... FOR UPDATE** و ثبت ردیف دفتری در همان تراکنش؛ برداشت با مانده ناکافی 409 و بدون اثر؛ تابع `verify_consistency` برای بازبینی invariant
+- **B20 استرداد:** جداول `refund_requests` (چرخه pending→approved/rejected→executed) + `refunds` (یکتای درخواست)؛ API: POST/GET `/refund-requests` (مالک یا کارکنان)، بررسی approve/reject با یادداشت (مدیر سازمان/سامانه)، POST `/refund-requests/{id}/execute` (اتمیک)
+- قاعده پذیرش سند: «استرداد از مبلغ مجاز بیشتر و اجرای تکراری ممنوع» — مجاز = پرداخت‌شده − اجراشده‌ها (ستون `refunded_amount` روی سفارش با قفل ردیفی)؛ مسیر بازگشت: پرداخت کیفی → شارژ کیف پول؛ sandbox → رسید شبیه‌ساز؛ zarinpal → ثبت برای استرداد از پنل درگاه
+- KPI فروش داشبورد (B24) اکنون **خالص پس از استرداد** است (sales_paid_amount − refunded + sales_refunded_amount)
+- Migration: 0019_phase30_finance — آزمون‌ها: test_phase30.py (۱۳ آزمون: سقف هم‌زمان/هر کاربر/انقضا، سازگاری مانده، منع دوباره‌مصرفی، چرخه کامل استرداد کیفی، منع مازاد/تکراری، دسترسی‌ها)

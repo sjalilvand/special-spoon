@@ -255,8 +255,69 @@ def verify_payment(db: Session, authority: str, approve: bool = True) -> tuple[P
     payment.paid_at = _now()
     order.status = OrderStatus.PAID
     _issue_invoice(db, order)
+    _settle_order_side_effects(db, order, payment)
     db.commit()
     return payment, result
+
+
+def _settle_order_side_effects(db: Session, order: Order, payment: Payment) -> None:
+    """اثرات جانبی پرداخت موفق — فاز ۳۰ (B18): سفارش شارژ کیف پول →
+    اعتبار کیف پول افزایش می‌یابد؛ داخل همان تراکنش اصلی (commit=False)
+    تا دفتر همیشه با وضعیت پرداخت هم‌تراز بماند؛ شکست هرگز سفارش
+    پرداخت‌شده را برنمی‌گرداند (پذیرش B12)."""
+    try:
+        if getattr(order, "kind", "service") == "topup":
+            from app.services.wallet import credit, WalletEntryReason
+            credit(
+                db, order.owner_user_id, int(order.payable_amount),
+                WalletEntryReason.TOPUP, commit=False,
+                order_id=order.id, payment_id=payment.id,
+                note=f"شارژ کیف پول - سفارش {order.order_number}",
+                created_by=order.owner_user_id,
+            )
+    except Exception:
+        db.rollback()
+
+
+def pay_order_from_wallet(db: Session, order: Order, actor_user) -> Payment:
+    """B18 - پرداخت سفارش از اعتبار کیف پول (gateway='wallet').
+
+    داخل یک تراکنش: قفل کیف پول → کنترل مانده → ردیف برداشت →
+    وضعیت پرداخت موفق → فاکتور. سفارش غیرقابل‌پرداخت → خطا.
+    """
+    from app.models.payment import PaymentStatus
+    from app.services.wallet import debit, WalletEntryReason, WalletError
+
+    if order.status != OrderStatus.PENDING:
+        raise GatewayError("سفارش در وضعیت قابل پرداخت نیست")
+    amount = int(order.payable_amount)
+    try:
+        entry = debit(
+            db, order.owner_user_id, amount, WalletEntryReason.PAYMENT, commit=False,
+            order_id=order.id,
+            note=f"پرداخت سفارش {order.order_number} از کیف پول",
+            created_by=actor_user.id,
+        )
+    except WalletError as exc:
+        db.rollback()
+        raise GatewayError(str(exc)) from exc
+    payment = Payment(
+        order_id=order.id,
+        gateway="wallet",
+        amount=amount,
+        currency=order.currency,
+        status=PaymentStatus.SUCCESS,
+        authority=f"wallet-{entry.id}",
+        gateway_ref=f"WT-{str(entry.id)[:12].upper()}",
+        paid_at=_now(),
+        verify_payload={"wallet_entry_id": str(entry.id)},
+    )
+    db.add(payment)
+    order.status = OrderStatus.PAID
+    _issue_invoice(db, order)
+    db.commit()
+    db.refresh(payment)
+    return payment
 
 
 # ---------------------------------------------------------------- invoice

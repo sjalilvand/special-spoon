@@ -24,6 +24,7 @@ from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Con
 from app.models.clinical import Diagnosis, TreatmentPlan
 from app.models.consent import CONSENT_KINDS, ConsentVersion
 from app.models.consultation import ConsultationRequest
+from app.models.discount import Discount, DiscountKind, DiscountRedemption
 from app.models.email_outbox import EmailOutbox, EmailOutboxStatus
 from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
@@ -41,6 +42,13 @@ from app.models.payment import (
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
 from app.models.recommendation import Recommendation
 from app.models.referral import Referral
+from app.models.refund import Refund, RefundRequest, RefundRequestStatus
+from app.models.wallet import (
+    Wallet,
+    WalletEntry,
+    WalletEntryDirection,
+    WalletEntryReason,
+)
 from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus, user_roles_table
 
 __all__ = [
@@ -49,15 +57,18 @@ __all__ = [
     "Branch", "BranchServiceOffering", "BranchStatus",
     "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Clinic", "Consent",
     "CONSENT_KINDS", "ConsentVersion", "ConsultationRequest", "Counselor",
+    "Discount", "DiscountKind", "DiscountRedemption",
     "CounselorCredential", "CredentialKind", "CredentialVerificationStatus",
     "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Invoice", "InvoiceItem",
     "InvoiceStatus", "Notification",
     "Order", "OrderStatus", "OrganizationUnit", "Payment", "PaymentStatus",
-    "Recommendation", "Referral", "ReviewAction", "Role",
+    "Recommendation", "Referral", "Refund", "RefundRequest", "RefundRequestStatus",
+    "ReviewAction", "Role",
     "OtpChallenge", "OtpPurpose",
     "Service", "ServiceLocation", "ServiceSessionType", "ServiceStatus",
     "Session", "SessionNoteRevision", "SessionNoteStatus", "Specialty",
     "SlotClaim", "SlotClaimStatus", "StoredFile", "TariffVersion",
     "TreatmentPlan", "User", "UserScope", "UserStatus", "user_roles_table",
+    "Wallet", "WalletEntry", "WalletEntryDirection", "WalletEntryReason",
 ]
