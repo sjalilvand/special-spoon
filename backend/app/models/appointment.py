@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint, func,
+    CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,6 +43,16 @@ class Appointment(Base):
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=AppointmentStatus.SCHEDULED)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # فاز ۲۸ - B06/B07: خدمت نوبت + snapshot قیمت از تعرفه نسخه‌دار
+    # (قیمت سفارش گذشته با تغییر تعرفه تغییر نمی‌کند - بند B07)
+    service_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    tariff_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tariff_versions.id", ondelete="RESTRICT"), nullable=True
+    )
+    price_amount: Mapped[int | None] = mapped_column(Numeric(16, 2), nullable=True)
+    price_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

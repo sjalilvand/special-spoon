@@ -49,4 +49,8 @@ class ConsultationRequest(Base):
         UUID(as_uuid=True), ForeignKey("counselors.id", ondelete="SET NULL"), nullable=True
     )
     preferred_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # فاز ۲۸ - B06: خدمت انتخابی درخواست (غیرفعال قابل انتخاب نیست)
+    service_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

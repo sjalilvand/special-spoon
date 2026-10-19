@@ -5,6 +5,7 @@ from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.cases import router as cases_router
+from app.api.v1.catalog import router as catalog_router
 from app.api.v1.consents import router as consents_router
 from app.api.v1.files import router as files_router
 from app.api.v1.counselors import router as counselors_router
@@ -25,6 +26,7 @@ from app.api.v1.sessions import router as sessions_router
 from app.api.v1.staff_site import router as staff_site_router
 from app.api.v1.supervisor import router as supervisor_router
 from app.api.v1.users import router as users_router
+from app.api.v1.verification import router as verification_router
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -61,6 +63,8 @@ app.include_router(public_router, prefix=settings.api_prefix)
 app.include_router(staff_site_router, prefix=settings.api_prefix)
 app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(email_outbox_router, prefix=settings.api_prefix)
+app.include_router(catalog_router, prefix=settings.api_prefix)
+app.include_router(verification_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

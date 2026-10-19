@@ -1,15 +1,23 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.db.session import get_db
+from app.models.catalog import (
+    CounselorCredential,
+    CredentialKind,
+    CredentialVerificationStatus,
+)
 from app.models.people import Counselor, ServiceLocation
 from app.models.user import Role, User, UserStatus
 from app.schemas.people import CounselorCreate, CounselorUpdate
 from app.services.audit import record_audit
+from app.services.qualification import is_counselor_bookable
 
 router = APIRouter(prefix="/counselors", tags=["counselors"])
 
@@ -22,6 +30,20 @@ def _out(c: Counselor, db: Session) -> dict:
     if c.service_location_id:
         loc = db.get(ServiceLocation, c.service_location_id)
         loc_title = loc.title if loc else None
+    # فاز ۲۸ - B05: وضعیت صلاحیت برای فهرست قابل رزرو
+    bookable = is_counselor_bookable(db, c)
+    approved_count = db.scalar(
+        select(func.count()).select_from(CounselorCredential).where(
+            CounselorCredential.counselor_id == c.id,
+            CounselorCredential.verification_status == CredentialVerificationStatus.APPROVED,
+        )
+    ) or 0
+    pending_count = db.scalar(
+        select(func.count()).select_from(CounselorCredential).where(
+            CounselorCredential.counselor_id == c.id,
+            CounselorCredential.verification_status == CredentialVerificationStatus.PENDING,
+        )
+    ) or 0
     return {
         "id": str(c.id),
         "counselor_code": c.counselor_code,
@@ -33,12 +55,16 @@ def _out(c: Counselor, db: Session) -> dict:
         "specialty": c.specialty,
         "license_number": c.license_number,
         "license_expiry_date": c.license_expiry_date.isoformat() if c.license_expiry_date else None,
+        "license_verified": c.license_verified,
         "work_mobile": c.work_mobile,
         "email": c.email,
         "capacity": c.capacity,
         "service_location_title": loc_title,
         "status": c.status,
         "has_account": c.user_id is not None,
+        "bookable": bookable,
+        "approved_credentials": approved_count,
+        "pending_credentials": pending_count,
     }
 
 
@@ -130,3 +156,70 @@ def update_counselor(counselor_id: uuid.UUID, payload: CounselorUpdate, db: Sess
     db.commit()
     record_audit(db, action="counselor.updated", actor_user_id=actor.id, entity_type="counselor", entity_id=str(c.id), detail={"changed": changed})
     return _out(c, db)
+
+
+# ---------------- فاز ۲۸ - B05: مدارک و صلاحیت مشاور ----------------
+
+class CredentialCreate(BaseModel):
+    kind: str = Field(default=CredentialKind.LICENSE, max_length=50)
+    title: str = Field(min_length=2, max_length=200)
+    license_number: str | None = Field(default=None, max_length=100)
+    issued_at: date | None = None
+    expires_at: date | None = None
+    file_path: str | None = Field(default=None, max_length=255)
+
+
+def _cred_out(c: CounselorCredential) -> dict:
+    return {
+        "id": str(c.id),
+        "counselor_id": str(c.counselor_id),
+        "kind": c.kind,
+        "title": c.title,
+        "license_number": c.license_number,
+        "issued_at": c.issued_at.isoformat() if c.issued_at else None,
+        "expires_at": c.expires_at.isoformat() if c.expires_at else None,
+        "file_path": c.file_path,
+        "verification_status": c.verification_status,
+        "reviewed_at": c.reviewed_at.isoformat() if c.reviewed_at else None,
+        "review_note": c.review_note,
+    }
+
+
+@router.get("/{counselor_id}/credentials")
+def list_credentials(counselor_id: uuid.UUID, db: Session = Depends(get_db), _actor=Depends(require_roles(*VIEW_ROLES))) -> dict:
+    c = db.get(Counselor, counselor_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="مشاور یافت نشد")
+    items = db.scalars(
+        select(CounselorCredential)
+        .where(CounselorCredential.counselor_id == counselor_id)
+        .order_by(CounselorCredential.created_at.desc())
+    ).all()
+    return {"items": [_cred_out(x) for x in items], "total": len(items)}
+
+
+@router.post("/{counselor_id}/credentials", status_code=201)
+def add_credential(counselor_id: uuid.UUID, payload: CredentialCreate, db: Session = Depends(get_db), actor=Depends(require_roles(*MANAGE_ROLES))) -> dict:
+    c = db.get(Counselor, counselor_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="مشاور یافت نشد")
+    if payload.kind not in CredentialKind.ALL:
+        raise HTTPException(status_code=422, detail="نوع مدرک نامعتبر است")
+    if payload.expires_at and payload.issued_at and payload.expires_at < payload.issued_at:
+        raise HTTPException(status_code=422, detail="تاریخ انقضا نمی‌تواند قبل از تاریخ صدور باشد")
+    cred = CounselorCredential(
+        counselor_id=counselor_id,
+        kind=payload.kind,
+        title=payload.title.strip(),
+        license_number=payload.license_number,
+        issued_at=payload.issued_at,
+        expires_at=payload.expires_at,
+        file_path=payload.file_path,
+        verification_status=CredentialVerificationStatus.PENDING,
+    )
+    db.add(cred)
+    db.commit()
+    record_audit(db, action="credential.created", actor_user_id=actor.id,
+                 entity_type="counselor_credential", entity_id=str(cred.id),
+                 detail={"counselor_id": str(counselor_id), "kind": cred.kind})
+    return _cred_out(cred)

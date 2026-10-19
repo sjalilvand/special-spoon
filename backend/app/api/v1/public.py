@@ -17,10 +17,12 @@ from app.core.config import get_settings
 from app.core.dates import normalize_digits
 from app.db.session import get_db
 from app.models.booking import SlotClaim, SlotClaimStatus
+from app.models.catalog import Service, ServiceStatus
 from app.models.consultation import ConsultationRequest
 from app.models.people import Counselor
 from app.services import booking_hold, otp as otp_service
 from app.services.audit import record_audit
+from app.services.qualification import bookable_counselors, is_counselor_bookable
 
 router = APIRouter(prefix="/public", tags=["public"])
 settings = get_settings()
@@ -95,20 +97,44 @@ class ConsultationCreate(BaseModel):
     # فاز ۲۶ - B09/B02: توکن نگهداشت اسلات + توکن اثبات تأیید موبایل
     hold_token: str | None = Field(default=None, max_length=100)
     otp_token: str | None = Field(default=None, max_length=100)
+    # فاز ۲۸ - B06: خدمت انتخابی (اختیاری؛ باید فعال باشد)
+    service_id: uuid.UUID | None = None
 
 
 @router.get("/counselors")
 def public_counselors(db: Session = Depends(get_db)) -> dict:
-    items = db.scalars(
-        select(Counselor).where(Counselor.status == "active").order_by(Counselor.last_name)
-    ).all()
+    """فاز ۲۸ - B05: فقط مشاوران با صلاحیت معتبر در فهرست قابل رزرو می‌آیند."""
+    items = bookable_counselors(db)
     return {"items": [{
         "id": str(c.id),
         "name": f"{c.first_name} {c.last_name}",
         "professional_title": c.professional_title,
         "specialty": c.specialty,
         "photo_url": f"/api/v1/public/counselors/{c.id}/photo" if c.photo_path else None,
-    } for c in items]}
+    } for c in sorted(items, key=lambda x: x.last_name)]}
+
+
+@router.get("/services")
+def public_services(db: Session = Depends(get_db)) -> dict:
+    """فاز ۲۸ - B06/B07: خدمات فعال + قیمت جاری از تعرفه نسخه‌دار."""
+    from app.api.v1.catalog import current_tariff
+
+    items = db.scalars(
+        select(Service).where(Service.status == ServiceStatus.ACTIVE).order_by(Service.title)
+    ).all()
+    out = []
+    for s in items:
+        t = current_tariff(db, s.id)
+        out.append({
+            "id": str(s.id),
+            "title": s.title,
+            "description": s.description,
+            "duration_minutes": s.duration_minutes,
+            "session_type": s.session_type,
+            "price_amount": float(t.amount) if t else None,
+            "price_currency": t.currency if t else None,
+        })
+    return {"items": out}
 
 
 _PHOTO_MEDIA = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
@@ -134,9 +160,9 @@ def booking_slots(
     to_date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     db: Session = Depends(get_db),
 ) -> dict:
-    """اسلات‌های آزاد یک مشاور برای رزرو عمومی (فاز ۲۱)"""
+    """اسلات‌های آزاد یک مشاور برای رزرو عمومی (فاز ۲۱) - B05: فقط مشاور با صلاحیت معتبر"""
     c = db.get(Counselor, counselor_id)
-    if c is None or c.status != "active":
+    if c is None or not is_counselor_bookable(db, c):
         raise HTTPException(status_code=404, detail="مشاور یافت نشد یا فعال نیست")
     f_default, t_default = bookable_range()
     try:
@@ -174,8 +200,8 @@ def create_booking_hold(payload: HoldCreate, request: Request, db: Session = Dep
         raise HTTPException(status_code=429, detail="نگهداشت‌های فعال شما زیاد است؛ یکی را تکمیل یا رها کنید")
 
     counselor = db.get(Counselor, payload.counselor_id)
-    if counselor is None or counselor.status != "active":
-        raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+    if counselor is None or not is_counselor_bookable(db, counselor):
+        raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست یا صلاحیت معتبری ندارد")
     try:
         raw = datetime.fromisoformat(payload.start_at)
     except ValueError:
@@ -258,6 +284,15 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         except ValueError:
             raise HTTPException(status_code=422, detail="تاریخ نامعتبر است")
 
+    # فاز ۲۸ - B06: خدمت انتخابی باید فعال باشد (خدمت غیرفعال رزرو جدید نمی‌گیرد)
+    selected_service = None
+    if payload.service_id is not None:
+        selected_service = db.get(Service, payload.service_id)
+        if selected_service is None:
+            raise HTTPException(status_code=404, detail="خدمت یافت نشد")
+        if selected_service.status != ServiceStatus.ACTIVE:
+            raise HTTPException(status_code=409, detail="این خدمت غیرفعال است و رزرو جدید نمی‌پذیرد")
+
     # فاز ۲۱/۲۶ - اعتبارسنجی رزرو اسلات (با یا بدون نگهداشت)
     preferred_counselor_id = None
     preferred_start = None
@@ -275,8 +310,8 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
             if str(hold.counselor_id) != str(payload.counselor_id):
                 raise HTTPException(status_code=409, detail="نگهداشت با مشاور انتخاب‌شده مطابقت ندارد")
             counselor = db.get(Counselor, hold.counselor_id)
-            if counselor is None or counselor.status != "active":
-                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+            if counselor is None or not is_counselor_bookable(db, counselor):
+                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست یا صلاحیت معتبری ندارد")
             preferred_counselor_id = counselor.id
             preferred_start = hold.start_at
             slot_label = preferred_start.strftime("%H:%M")
@@ -284,8 +319,8 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
             if payload.counselor_id is None or not payload.start_at:
                 raise HTTPException(status_code=422, detail="برای رزرو، انتخاب مشاور و زمان هر دو الزامی است")
             counselor = db.get(Counselor, payload.counselor_id)
-            if counselor is None or counselor.status != "active":
-                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست")
+            if counselor is None or not is_counselor_bookable(db, counselor):
+                raise HTTPException(status_code=422, detail="مشاور انتخاب‌شده فعال نیست یا صلاحیت معتبری ندارد")
             try:
                 raw = datetime.fromisoformat(payload.start_at)
             except ValueError:
@@ -309,6 +344,7 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         ip=ip,
         preferred_counselor_id=preferred_counselor_id,
         preferred_start_at=preferred_start,
+        service_id=selected_service.id if selected_service is not None else None,
     )
     db.add(r)
     try:

@@ -12,6 +12,8 @@ class AppointmentCreate(BaseModel):
     duration_minutes: int | None = Field(default=None, ge=5, le=480)
     location: str | None = Field(default=None, max_length=200)
     note: str | None = Field(default=None, max_length=500)
+    # فاز ۲۸ - B06/B07: خدمت (باید فعال باشد) + snapshot قیمت خودکار از تعرفه
+    service_id: uuid.UUID | None = None
 
 
 class AppointmentUpdate(BaseModel):

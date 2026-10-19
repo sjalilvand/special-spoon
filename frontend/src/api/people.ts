@@ -17,12 +17,17 @@ export interface Counselor {
   specialty: string | null;
   license_number: string | null;
   license_expiry_date: string | null;
+  license_verified?: boolean;
   work_mobile: string | null;
   email: string | null;
   capacity: number | null;
   service_location_title: string | null;
   status: string;
   has_account: boolean;
+  // فاز ۲۸ - B05: وضعیت صلاحیت برای فهرست قابل رزرو
+  bookable?: boolean;
+  approved_credentials?: number;
+  pending_credentials?: number;
 }
 
 export interface Applicant {

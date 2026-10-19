@@ -73,10 +73,11 @@ def env():
     dis.status = UserStatus.DISABLED
     data["pending_user"] = _mk_user(db, "t_pending", ["RECEPTION"], status=UserStatus.PENDING, password=None)
 
+    # فاز ۲۸ - B05: مشاوران آزمون صلاحیت معتبر دارند (مجوز تأییدشده بدون انقضا)
     cA = Counselor(counselor_code="TC-A", first_name="آزمون", last_name="مشاورالف",
-                   status="active", user_id=ua.id)
+                   status="active", user_id=ua.id, license_verified=True)
     cB = Counselor(counselor_code="TC-B", first_name="آزمون", last_name="مشاوریب",
-                   status="active", user_id=ub.id)
+                   status="active", user_id=ub.id, license_verified=True)
     db.add_all([cA, cB])
     db.flush()
 

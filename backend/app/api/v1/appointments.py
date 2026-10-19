@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.services.case_access import counselor_can_access
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.catalog import Service, ServiceStatus
 from app.models.case import Case, CaseStatus
 from app.models.people import Applicant, Counselor
 from app.schemas.schedule import AppointmentCreate, AppointmentUpdate
@@ -39,6 +40,7 @@ def _appt_out(db: Session, a: Appointment) -> dict:
     case = db.get(Case, a.case_id)
     applicant = db.get(Applicant, case.applicant_id) if case else None
     c = db.get(Counselor, a.counselor_id)
+    service = db.get(Service, a.service_id) if a.service_id else None
     return {
         "id": str(a.id),
         "case_id": str(a.case_id),
@@ -50,6 +52,12 @@ def _appt_out(db: Session, a: Appointment) -> dict:
         "location": a.location,
         "status": a.status,
         "note": a.note,
+        # فاز ۲۸ - B06/B07: خدمت + snapshot قیمت (تغییر تعرفه اثر ندارد)
+        "service_id": str(a.service_id) if a.service_id else None,
+        "service_title": service.title if service else None,
+        "tariff_version_id": str(a.tariff_version_id) if a.tariff_version_id else None,
+        "price_amount": float(a.price_amount) if a.price_amount is not None else None,
+        "price_currency": a.price_currency,
     }
 
 
@@ -100,19 +108,43 @@ def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db)
     if counselor is None or counselor.status != "active":
         raise HTTPException(status_code=422, detail="مشاور یافت نشد یا فعال نیست")
 
+    # فاز ۲۸ - B06: خدمت انتخابی باید فعال باشد؛ مدت پیش‌فرض از خدمت
+    # فاز ۲۸ - B07: snapshot قیمت از تعرفه معتبر در تاریخ نوبت
+    service = None
+    if payload.service_id is not None:
+        service = db.get(Service, payload.service_id)
+        if service is None:
+            raise HTTPException(status_code=404, detail="خدمت یافت نشد")
+        if service.status != ServiceStatus.ACTIVE:
+            raise HTTPException(status_code=409, detail="این خدمت غیرفعال است و رزرو جدید نمی‌پذیرد")
+
+    duration = payload.duration_minutes
+    if service is not None and duration is None:
+        duration = service.duration_minutes
+
+    from app.api.v1.catalog import current_tariff
+
+    tariff = current_tariff(db, service.id, payload.scheduled_at.date()) if service is not None else None
+
     a = Appointment(
         case_id=case.id,
         counselor_id=counselor_id,
         scheduled_at=payload.scheduled_at,
-        duration_minutes=payload.duration_minutes,
+        duration_minutes=duration,
         location=payload.location,
         note=payload.note,
+        service_id=service.id if service is not None else None,
+        tariff_version_id=tariff.id if tariff is not None else None,
+        price_amount=tariff.amount if tariff is not None else None,
+        price_currency=tariff.currency if tariff is not None else None,
         created_by=actor.id,
     )
     db.add(a)
     db.commit()
     record_audit(db, action="appointment.created", actor_user_id=actor.id,
-                 entity_type="appointment", entity_id=str(a.id))
+                 entity_type="appointment", entity_id=str(a.id),
+                 detail={"service_id": str(service.id) if service is not None else None,
+                         "tariff_snapshot": float(tariff.amount) if tariff is not None else None})
     return _appt_out(db, a)
 
 

@@ -8,6 +8,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
 import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselor } from "../api/people";
 import type { Counselor } from "../api/people";
+import { addCredential, fetchCredentials } from "../api/catalog";
+import type { CounselorCredential } from "../api/catalog";
 import JalaliDateField from "../components/JalaliDateField";
 
 const STATUS: Record<string, { label: string; color: "success" | "default" | "warning" }> = {
@@ -22,6 +24,7 @@ export default function CounselorsPage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [credentialsFor, setCredentialsFor] = useState<Counselor | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["counselors", page, search],
@@ -57,13 +60,14 @@ export default function CounselorsPage() {
               <TableCell>محل خدمت</TableCell>
               <TableCell>ظرفیت</TableCell>
               <TableCell>وضعیت</TableCell>
+              <TableCell>صلاحیت رزرو (B05)</TableCell>
               <TableCell>حساب</TableCell>
               <TableCell>عملیات</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={9} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} align="center"><CircularProgress size={24} /></TableCell></TableRow>
             )}
             {data?.items.map((row) => {
               const st = STATUS[row.status] ?? { label: row.status, color: "default" as const };
@@ -77,14 +81,27 @@ export default function CounselorsPage() {
                   <TableCell>{row.capacity ?? "—"}</TableCell>
                   <TableCell><Chip label={st.label} color={st.color} size="small" /></TableCell>
                   <TableCell>
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Chip size="small" variant="outlined"
+                        color={row.bookable ? "success" : "warning"}
+                        label={row.bookable ? "قابل رزرو" : "غیرقابل رزرو"} />
+                      {(row.pending_credentials ?? 0) > 0 && (
+                        <Chip size="small" color="info" label={`${row.pending_credentials} در انتظار`} />
+                      )}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
                     <Chip size="small" variant="outlined" label={row.has_account ? "دارد" : "ندارد"} />
                   </TableCell>
                   <TableCell>
-                    <Button size="small" onClick={() => {
-                      if (window.confirm("تغییر وضعیت این مشاور؟")) toggleStatus.mutate(row);
-                    }}>
-                      {row.status === "active" ? "غیرفعال" : "فعال"}
-                    </Button>
+                    <Stack direction="row" spacing={0.5}>
+                      <Button size="small" onClick={() => setCredentialsFor(row)}>مدارک</Button>
+                      <Button size="small" onClick={() => {
+                        if (window.confirm("تغییر وضعیت این مشاور؟")) toggleStatus.mutate(row);
+                      }}>
+                        {row.status === "active" ? "غیرفعال" : "فعال"}
+                      </Button>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               );
@@ -97,6 +114,9 @@ export default function CounselorsPage() {
       </TableContainer>
 
       <CreateDialog open={open} onClose={() => setOpen(false)} onError={setError} />
+      {credentialsFor && (
+        <CredentialsDialog counselor={credentialsFor} onClose={() => setCredentialsFor(null)} />
+      )}
     </Stack>
   );
 }
@@ -196,6 +216,128 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
           <Button type="submit" variant="contained" disabled={busy}>{busy ? "در حال ثبت…" : "ایجاد"}</Button>
         </DialogActions>
       </form>
+    </Dialog>
+  );
+}
+
+/* فاز ۲۸ - B05: مدیریت مدارک و صلاحیت مشاور */
+function CredentialsDialog({ counselor, onClose }: {
+  counselor: Counselor; onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [issuedAt, setIssuedAt] = useState<string | undefined>(undefined);
+  const [expiresAt, setExpiresAt] = useState<string | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: creds, isLoading } = useQuery({
+    queryKey: ["credentials", counselor.id],
+    queryFn: () => fetchCredentials(counselor.id),
+  });
+
+  useEffect(() => {
+    if (counselor.id) { setForm({}); setIssuedAt(undefined); setExpiresAt(undefined); setFormError(null); }
+  }, [counselor.id]);
+
+  const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setBusy(true);
+    try {
+      await addCredential(counselor.id, {
+        kind: form.kind || "license",
+        title: form.title?.trim(),
+        license_number: form.license_number?.trim() || undefined,
+        issued_at: issuedAt,
+        expires_at: expiresAt,
+      });
+      setForm({});
+      setIssuedAt(undefined);
+      setExpiresAt(undefined);
+      queryClient.invalidateQueries({ queryKey: ["credentials", counselor.id] });
+      queryClient.invalidateQueries({ queryKey: ["counselors"] });
+    } catch (e) {
+      setFormError(errDetail(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const KIND: Record<string, string> = {
+    license: "مجوز حرفه‌ای",
+    degree: "مدرک تحصیلی",
+    certificate: "گواهی‌نامه",
+  };
+  const CRED_STATUS: Record<string, { label: string; color: "warning" | "success" | "error" }> = {
+    pending: { label: "در انتظار بررسی", color: "warning" },
+    approved: { label: "تأییدشده", color: "success" },
+    rejected: { label: "ردشده", color: "error" },
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>مدارک و صلاحیت — {counselor.first_name} {counselor.last_name} (B05)</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {formError && <Alert severity="error">{formError}</Alert>}
+          <form onSubmit={submit}>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="flex-start">
+              <Select size="small" defaultValue="license" value={form.kind ?? "license"} onChange={set("kind")} sx={{ minWidth: 130 }}>
+                <MenuItem value="license">مجوز حرفه‌ای</MenuItem>
+                <MenuItem value="degree">مدرک تحصیلی</MenuItem>
+                <MenuItem value="certificate">گواهی‌نامه</MenuItem>
+              </Select>
+              <TextField size="small" required label="عنوان مدرک" value={form.title ?? ""} onChange={set("title")} sx={{ minWidth: 200 }} />
+              <TextField size="small" label="شماره" value={form.license_number ?? ""} onChange={set("license_number")} sx={{ minWidth: 120 }} />
+              <JalaliDateField label="تاریخ صدور" value={issuedAt} onChange={setIssuedAt} />
+              <JalaliDateField label="تاریخ انقضا" value={expiresAt} onChange={setExpiresAt} />
+              <Button type="submit" variant="contained" disabled={busy}>افزودن مدرک</Button>
+            </Stack>
+          </form>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>نوع</TableCell>
+                <TableCell>عنوان</TableCell>
+                <TableCell>شماره</TableCell>
+                <TableCell>انقضا</TableCell>
+                <TableCell>وضعیت بررسی</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {isLoading && (
+                <TableRow><TableCell colSpan={5} align="center"><CircularProgress size={20} /></TableCell></TableRow>
+              )}
+              {creds?.map((c: CounselorCredential) => {
+                const st = CRED_STATUS[c.verification_status] ?? { label: c.verification_status, color: "default" as never };
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell>{KIND[c.kind] ?? c.kind}</TableCell>
+                    <TableCell>{c.title}</TableCell>
+                    <TableCell>{c.license_number ?? "—"}</TableCell>
+                    <TableCell>{c.expires_at ?? "—"}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={st.label} color={st.color} />
+                      {c.review_note && (
+                        <Typography variant="caption" display="block" color="text.secondary">{c.review_note}</Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {!isLoading && creds?.length === 0 && (
+                <TableRow><TableCell colSpan={5} align="center">مدرکی ثبت نشده است</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>بستن</Button>
+      </DialogActions>
     </Dialog>
   );
 }

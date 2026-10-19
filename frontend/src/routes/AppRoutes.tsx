@@ -23,8 +23,10 @@ import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
 import ProcessesPage from "../pages/ProcessesPage";
 import ReviewsPage from "../pages/ReviewsPage";
+import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import UsersPage from "../pages/UsersPage";
+import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import ProtectedRoute from "./ProtectedRoute";
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
@@ -64,6 +66,16 @@ export default function AppRoutes() {
       <Route path="/counselors" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>
           <Layout><CounselorsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/services" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><ServicesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/verification-reviews" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>
+          <Layout><VerificationReviewsPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/applicants" element={
