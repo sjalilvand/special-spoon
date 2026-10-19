@@ -8,6 +8,7 @@ from app.models.appointment import (
 from app.models.assessment import Assessment, AssessmentStatus, FormVersion, ReviewAction
 from app.models.audit import AuditEvent
 from app.models.booking import SlotClaim, SlotClaimStatus
+from app.models.branch import Branch, BranchServiceOffering, BranchStatus, Clinic
 from app.models.catalog import (
     CounselorCredential,
     CredentialKind,
@@ -28,6 +29,15 @@ from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
+from app.models.payment import (
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentStatus,
+)
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
 from app.models.recommendation import Recommendation
 from app.models.referral import Referral
@@ -36,12 +46,15 @@ from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus
 __all__ = [
     "ActivationToken", "Applicant", "Appointment", "AppointmentStatus",
     "Assessment", "AssessmentStatus", "AuditEvent", "AuthSession",
-    "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Consent",
+    "Branch", "BranchServiceOffering", "BranchStatus",
+    "CASE_STATUSES", "Case", "CaseAssignment", "CaseStatus", "Clinic", "Consent",
     "CONSENT_KINDS", "ConsentVersion", "ConsultationRequest", "Counselor",
     "CounselorCredential", "CredentialKind", "CredentialVerificationStatus",
     "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
-    "ImportJob", "ImportRow", "IntakeQuestionnaire", "Notification",
-    "OrganizationUnit", "Recommendation", "Referral", "ReviewAction", "Role",
+    "ImportJob", "ImportRow", "IntakeQuestionnaire", "Invoice", "InvoiceItem",
+    "InvoiceStatus", "Notification",
+    "Order", "OrderStatus", "OrganizationUnit", "Payment", "PaymentStatus",
+    "Recommendation", "Referral", "ReviewAction", "Role",
     "OtpChallenge", "OtpPurpose",
     "Service", "ServiceLocation", "ServiceSessionType", "ServiceStatus",
     "Session", "SessionNoteRevision", "SessionNoteStatus", "Specialty",

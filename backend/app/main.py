@@ -4,6 +4,7 @@ from app.api.v1.applicants import router as applicants_router
 from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.branches import router as branches_router
 from app.api.v1.cases import router as cases_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.consents import router as consents_router
@@ -18,6 +19,7 @@ from app.api.v1.imports import router as imports_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.org import router as org_router
+from app.api.v1.payments import router as payments_router
 from app.api.v1.public import router as public_router
 from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.referrals import router as referrals_router
@@ -65,6 +67,8 @@ app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(email_outbox_router, prefix=settings.api_prefix)
 app.include_router(catalog_router, prefix=settings.api_prefix)
 app.include_router(verification_router, prefix=settings.api_prefix)
+app.include_router(branches_router, prefix=settings.api_prefix)
+app.include_router(payments_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

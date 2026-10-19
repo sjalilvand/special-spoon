@@ -234,6 +234,25 @@ def admin_dashboard(
         .where(SlotClaim.status == SlotClaimStatus.CONFIRMED,
                SlotClaim.created_at >= since)) or 0)
 
+    # ---- فروش (B24 × B10؛ پس از تصمیم D02) ----
+    from app.models.payment import Order, OrderStatus, Payment
+    from app.models.payment import PaymentStatus as PayStatus
+    paid_orders_window = int(db.scalar(
+        select(func.count()).select_from(Order)
+        .where(Order.status == OrderStatus.PAID, Order.created_at >= since)) or 0)
+    paid_amount_window = float(db.scalar(
+        select(func.coalesce(func.sum(Order.payable_amount), 0))
+        .where(Order.status == OrderStatus.PAID, Order.created_at >= since)) or 0)
+    pending_orders = int(db.scalar(
+        select(func.count()).select_from(Order)
+        .where(Order.status == OrderStatus.PENDING)) or 0)
+    sales_trend_rows = db.execute(
+        select(func.date(Payment.paid_at), func.sum(Payment.amount))
+        .where(Payment.status == PayStatus.SUCCESS, Payment.paid_at >= day_start)
+        .group_by(func.date(Payment.paid_at))
+    ).all()
+    sales_trend = {r[0]: float(r[1] or 0) for r in sales_trend_rows}
+
     # ---- روند روزانه (پرونده جدید / درخواست رزرو) ----
     case_trend = {r[0]: int(r[1]) for r in db.execute(
         select(func.date(Case.created_at), func.count())
@@ -252,6 +271,14 @@ def admin_dashboard(
             d = (now - timedelta(days=days - 1 - i)).date()
             key = d.isoformat()
             out.append({"date": key, "count": int(src.get(d, src.get(key, 0)))})
+        return out
+
+    def _amount_series(src: dict) -> list[dict]:
+        out = []
+        for i in range(days):
+            d = (now - timedelta(days=days - 1 - i)).date()
+            key = d.isoformat()
+            out.append({"date": key, "amount": float(src.get(d, src.get(key, 0)))})
         return out
 
     # ---- بار کاری مشاوران ----
@@ -298,12 +325,16 @@ def admin_dashboard(
             "consultations_by_status": consult_by_status,
             "booking_active_holds": active_holds,
             "booking_confirmed_holds": confirmed_holds,
+            "sales_paid_orders": paid_orders_window,
+            "sales_paid_amount": paid_amount_window,
+            "sales_pending_orders": pending_orders,
             "sessions_count": int(db.scalar(
                 select(func.count()).select_from(SessionModel).where(SessionModel.occurred_at >= since)) or 0),
         },
         "trends": {
             "cases": _series(case_trend),
             "bookings": _series(consult_trend),
+            "sales": _amount_series(sales_trend),
         },
         "counselor_workload": workload,
     }

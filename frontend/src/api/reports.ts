@@ -85,11 +85,16 @@ export interface AdminDashboardData {
     consultations_by_status: Record<string, number>;
     booking_active_holds: number;
     booking_confirmed_holds: number;
+    sales_paid_orders: number;
+    sales_paid_amount: number;
+    sales_pending_orders: number;
     sessions_count: number;
   };
-  trends: { cases: TrendPoint[]; bookings: TrendPoint[] };
+  trends: { cases: TrendPoint[]; bookings: TrendPoint[]; sales?: SalesTrendPoint[] };
   counselor_workload: CounselorWorkloadRow[];
 }
+
+export interface SalesTrendPoint { date: string; amount: number }
 
 export async function fetchAdminDashboard(days: number): Promise<AdminDashboardData> {
   return (await apiClient.get("/reports/admin-dashboard", { params: { days } })).data;

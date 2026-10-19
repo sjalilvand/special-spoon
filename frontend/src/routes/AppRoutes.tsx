@@ -7,6 +7,7 @@ import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApplicantsPage from "../pages/ApplicantsPage";
 import AssessmentFormPage from "../pages/AssessmentFormPage";
 import AuditEventsPage from "../pages/AuditEventsPage";
+import BranchesPage from "../pages/BranchesPage";
 import CaseDetailPage from "../pages/CaseDetailPage";
 import CasesPage from "../pages/CasesPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
@@ -16,11 +17,13 @@ import CounselorsPage from "../pages/CounselorsPage";
 import DashboardPage from "../pages/DashboardPage";
 import DpoReportPage from "../pages/DpoReportPage";
 import ImportsPage from "../pages/ImportsPage";
+import InvoicePage from "../pages/InvoicePage";
 import Level3AlertsPage from "../pages/Level3AlertsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import LoginPage from "../pages/LoginPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
+import OrdersPage from "../pages/OrdersPage";
 import ProcessesPage from "../pages/ProcessesPage";
 import ReviewsPage from "../pages/ReviewsPage";
 import ServicesPage from "../pages/ServicesPage";
@@ -76,6 +79,21 @@ export default function AppRoutes() {
       <Route path="/verification-reviews" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>
           <Layout><VerificationReviewsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/branches" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]}>
+          <Layout><BranchesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/orders" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
+          <Layout><OrdersPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/invoices/:id" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><InvoicePage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/applicants" element={

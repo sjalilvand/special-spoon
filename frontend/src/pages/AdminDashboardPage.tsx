@@ -144,6 +144,25 @@ export default function AdminDashboardPage() {
                 })}
               </Stack>
             </Paper>
+
+            <Paper sx={{ p: 2 }} aria-label="فروش (B10)">
+              <Typography variant="subtitle1" fontWeight={700} mb={1.5}>فروش (بازه) — B10 پس از D02</Typography>
+              <Grid container spacing={1.5}>
+                <Grid item xs={6}>
+                  <StatCard label="سفارش‌های پرداخت‌شده" value={k.sales_paid_orders} color="success.main" />
+                </Grid>
+                <Grid item xs={6}>
+                  <StatCard label="جمع فروش (ریال)" value={Math.round(k.sales_paid_amount).toLocaleString("fa-IR")} color="primary.main" />
+                </Grid>
+                <Grid item xs={6}>
+                  <StatCard label="در انتظار پرداخت" value={k.sales_pending_orders} color="warning.main" />
+                </Grid>
+                <Grid item xs={6}>
+                  <StatCard label="میانگین سفارش (ریال)"
+                    value={k.sales_paid_orders ? Math.round(k.sales_paid_amount / k.sales_paid_orders).toLocaleString("fa-IR") : "—"} />
+                </Grid>
+              </Grid>
+            </Paper>
           </Box>
 
           <Paper sx={{ p: 2 }} aria-label="بار کاری مشاوران">

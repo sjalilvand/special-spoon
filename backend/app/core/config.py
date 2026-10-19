@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.27.0"
+    app_version: str = "0.29.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_upload_mb: int = 10
     download_ticket_seconds: int = 120
+
+    # فاز ۲۹ - B10/B11: سفارش و پرداخت (تصمیم D02: درگاه پلاگین‌پذیر)
+    # sandbox = درگاه شبیه‌ساز توسعه/آزمون؛ zarinpal = درگاه پیشنهادی تولید
+    payment_gateway: str = "sandbox"
+    # آدرس عمومی سامانه برای ساخت callback درگاه‌های واقعی
+    public_base_url: str = "http://localhost:5173"
+    # زرین‌پال REST v4؛ merchant_id خالی = درگاه غیرفعال
+    zarinpal_merchant_id: str = ""
+    zarinpal_sandbox: bool = True
     # MIME های مجاز؛ فایل خارج از فهرست در قرنطینه می‌رود
     allowed_mime_types: str = (
         "application/pdf,image/png,image/jpeg,image/webp,"
