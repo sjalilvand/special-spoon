@@ -108,6 +108,10 @@ class Applicant(Base):
     unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organization_units.id", ondelete="SET NULL"), nullable=True
     )
+    # فاز ۳۳ - B21: سازمان کارفرما/کارگزار متقاضی (مبنای قرارداد و سهم پرداخت)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
     service_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("service_locations.id", ondelete="SET NULL"), nullable=True
     )

@@ -23,6 +23,7 @@ import InvoicePage from "../pages/InvoicePage";
 import Level3AlertsPage from "../pages/Level3AlertsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import LoginPage from "../pages/LoginPage";
+import OrganizationsPage from "../pages/OrganizationsPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
 import OrdersPage from "../pages/OrdersPage";
@@ -30,6 +31,7 @@ import ProcessesPage from "../pages/ProcessesPage";
 import ReviewsPage from "../pages/ReviewsPage";
 import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
+import TopicsPage from "../pages/TopicsPage";
 import UsersPage from "../pages/UsersPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import WalletPage from "../pages/WalletPage";
@@ -79,6 +81,18 @@ export default function AppRoutes() {
       <Route path="/services" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
           <Layout><ServicesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۳ - B32: دسته‌بندی موضوعی */}
+      <Route path="/topics" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><TopicsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۳ - B21: سازمان‌ها و قراردادها */}
+      <Route path="/organizations" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]}>
+          <Layout><OrganizationsPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/verification-reviews" element={

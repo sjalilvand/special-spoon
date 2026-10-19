@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.db.session import get_db
+from app.models.org_contract import Organization
 from app.models.people import Applicant, OrganizationUnit, ServiceLocation
 from app.models.user import Role, User, UserStatus
 from app.schemas.people import ApplicantCreate, ApplicantUpdate
@@ -24,6 +25,11 @@ def _out(a: Applicant, db: Session) -> dict:
     if a.service_location_id:
         l = db.get(ServiceLocation, a.service_location_id)
         loc_title = l.title if l else None
+    # فاز ۳۳ - B21: سازمان کارفرما
+    org_name = None
+    if a.organization_id:
+        o = db.get(Organization, a.organization_id)
+        org_name = o.name if o else None
     return {
         "id": str(a.id),
         "external_id": a.external_id,
@@ -35,6 +41,8 @@ def _out(a: Applicant, db: Session) -> dict:
         "gender": a.gender,
         "mobile": a.mobile,
         "unit_title": unit_title,
+        "organization_id": str(a.organization_id) if a.organization_id else None,
+        "organization_name": org_name,
         "service_location_title": loc_title,
         "referral_source": a.referral_source,
         "status": a.status,
@@ -91,6 +99,7 @@ def create_applicant(payload: ApplicantCreate, db: Session = Depends(get_db), ac
         mobile=payload.mobile,
         phone=payload.phone,
         unit_id=payload.unit_id,
+        organization_id=payload.organization_id,
         service_location_id=payload.service_location_id,
         city=payload.city,
         address=payload.address,
@@ -138,7 +147,7 @@ def update_applicant(applicant_id: uuid.UUID, payload: ApplicantUpdate, db: Sess
         a.status = data["status"]
         changed.append("status")
     for f in ("birth_date", "gender", "marital_status", "education", "occupation", "mobile", "phone",
-              "unit_id", "service_location_id", "city", "address", "referral_source", "referral_description"):
+              "unit_id", "organization_id", "service_location_id", "city", "address", "referral_source", "referral_description"):
         if f in data and data[f] is not None:
             setattr(a, f, data[f])
             changed.append(f)

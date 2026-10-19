@@ -67,9 +67,12 @@ class Order(Base):
         CheckConstraint("payable_amount >= 0", name="ck_orders_payable_nonneg"),
         CheckConstraint("kind IN ('service','topup')", name="ck_orders_kind"),
         CheckConstraint("refunded_amount >= 0", name="ck_orders_refunded_nonneg"),
+        CheckConstraint("org_share_amount IS NULL OR org_share_amount >= 0",
+                        name="ck_orders_org_share_nonneg"),
         Index("ix_orders_owner", "owner_user_id"),
         Index("ix_orders_status", "status"),
         Index("ix_orders_appointment", "appointment_id"),
+        Index("ix_orders_organization", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -103,6 +106,16 @@ class Order(Base):
         UUID(as_uuid=True), ForeignKey("discounts.id", ondelete="RESTRICT"), nullable=True
     )
     refunded_amount: Mapped[int] = mapped_column(Numeric(16, 2), default=0)
+    # فاز ۳۳ - B21: تقسیم سهم پرداخت سازمان — snapshot در لحظه ساخت سفارش
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
+    contract_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contracts.id", ondelete="RESTRICT"), nullable=True
+    )
+    coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    org_share_amount: Mapped[int | None] = mapped_column(Numeric(16, 2), nullable=True)
+    applicant_share_amount: Mapped[int | None] = mapped_column(Numeric(16, 2), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

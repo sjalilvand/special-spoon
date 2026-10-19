@@ -21,6 +21,7 @@ from app.api.v1.imports import router as imports_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.org import router as org_router
+from app.api.v1.organizations import router as organizations_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.public import router as public_router
 from app.api.v1.recommendations import router as recommendations_router
@@ -30,6 +31,7 @@ from app.api.v1.reports import router as reports_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.staff_site import router as staff_site_router
 from app.api.v1.supervisor import router as supervisor_router
+from app.api.v1.topics import router as topics_router
 from app.api.v1.users import router as users_router
 from app.api.v1.verification import router as verification_router
 from app.api.v1.wallet import router as wallet_router
@@ -49,6 +51,8 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(accounting_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(org_router, prefix=settings.api_prefix)
+app.include_router(topics_router, prefix=settings.api_prefix)
+app.include_router(organizations_router, prefix=settings.api_prefix)
 app.include_router(counselors_router, prefix=settings.api_prefix)
 app.include_router(applicants_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)

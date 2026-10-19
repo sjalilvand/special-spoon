@@ -40,6 +40,7 @@ from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
+from app.models.org_contract import Contract, ContractService, Organization
 from app.models.payment import (
     Invoice,
     InvoiceItem,
@@ -53,6 +54,7 @@ from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLoc
 from app.models.recommendation import Recommendation
 from app.models.referral import Referral
 from app.models.refund import Refund, RefundRequest, RefundRequestStatus
+from app.models.topics import ServiceTopic, Topic
 from app.models.wallet import (
     Wallet,
     WalletEntry,
@@ -73,7 +75,8 @@ __all__ = [
     "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Invoice", "InvoiceItem",
     "InvoiceStatus", "Notification",
-    "Order", "OrderStatus", "OrganizationUnit", "Payment", "PaymentStatus",
+    "Contract", "ContractService", "Organization", "Order", "OrderStatus",
+    "OrganizationUnit", "Payment", "PaymentStatus",
     "Recommendation", "Referral", "Refund", "RefundRequest", "RefundRequestStatus",
     "ReviewAction", "Role",
     "OtpChallenge", "OtpPurpose",
@@ -81,6 +84,6 @@ __all__ = [
     "Session", "SessionNoteRevision", "SessionNoteStatus", "Specialty",
     "Settlement", "SettlementItem", "SettlementStatus",
     "SlotClaim", "SlotClaimStatus", "StoredFile", "TariffVersion",
-    "TreatmentPlan", "User", "UserScope", "UserStatus", "user_roles_table",
+    "ServiceTopic", "Topic", "TreatmentPlan", "User", "UserScope", "UserStatus", "user_roles_table",
     "Wallet", "WalletEntry", "WalletEntryDirection", "WalletEntryReason",
 ]

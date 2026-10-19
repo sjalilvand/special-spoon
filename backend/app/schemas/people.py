@@ -49,6 +49,7 @@ class ApplicantCreate(BaseModel):
     mobile: str | None = Field(default=None, max_length=20)
     phone: str | None = Field(default=None, max_length=20)
     unit_id: uuid.UUID | None = None
+    organization_id: uuid.UUID | None = None  # فاز ۳۳ - B21: سازمان کارفرما
     service_location_id: uuid.UUID | None = None
     city: str | None = Field(default=None, max_length=100)
     address: str | None = Field(default=None, max_length=500)
@@ -67,6 +68,7 @@ class ApplicantUpdate(BaseModel):
     mobile: str | None = Field(default=None, max_length=20)
     phone: str | None = Field(default=None, max_length=20)
     unit_id: uuid.UUID | None = None
+    organization_id: uuid.UUID | None = None  # فاز ۳۳ - B21: سازمان کارفرما
     service_location_id: uuid.UUID | None = None
     city: str | None = Field(default=None, max_length=100)
     address: str | None = Field(default=None, max_length=500)

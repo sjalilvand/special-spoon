@@ -18,7 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_roles
 from app.models.appointment import Appointment
+from app.models.case import Case
 from app.models.catalog import Service
+from app.models.org_contract import Contract, ContractService
+from app.models.people import Applicant
 from app.models.payment import Invoice, InvoiceItem, Order, OrderStatus
 from app.models.user import User
 from app.services import payments as pay
@@ -28,6 +31,29 @@ router = APIRouter(tags=["payments"])
 
 VIEW_ROLES = ("SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR", "RECEPTION", "COUNSELOR")
 CREATE_ROLES = ("SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION")
+
+
+def _active_contract_for(db: Session, organization_id, service_id):
+    """B21: قرارداد فعال سازمان برای خدمت — draft/منقضی/ملغی اعمال نمی‌شود؛
+    بدون ردیف دامنه = همه خدمات؛ با ردیف = فقط همان خدمات."""
+    from datetime import date
+
+    today = date.today()
+    contracts = db.scalars(
+        select(Contract).where(
+            Contract.organization_id == organization_id,
+            Contract.status == "active",
+            Contract.valid_from <= today,
+        )
+    ).all()
+    candidates = [c for c in contracts if c.valid_to is None or c.valid_to >= today]
+    for c in candidates:
+        scoped = db.scalars(
+            select(ContractService.service_id).where(ContractService.contract_id == c.id)
+        ).all()
+        if not scoped or service_id in scoped:
+            return c
+    return None
 
 
 def _order_number(db: Session) -> str:
@@ -67,6 +93,14 @@ def _order_out(db: Session, o: Order, with_invoice: bool = True) -> dict:
         "kind": getattr(o, "kind", "service"),
         "discount_code": None,
         "refunded_amount": float(getattr(o, "refunded_amount", 0) or 0),
+        # فاز ۳۳ - B21: تقسیم سهم پرداخت (snapshot)
+        "organization_id": str(o.organization_id) if o.organization_id else None,
+        "contract_id": str(o.contract_id) if o.contract_id else None,
+        "coverage_percent": float(o.coverage_percent) if o.coverage_percent is not None else None,
+        "org_share_amount": float(o.org_share_amount) if o.org_share_amount is not None else None,
+        "applicant_share_amount": (
+            float(o.applicant_share_amount) if o.applicant_share_amount is not None else None
+        ),
         "note": o.note,
         "created_at": o.created_at.isoformat() if o.created_at else None,
     }
@@ -200,6 +234,48 @@ def create_order(
     if discount > amount:
         raise HTTPException(status_code=422, detail="تخفیف نمی‌تواند از مبلغ سفارش بیشتر باشد")
 
+    # فاز ۳۳ - B21: تقسیم سهم پرداخت سازمان (قرارداد فعال) — snapshot در لحظه سفارش
+    org_id = None
+    contract_id = None
+    coverage_percent = None
+    org_share = 0
+    if payload.discount_code or discount:
+        # قرارداد و تخفیف هم‌زمان قابل استفاده نیستند (منع دو‌جبری شدن هزینه)
+        case_for_org = None
+        if payload.case_id is not None:
+            case_for_org = db.get(Case, payload.case_id)
+        elif payload.appointment_id is not None:
+            appt0 = db.get(Appointment, payload.appointment_id)
+            case_for_org = db.get(Case, appt0.case_id) if appt0 and appt0.case_id else None
+        applicant0 = db.get(Applicant, case_for_org.applicant_id) if case_for_org else None
+        if applicant0 is not None and applicant0.organization_id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="متقاضی دارای سازمان با قرارداد است؛ تخفیف و قرارداد هم‌زمان قابل استفاده نیستند",
+            )
+    else:
+        case_for_org = None
+        if payload.case_id is not None:
+            case_for_org = db.get(Case, payload.case_id)
+        elif payload.appointment_id is not None:
+            appt0 = db.get(Appointment, payload.appointment_id)
+            case_for_org = db.get(Case, appt0.case_id) if appt0 and appt0.case_id else None
+        applicant0 = db.get(Applicant, case_for_org.applicant_id) if case_for_org else None
+        if (
+            applicant0 is not None
+            and applicant0.organization_id is not None
+            and service_id is not None
+        ):
+            contract = _active_contract_for(db, applicant0.organization_id, service_id)
+            if contract is not None:
+                org_id = contract.organization_id
+                contract_id = contract.id
+                coverage_percent = float(contract.coverage_percent)
+                raw_share = int(round(amount * coverage_percent / 100.0))
+                if contract.coverage_cap_amount is not None:
+                    raw_share = min(raw_share, int(contract.coverage_cap_amount))
+                org_share = max(0, min(raw_share, amount))
+
     owner = payload.owner_user_id or actor.id
     if db.get(User, owner) is None:
         raise HTTPException(status_code=404, detail="کاربر مالک سفارش یافت نشد")
@@ -215,8 +291,13 @@ def create_order(
         amount=amount,
         currency=currency,
         discount_amount=discount if discount else None,
-        payable_amount=amount - discount,
+        payable_amount=amount - discount - org_share,
         status=OrderStatus.PENDING,
+        organization_id=org_id,
+        contract_id=contract_id,
+        coverage_percent=coverage_percent,
+        org_share_amount=org_share if org_share else None,
+        applicant_share_amount=(amount - discount - org_share) if org_share else None,
         note=payload.note,
         created_by=actor.id,
     )

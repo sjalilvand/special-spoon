@@ -48,6 +48,7 @@ ACCOUNT_CODE = {
     "bank": "1101",
     "gateway_receivable": "1102",
     "clearing": "1103",
+    "org_receivable": "1104",
     "wallet_liability": "2101",
     "refund_payable": "2102",
     "service_revenue": "4101",
@@ -62,6 +63,7 @@ DEFAULT_ACCOUNTS = [
     ("1101", "حساب بانک", AccountType.ASSET),
     ("1102", "درگاه‌های پرداخت - در جریان وصول", AccountType.ASSET),
     ("1103", "حساب‌های تصفیه", AccountType.ASSET),
+    ("1104", "حساب‌های دریافتنی از سازمان‌ها", AccountType.ASSET),
     ("2101", "کیف پول کاربران", AccountType.LIABILITY),
     ("2102", "استردادهای پرداختنی", AccountType.LIABILITY),
     ("4101", "درآمد خدمات مشاوره", AccountType.REVENUE),
@@ -240,12 +242,14 @@ def reverse_entry(
 
 # ------------------------------------------------ auto-posting (B22 × B10/B18/B20)
 def _order_lines_for_revenue(db: Session, order: Order, payable: int, kind: str) -> list[dict]:
-    """ردیف‌های شناسایی درآمد با تفکیک تخفیف (B19): ناخالص 4101، تخفیف 5102."""
+    """ردیف‌های شناسایی درآمد با تفکیک تخفیف (B19) و سهم سازمان (B21، فاز ۳۳):
+    ناخالص 4101، تخفیف 5102، سهم سازمان دریافتنی 1104."""
     discount = int(Decimal(order.discount_amount or 0))
+    org_share = int(Decimal(getattr(order, "org_share_amount", 0) or 0))
     gross = int(Decimal(order.amount or 0))
-    # ناخالص باید قابل بازسازی باشد: payable + discount (پوشش حالت‌های لبه)
-    if gross < payable + discount:
-        gross = payable + discount
+    # ناخالص باید قابل بازسازی باشد: payable + discount + org_share (پوشش حالت‌های لبه)
+    if gross < payable + discount + org_share:
+        gross = payable + discount + org_share
     rev = account_by_code(db, ACCOUNT_CODE["service_revenue"])
     lines: list[dict] = []
     if kind == "wallet":
@@ -268,6 +272,14 @@ def _order_lines_for_revenue(db: Session, order: Order, payable: int, kind: str)
             "debit": discount,
             "credit": 0,
             "description": f"هزینه تخفیف سفارش {order.order_number}",
+        })
+    if org_share > 0:
+        # فاز ۳۳ - B21: سهم سازمان = مطالبه از سازمان (دارایی)، نه درآمد نقدی
+        lines.append({
+            "account_id": account_by_code(db, ACCOUNT_CODE["org_receivable"]).id,
+            "debit": org_share,
+            "credit": 0,
+            "description": f"سهم سازمان سفارش {order.order_number} (قرارداد)",
         })
     lines.append({
         "account_id": rev.id,
