@@ -74,12 +74,12 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
-        path="/api/v1/auth",
+        path="/api",  # فاز ۳۹: هر دو نسخه v1/v2 — کوکی refresh نسخه‌agnostic است
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(key=REFRESH_COOKIE, path="/api/v1/auth")
+    response.delete_cookie(key=REFRESH_COOKIE, path="/api")
 
 
 def _revoke_all_sessions(db: Session, user_id) -> None:

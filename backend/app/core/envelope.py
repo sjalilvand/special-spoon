@@ -12,9 +12,14 @@
   ``version="v2"`` و ``duration_ms`` است؛
 - اگر کلاینت هدر ``Idempotency-Key`` بفرستد، همان کلید در ``meta`` اکو می‌شود
   (زمینه‌سازی قرارداد ADR-05 برای عملیات مالی؛ ذخیره اثر واقعی سرور = گام ۳ ADR-05)؛
-- برای پاسخ‌های صفحه‌بندی‌شده ``{items, ...}``: ``items`` به ``data`` می‌رود و
-  بقیه کلیدها (total/page/page_size/unread/...) داخل ``meta.pagination`` قرار
-  می‌گیرند تا قرارداد آتی v2 فهرست‌محور شود؛
+- برای پاسخ‌های صفحه‌بندی‌شده ``{items, total/page/page_size/...}``: ``items``
+  به ``data`` می‌رود و بقیه کلیدها داخل ``meta.pagination`` قرار می‌گیرند تا
+  قرارداد آتی v2 فهرست‌محور شود؛
+- تفکیک فقط برای پاسخ‌های «واقعاً صفحه‌بندی‌شده» انجام می‌شود — یعنی dict دارای
+  ``items`` و حداقل یکی از نشانگرهای صفحه‌بندی (total/page/page_size/limit/offset).
+  پاسخ‌های تکی/ساختاری که کلید ``items`` آن‌ها اقلام داخلی خود شیء است (اقلام
+  صورتحساب، سؤالات فرم، ردیف‌های خطای import، سرویس‌های تخصص و ...) دست‌نخورده
+  به‌عنوان ``data`` عبور می‌کنند تا معنای شیء حفظ شود (فاز ۳۹)؛
 - خطاها از بدنه ``{"detail": ...}`` FastAPI نگاشت می‌شوند: رشته → یک خطای
   ``{"code", "message"}``؛ فهرست خطاهای اعتبارسنجی 422 → نگاشت loc/msg/type؛
   هر شکل دیگری → ``{"code": "http_<status>", "message": <پیام پیش‌فرض>, "details": <بدنه>}``.
@@ -76,9 +81,24 @@ def default_message(status: int) -> str:
     return _STATUS_MESSAGES.get(status, "خطا در پردازش درخواست")
 
 
+# نشانگرهای صفحه‌بندی — حضور حداقل یکی از این‌ها در کنار items یعنی پاسخ فهرست
+# صفحه‌بندی‌شده است (فاز ۳۹). پاسخ‌های تکی/ساختاری با کلید items داخلی
+# (صورتحساب، فرم، import و ...) بدون این نشانگرها دست‌نخورده عبور می‌کنند.
+PAGINATION_MARKERS = frozenset({"total", "page", "page_size", "limit", "offset"})
+
+
 def split_items(payload: object) -> tuple[object, dict]:
-    """پاسخ‌های صفحه‌بندی‌شده {items, ...} → (items, {"pagination": {...}})."""
-    if isinstance(payload, dict) and "items" in payload:
+    """پاسخ صفحه‌بندی‌شده {items, total/...} → (items, {"pagination": {...}}).
+
+    فاز ۳۹: تفکیک فقط وقتی انجام می‌شود که payload علاوه بر ``items`` حداقل یکی
+    از نشانگرهای صفحه‌بندی را داشته باشد؛ در غیر این صورت کل dict به‌عنوان یک
+    شیء واحد (پاسخ تکی/ساختاری) دست‌نخورده برمی‌گردد.
+    """
+    if (
+        isinstance(payload, dict)
+        and "items" in payload
+        and any(marker in payload for marker in PAGINATION_MARKERS)
+    ):
         rest = {k: v for k, v in payload.items() if k != "items"}
         return payload["items"], ({"pagination": rest} if rest else {})
     return payload, {}

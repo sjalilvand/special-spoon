@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface CounselorWorkloadRow {
   counselor_id: string;
@@ -51,7 +51,14 @@ export interface AuditEventRow {
 export async function fetchAuditEvents(params: {
   page: number;
 }): Promise<{ items: AuditEventRow[]; total: number; page: number; page_size: number }> {
-  return (await apiClient.get("/audit-events", { params: { ...params, page_size: 30 } })).data;
+  // فاز ۳۹ (v2): data آرایه + total/page/page_size در meta.pagination
+  const r = await apiClient.get("/audit-events", { params: { ...params, page_size: 30 } });
+  return { items: r.data, ...paginationOf(r) } as {
+    items: AuditEventRow[];
+    total: number;
+    page: number;
+    page_size: number;
+  };
 }
 
 export async function printAssessment(id: string): Promise<void> {

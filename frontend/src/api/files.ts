@@ -33,6 +33,6 @@ export async function uploadCaseFile(caseId: string, file: File): Promise<FileIt
 /** بلیت کوتاه‌مدت بگیر و پنجره دانلود را باز کن (B39: لینک امضاشده کوتاه‌مدت) */
 export async function downloadFileWithTicket(fileId: string): Promise<void> {
   const { data } = await apiClient.post<{ ticket: string }>(`/files/${fileId}/download-ticket`);
-  const base = apiClient.defaults.baseURL ?? "/api/v1";
+  const base = apiClient.defaults.baseURL ?? "/api/v2";
   window.open(`${base}/files/${fileId}/download?ticket=${encodeURIComponent(data.ticket)}`, "_blank");
 }

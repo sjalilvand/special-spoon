@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export const ROLE_OPTIONS: { code: string; title: string }[] = [
   { code: "SYSTEM_ADMIN", title: "مدیر سامانه" },
@@ -75,7 +75,13 @@ export async function fetchUsers(params: { search?: string; page: number; page_s
   page_size: number;
 }> {
   const res = await apiClient.get("/users", { params });
-  return res.data;
+  // فاز ۳۹ (v2): data آرایه + total/page/page_size در meta.pagination
+  return { items: res.data, ...paginationOf(res) } as {
+    items: UserRow[];
+    total: number;
+    page: number;
+    page_size: number;
+  };
 }
 
 export async function createUser(payload: {

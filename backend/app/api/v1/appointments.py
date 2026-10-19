@@ -65,7 +65,7 @@ def _appt_out(db: Session, a: Appointment) -> dict:
 def list_appointments(
     case_id: uuid.UUID | None = Query(default=None),
     status: str = Query(default="", max_length=20),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     actor=Depends(get_current_user),

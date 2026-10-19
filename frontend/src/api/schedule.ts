@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface AppointmentRow {
   id: string;
@@ -65,7 +65,9 @@ export async function fetchAppointments(params: {
   status?: string;
   page?: number;
 }): Promise<{ items: AppointmentRow[]; total: number }> {
-  return (await apiClient.get("/appointments", { params })).data;
+  // فاز ۳۹ (v2): data آرایه + total در meta.pagination
+  const r = await apiClient.get("/appointments", { params });
+  return { items: r.data, total: Number(paginationOf(r).total ?? 0) };
 }
 
 export async function createAppointment(payload: Record<string, unknown>): Promise<AppointmentRow> {

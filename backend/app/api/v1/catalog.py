@@ -165,7 +165,7 @@ def list_services(
     specialty_id: uuid.UUID | None = Query(default=None),
     status: str = Query(default="", max_length=20),
     search: str = Query(default="", max_length=100),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
     _actor=Depends(require_roles(*VIEW_ROLES)),

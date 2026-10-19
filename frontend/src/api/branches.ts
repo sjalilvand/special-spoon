@@ -1,5 +1,5 @@
 // فاز ۲۹ - B31 سند جامع: مراکز مشاوره و شعب
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface Clinic {
   id: string;
@@ -144,6 +144,8 @@ export async function fetchNearbyBranches(params?: {
   if (params?.limit) q.limit = String(params.limit);
   if (params?.city) q.city = params.city;
   if (params?.service_id) q.service_id = params.service_id;
-  const r = await apiClient.get<NearbyBranchesResponse>("/public/branches/nearby", { params: q });
-  return r.data;
+  const r = await apiClient.get("/public/branches/nearby", { params: q });
+  // فاز ۳۹ (v2): data آرایه + total/sorted_by/privacy_note در meta.pagination
+  const pg = paginationOf(r) as Pick<NearbyBranchesResponse, "total" | "sorted_by" | "privacy_note">;
+  return { items: r.data, total: pg.total, sorted_by: pg.sorted_by, privacy_note: pg.privacy_note };
 }

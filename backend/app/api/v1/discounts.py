@@ -48,7 +48,7 @@ class DiscountUpdate(BaseModel):
 
 class ValidatePayload(BaseModel):
     code: str = Field(min_length=3, max_length=50)
-    amount: int = Field(gt=0)
+    amount: int = Field(gt=0, le=1_000_000_000_000)
 
 
 @router.get("/discounts")

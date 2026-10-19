@@ -1,5 +1,5 @@
 // فاز ۳۶ - B28 سند جامع: یکپارچه‌سازی‌های بیرونی (وضعیت سرویس‌ها + صف پیامک)
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface IntegrationStatus {
   configured: string;
@@ -77,8 +77,10 @@ export async function fetchSmsOutbox(params: {
   page?: number;
   page_size?: number;
 }): Promise<SmsOutboxResponse> {
-  const r = await apiClient.get<SmsOutboxResponse>("/sms-outbox", { params });
-  return r.data;
+  // فاز ۳۹ (v2): data آرایه + بقیه کلیدها (total/page/summary) در meta.pagination
+  const r = await apiClient.get("/sms-outbox", { params });
+  const pg = paginationOf(r) as Pick<SmsOutboxResponse, "total" | "page" | "page_size" | "summary">;
+  return { items: r.data, total: pg.total, page: pg.page, page_size: pg.page_size, summary: pg.summary };
 }
 
 export async function processSmsOutbox(limit = 25): Promise<ProcessResult> {

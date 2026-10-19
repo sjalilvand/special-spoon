@@ -1,5 +1,5 @@
 // فاز ۲۸ - B05/B06/B07 سند جامع: صلاحیت مشاور، خدمات و تعرفه نسخه‌دار
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface Specialty {
   id: string;
@@ -61,8 +61,9 @@ export interface CounselorCredential {
 export interface Paged<T> { items: T[]; total: number; page: number; page_size: number }
 
 export async function fetchSpecialties(includeInactive = false): Promise<Specialty[]> {
+  // فاز ۳۹ (v2): پاسخ صفحه‌بندی‌شده {items,total} → data آرایه
   const r = await apiClient.get("/specialties", { params: { include_inactive: includeInactive || undefined } });
-  return r.data.items;
+  return r.data;
 }
 
 export async function createSpecialty(payload: { name: string; description?: string }): Promise<Specialty> {
@@ -78,8 +79,9 @@ export async function updateSpecialty(id: string, payload: Record<string, unknow
 export async function fetchServices(params: {
   specialty_id?: string; status?: string; search?: string; page?: number;
 }): Promise<Paged<Service>> {
+  // فاز ۳۹ (v2): data آرایه + total/page در meta.pagination
   const r = await apiClient.get("/services", { params });
-  return r.data;
+  return { items: r.data, ...paginationOf(r) } as Paged<Service>;
 }
 
 export async function createService(payload: Record<string, unknown>): Promise<Service> {
@@ -94,7 +96,7 @@ export async function updateService(id: string, payload: Record<string, unknown>
 
 export async function fetchTariffs(serviceId: string): Promise<TariffVersion[]> {
   const r = await apiClient.get("/tariffs", { params: { service_id: serviceId } });
-  return r.data.items;
+  return r.data; // فاز ۳۹ (v2): {items,total} صفحه‌بندی‌شده → data آرایه
 }
 
 export async function createTariff(payload: {
@@ -116,7 +118,7 @@ export async function fetchQuote(serviceId: string, date?: string): Promise<Pric
 
 export async function fetchCredentials(counselorId: string): Promise<CounselorCredential[]> {
   const r = await apiClient.get(`/counselors/${counselorId}/credentials`);
-  return r.data.items;
+  return r.data; // فاز ۳۹ (v2): {items,total} صفحه‌بندی‌شده → data آرایه
 }
 
 export async function addCredential(counselorId: string, payload: Record<string, unknown>): Promise<CounselorCredential> {
@@ -126,7 +128,7 @@ export async function addCredential(counselorId: string, payload: Record<string,
 
 export async function fetchVerificationReviews(status = "pending"): Promise<CounselorCredential[]> {
   const r = await apiClient.get("/verification-reviews", { params: { status } });
-  return r.data.items;
+  return r.data; // فاز ۳۹ (v2): {items,total,all} صفحه‌بندی‌شده → data آرایه
 }
 
 export async function reviewCredential(id: string, action: "approve" | "reject", note?: string): Promise<CounselorCredential> {

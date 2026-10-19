@@ -37,7 +37,7 @@ def _notify_refund(db: Session, user_id, title: str, body: str, severity: str = 
 
 class RefundRequestCreate(BaseModel):
     order_id: uuid.UUID
-    amount: int = Field(gt=0)
+    amount: int = Field(gt=0, le=1_000_000_000_000)
     reason: str = Field(min_length=5, max_length=500)
 
 

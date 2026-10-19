@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface ConsultationRow {
   id: string;
@@ -30,7 +30,9 @@ export async function fetchConsultationRequests(params: {
   status?: string;
   page: number;
 }): Promise<{ items: ConsultationRow[]; total: number }> {
-  return (await apiClient.get("/consultation-requests", { params: { ...params, page_size: 20 } })).data;
+  // فاز ۳۹ (v2): data آرایه + total در meta.pagination
+  const r = await apiClient.get("/consultation-requests", { params: { ...params, page_size: 20 } });
+  return { items: r.data, total: Number(paginationOf(r).total ?? 0) };
 }
 
 export async function updateConsultationRequest(

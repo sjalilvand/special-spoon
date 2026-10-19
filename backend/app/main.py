@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.envelope import API_V2_PREFIX, EnvelopeMiddleware
+from app.core.guards import NullByteGuardMiddleware
 
 from app.api.v1.ai import router as ai_router
 from app.api.v1.applicants import router as applicants_router
@@ -108,6 +109,8 @@ for _router, _tags in _ROUTERS:
 for _router, _ in _ROUTERS:
     app.include_router(_router, prefix=API_V2_PREFIX, include_in_schema=False)  # type: ignore[arg-type]
 
+# فاز ۳۹: محافظ NUL داخلی‌تر از پاکت است تا رد 422 آن هم روی v2 پاکت‌بندی شود
+app.add_middleware(NullByteGuardMiddleware)
 app.add_middleware(EnvelopeMiddleware)
 
 

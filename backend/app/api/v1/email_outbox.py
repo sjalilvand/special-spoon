@@ -42,7 +42,7 @@ def _out(row: EmailOutbox) -> dict:
 @router.get("")
 def list_outbox(
     status: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=30, ge=1, le=100),
     db: Session = Depends(get_db),
     _actor=Depends(require_roles(*ADMIN_ROLES)),

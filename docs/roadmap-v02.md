@@ -106,12 +106,24 @@
 - [x] **ADR-04 گام ۲ (مهاجرت داده):** سرویس `app/services/storage_migration.py` + اسکریپت idempotent `backend/scripts/migrate_files_to_s3.py` (`--dry-run/--limit/--loop`) — فقط ردیف‌های storage='local'، کنترل checksum قبل از حرکت، put با همان کلید، راستی‌آزمایی با خواندن مجدد، ثبت storage='s3' فقط پس از تأیید، حفظ نسخه محلی (تسویه = گام ۴)، fail-soft در خطای S3، سند ADR-04 به‌روز شد
 - تست‌ها: ۲۳ آزمون جدید فاز ۳۸ (پاکت: ۱۱؛ مهاجرت/compose: ۱۲)؛ کل ۲۸۵ passed، 1 skipped؛ build tsc+vite ✓
 
+### فاز ۳۹ — ✅ انجام شد (مهاجرت فرانت به پاکت v2 + آزمون قرارداد Schemathesis + آزمون بار k6)
+- [x] **مهاجرت فرانت‌اند به v2 (گام ۲ طرح ۴ گام ADR-03):** `baseURL` کلاینت از `/api/v1` به `/api/v2` — interceptor گشونده پاکت در `client.ts` (تنها نقطه سازگاری): `res.data` → payload واقعی، `res.meta` → متادیتا (augmentation تایپ axios: `EnvelopeMeta`)، پاسخ‌های blob/B39 دست‌نخورده؛ `paginationOf` برای بازچینی شکل `{items, total, ...}` صفحات از `meta.pagination` (۱۱ تابع لایه api: users/applicants/counselors/appointments/cases/services/specialties/tariffs/credentials/verification/sms-outbox/audit/consultation-requests/nearby) — صفحات بدون تغییر؛ `errDetail` پاکت‌محور (`errors[0].message` + fallback `detail`)؛ جریان refresh و logout با همان قرارداد؛ build tsc+vite سبز؛ E2E واقعی سبز (ورود از UI + اعلان‌ها روی v2)
+- [x] **تدقیق قرارداد تفکیک فهرست‌ها (اصلاح ADR-03):** تفکیک `{items,...}` فقط برای پاسخ‌های واقعاً صفحه‌بندی‌شده (نشانگر total/page/page_size/limit/offset) — پاسخ‌های تکی/ساختاری با items داخلی (فاکتور، فرم، import، اعلان‌ها، گزینه‌ها) دست‌نخورده در data؛ کشف از تحلیل ۹۹ نقطه مصرف فرانت
+- [x] **باگ واقعی کوکی refresh:** کوکی با `path=/api/v1/auth` در v2 ارسال نمی‌شد (سکوتِ refresh فرانت) → `path=/api` (نسخه‌agnostic) + آزمون رگرسیون
+- [x] **آزمون قرارداد با Schemathesis (دسته ۳ سند):** اسکریپت خودکفا `backend/scripts/run_schemathesis.py` (پایگاه قربانی rosepsy_contract + مهاجرت + مدیر آزمون + سرور :8100 + schemathesis CLI با چک not_a_server_error + گزارش junit + teardown) — **۲۶۹/۲۶۹ سبز (۳۳۵۳ چک)**؛ ۳ باگ قرارداد واقعی یافت و رفع شد:
+  1. سرریز bigint در OFFSET با page نجومی (500 → سقف le=1_000_000 و 422) در ۱۰ مسیر صفحه‌بندی + offset اعلان‌ها
+  2. بایت NUL/0x00 در بدنه/کوئری (500 psycopg → میان‌افزار `NullByteGuardMiddleware` با رد 422 روی v1+v2، پوشش هر سه شکل: بایت خام/گریز JSON/درصد-انکود)
+  3. سرریز Numeric(16,2) در مبالغ کیف پول/استرداد/تخفیف (سقف Field = 1e12)
+  - ۴ آزمون رگرسیون یافته‌ها در tests/test_phase39_frontend_v2.py
+- [x] **آزمون بار با k6 (دسته ۶ سند):** `perf/smoke.js` (دود قرارداد) + `perf/load.js` (ramp ۱→۲۰ VU) با آستانه‌های SLO سند (p95<800ms، خطا<2%)؛ بیس‌لاین ثبت‌شده: **۶٬۲۶۵ درخواست، ۰ خطا، checks ۱۰۰٪، p95=45ms، 62 req/s**؛ README اجرا + خلاصه JSON در `perf/results/`
+- تست‌ها: ۱۷ آزمون جدید فاز ۳۹ (پاکت/مهاجرت: ۱۳ + رگرسیون قرارداد: ۴)؛ کل ۳۰۲ passed، 1 skipped؛ build tsc+vite ✓؛ E2E ۴/۴ ✓
+
 ### بدهی فنی (ADRهای سند)
-- [x] **ADR-03:** پاکت پاسخ استاندارد `{data, meta, errors}` — **پیاده شد در فاز ۳۸** (`docs/adr/ADR-03-response-envelope.md`)؛ /api/v2 با پاکت + meta (request_id/اکوی Idempotency-Key) + نگاشت خطا به کد پایدار؛ v1 دست‌نخورده؛ مهاجرت کلاینت‌ها (فرانت/موبایل) طبق طرح ۴ گام باقی است
+- [x] **ADR-03:** پاکت پاسخ استاندارد `{data, meta, errors}` — پیاده شد در فاز ۳۸ (`docs/adr/ADR-03-response-envelope.md`)؛ **گام ۲ طرح مهاجرت (فرانت) در فاز ۳۹ کامل شد** — کلاینت HTTP فرانت روی /api/v2 با interceptor گشونده پاکت + بازچینی pagination از meta + errDetail پاکت‌محور + اصلاح کوکی refresh به path=/api (باگ کشف‌شده)؛ مهاجرت موبایل باقی است
 - [x] **ADR-02:** صف کار (Celery/arq) — **مستند شد در فاز ۳۶** (`docs/adr/ADR-02-task-queue-celery.md`)؛ راه‌حل میانی فعلی: صف پایگاه‌داده email_outbox/sms_outbox + آستانه‌های اجرا و طرح مهاجرت
 - [x] **ADR-04:** Object Storage (MinIO/S3) — **آداپتور پلاگین‌پذیر پیاده شد در فاز ۳۷** (`docs/adr/ADR-04-object-storage.md`)؛ پیش‌فرض local بدون کلید، s3 با config کامل + fallback fail-soft + ستون files.storage برای مهاجرت تدریجی؛ **گام‌های ۱–۲ طرح مهاجرت (سرویس compose MinIO + اسکریپت مهاجرت idempotent) عملیاتی شد در فاز ۳۸** — سوییچ (گام ۳) و تسویه (گام ۴) باقی است
 - [x] **Rate limit سراسری (بند ۱۰ سند) + Idempotency-Key — مستند شد در فاز ۳۶ به‌عنوان ADR-05** (`docs/adr/ADR-05-global-rate-limit.md`)؛ راه‌حل میانی فعلی: سقف‌های per-feature (ورود/OTP/نگهداشت/دستیار) + قیود یکتایی DB برای مالی
-- [ ] دسته‌های آزمون ۳/۴/۶ سند (Contract/E2E/Performance) با Schemathesis/Playwright/k6 — **E2E: اسکلت در فاز ۳۷ و اجرای کامل سبز (۴/۴ smoke) در فاز ۳۸ انجام شد؛ Contract (Schemathesis) و Performance (k6) باقی است**
+- [x] **دسته‌های آزمون ۳/۴/۶ سند (Contract/E2E/Performance) با Schemathesis/Playwright/k6 — در فاز ۳۸/۳۹ کامل شد:** E2E ۴/۴ سبز (فاز ۳۸)؛ **فاز ۳۹: Contract با Schemathesis ۲۶۹/۲۶۹ سبز (۳ سه خطای قرارداد واقعی یافت و رفع شد: سرریز bigint در صفحه‌بندی، NUL/0x00 در بدنه، سرریز Numeric در مبالغ) + Performance با k6 (دود + بار ۱→۲۰ VU، ۶۲۶۵ درخواست، صفر خطا، p95=45ms) — `perf/` و `backend/scripts/run_schemathesis.py`**
 
 ## زنجیره فازهای انجام‌شده
 - فاز ۲۱ (بالادستی): رزرو عمومی + موتور اسلات
@@ -132,4 +144,5 @@
 - فاز ۳۵: پشتیبانی (B23) + تست روان‌شناسی (B37/D08) + دستیار هوشمند (B25–B27/D07)
 - فاز ۳۶: یکپارچه‌سازی‌های بیرونی — پیامک پلاگین‌پذیر (B28) + اپ Flutter (B17) + مستندسازی ADR-02/ADR-05
 - فاز ۳۷: تصمیم ADR-04 — Object Storage پلاگین‌پذیر (local/s3-MinIO) + گام اول E2E (اسکلت Playwright)
-- فاز ۳۸ (این فاز): ADR-03 پاکت پاسخ استاندارد با /api/v2 + اجرای کامل E2E (۴/۴ سبز) + عملیاتی‌سازی MinIO (گام‌های ۱–۲ طرح ADR-04)
+- فاز ۳۸: ADR-03 پاکت پاسخ استاندارد با /api/v2 + اجرای کامل E2E (۴/۴ سبز) + عملیاتی‌سازی MinIO (گام‌های ۱–۲ طرح ADR-04)
+- فاز ۳۹ (این فاز): مهاجرت فرانت‌اند به پاکت v2 (گام ۲ طرح ADR-03) + آزمون قرارداد با Schemathesis (۲۶۹/۲۶۹ — رفع ۳ باگ واقعی) + آزمون بار با k6 (بیس‌لاین perf) + تدقیق قرارداد تفکیک فهرست‌ها

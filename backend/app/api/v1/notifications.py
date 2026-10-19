@@ -40,7 +40,7 @@ def _out(n: Notification) -> dict:
 def list_notifications(
     unread_only: bool = False,
     limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=1_000_000),
     db: Session = Depends(get_db),
     actor=Depends(get_current_user),
 ) -> dict:

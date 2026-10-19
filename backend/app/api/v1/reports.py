@@ -368,7 +368,7 @@ def admin_dashboard(
 
 @router.get("/audit-events")
 def list_audit_events(
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=30, ge=1, le=100),
     db: Session = Depends(get_db),
     actor=Depends(get_current_user),

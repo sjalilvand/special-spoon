@@ -90,16 +90,18 @@
 
 | دسته سند | وضعیت فعلی |
 |---|---|
-| Unit / Integration (pytest روی PostgreSQL ایزوله) | ✅ ۲۸۵ تست سبز، 1 skipped (فاز ۳۸) |
+| Unit / Integration (pytest روی PostgreSQL ایزوله) | ✅ ۳۰۲ تست سبز، 1 skipped (فاز ۳۹) |
 | Security (ماتریس نقش×مسیر) | ✅ فاز ۲۵ — tests/test_access_matrix.py |
 | E2E (Playwright + Chromium) | ✅ فاز ۳۷/۳۸ — اسکلت + اجرای کامل سبز (۴/۴ smoke: سلامت، هدایت احراز، ورود واقعی، اعلان‌ها)؛ تعمیق سناریوهای کسب‌وکار باقی است |
-| Contract (Schemathesis) / Performance (k6) / Accessibility / UAT | ⬜ زیرساخت‌های تکمیلی لازم است |
+| Contract (Schemathesis) | ✅ فاز ۳۹ — ۲۶۹/۲۶۹ عملیات، ۳٬۳۵۳ چک سبز (`backend/scripts/run_schemathesis.py`)؛ سه باگ قرارداد واقعی رفع شد |
+| Performance (k6) | ✅ فاز ۳۹ — دود + بار (۱→۲۰ VU): ۶٬۲۶۵ درخواست، صفر خطا، p95=45ms (`perf/`) |
+| Accessibility / UAT | ⬜ زیرساخت‌های تکمیلی لازم است |
 
 ## ۷) تصمیم‌های معمارانه باقی‌مانده نسبت به سند
 
 - پاکت پاسخ استاندارد `{data, meta, errors}` و Idempotency-Key: **پاکت با نسخه /api/v2 پیاده شد (فاز ۳۸ — ADR-03)**؛ v1 دست‌نخورده؛ اکوی Idempotency-Key در meta انجام می‌شود؛ ذخیره اثر سرور (جدول idempotency_keys) = گام ۳ ADR-05 باقی است.
 - OTP و کانال‌های پیام‌رسانی، صف کار و Object Storage: ADR-04 (Object Storage) پیاده شد (فاز ۳۷/۳۸)؛ ADR-02 (صف کار) مستند شد؛ OTP با آداپتور پیامک فاز ۳۶.
-- مهاجرت کلاینت‌ها (فرانت/موبایل) به پاکت v2 و سوییچ نهایی STORAGE_BACKEND=s3: طبق طرح‌های ۴ گام ADR-03 و ADR-04 باقی است.
+- مهاجرت کلاینت‌ها به پاکت v2: **فرانت کامل شد (فاز ۳۹ — گام ۲ طرح ADR-03)**؛ موبایل (گام ۳) باقی است. سوییچ نهایی STORAGE_BACKEND=s3 طبق گام‌های ۳–۴ ADR-04 باقی است.
 
 ## ۸) به‌روزرسانی فاز ۲۵
 

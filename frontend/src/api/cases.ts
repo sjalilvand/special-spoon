@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface CaseRow {
   id: string;
@@ -73,7 +73,9 @@ export async function fetchCases(params: {
   status?: string;
   search?: string;
 }): Promise<{ items: CaseRow[]; total: number }> {
-  return (await apiClient.get("/cases", { params: { ...params, page_size: 10 } })).data;
+  // فاز ۳۹ (v2): data آرایه + total در meta.pagination
+  const r = await apiClient.get("/cases", { params: { ...params, page_size: 10 } });
+  return { items: r.data, total: Number(paginationOf(r).total ?? 0) };
 }
 
 export async function fetchCase(id: string): Promise<CaseDetail> {

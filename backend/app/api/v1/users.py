@@ -50,7 +50,7 @@ def _revoke_all_sessions(db: Session, user_id) -> None:
 @router.get("")
 def list_users(
     search: str = Query(default="", max_length=100),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     _actor: User = Depends(require_roles("SYSTEM_ADMIN")),

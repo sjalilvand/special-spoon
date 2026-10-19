@@ -161,7 +161,7 @@ def counselor_options(
 def list_cases(
     status: str = Query(default="", max_length=30),
     search: str = Query(default="", max_length=100),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     actor=Depends(require_roles(*CASE_VIEW_ROLES)),

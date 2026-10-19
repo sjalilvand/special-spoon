@@ -393,7 +393,8 @@ function NewOrderDialog(props: {
     queryKey: ["all-services"],
     queryFn: async () => {
       const r = await apiClient.get("/services", { params: { status: "active", page_size: 100 } });
-      return r.data.items as { id: string; title: string; current_price: number | null; current_currency: string | null }[];
+      // فاز ۳۹ (v2): پاسخ صفحه‌بندی‌شده {items,...} → data آرایه
+      return r.data as { id: string; title: string; current_price: number | null; current_currency: string | null }[];
     },
     enabled: props.open,
   });

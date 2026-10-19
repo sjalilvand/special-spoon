@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, paginationOf } from "./client";
 
 export interface IdName {
   id: string;
@@ -64,7 +64,9 @@ export async function fetchServiceLocations(): Promise<IdName[]> {
 }
 
 export async function fetchCounselors(params: { search?: string; page: number }): Promise<Paged<Counselor>> {
-  return (await apiClient.get("/counselors", { params: { ...params, page_size: 10 } })).data;
+  // فاز ۳۹ (v2): پاسخ صفحه‌بندی‌شده → data آرایه + total/page در meta.pagination
+  const r = await apiClient.get("/counselors", { params: { ...params, page_size: 10 } });
+  return { items: r.data, ...paginationOf(r) } as Paged<Counselor>;
 }
 
 export async function createCounselor(payload: Record<string, unknown>): Promise<Counselor> {
@@ -76,7 +78,8 @@ export async function updateCounselor(id: string, payload: Record<string, unknow
 }
 
 export async function fetchApplicants(params: { search?: string; page: number }): Promise<Paged<Applicant>> {
-  return (await apiClient.get("/applicants", { params: { ...params, page_size: 10 } })).data;
+  const r = await apiClient.get("/applicants", { params: { ...params, page_size: 10 } });
+  return { items: r.data, ...paginationOf(r) } as Paged<Applicant>;
 }
 
 export async function createApplicant(payload: Record<string, unknown>): Promise<Applicant> {

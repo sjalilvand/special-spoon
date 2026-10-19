@@ -199,6 +199,14 @@
 - بخش storage در `/integrations/config` (۶ یکپارچه‌سازی) + سند `docs/adr/ADR-04-object-storage.md` (آستانه اجرا + طرح مهاجرت ۴ گام)
 - اسکلت Playwright در `frontend/e2e/` (smoke: سلامت API، هدایت احراز، ورود، اعلان‌ها) — خارج از build فرانت
 
+## فاز ۳۹ — مهاجرت فرانت به پاکت v2 + آزمون قرارداد Schemathesis + آزمون بار k6 (v0.39.0)
+- **مهاجرت فرانت‌اند به /api/v2 (گام ۲ طرح ADR-03):** interceptor گشونده پاکت در `src/api/client.ts` — تنها نقطه سازگاری بین سیم v2 و شکل مصرف داخلی؛ `res.meta` (متادیتا + pagination) با augmentation تایپ axios؛ ۱۱ تابع لایه api شکل `{items, total}` صفحات را از `meta.pagination` بازچینی می‌کنند تا صفحات تغییر نکنند؛ `errDetail` پاکت‌محور؛ پاسخ‌های blob (B39) دست‌نخورده
+- **تدقیق قرارداد تفکیک فهرست‌ها:** تفکیک فقط برای پاسخ‌های واقعاً صفحه‌بندی‌شده (نشانگر total/page/...) — پاسخ‌های تکی با items داخلی (فاکتور/فرم/import/اعلان‌ها) دست‌نخورده؛ کشف‌شده از تحلیل ۹۹ نقطه مصرف فرانت
+- **باگ واقعی کوکی refresh:** `path=/api/v1/auth` در v2 ارسال نمی‌شد → `path=/api` (نسخه‌agnostic)
+- **آزمون قرارداد (دسته ۳ سند):** `backend/scripts/run_schemathesis.py` خودکفا — ۲۶۹/۲۶۹ سبز (۳٬۳۵۳ چک)؛ سه باگ واقعی یافت و رفع شد: سرریز bigint صفحه‌بندی، NUL/0x00 (میان‌افزار NullByteGuardMiddleware)، سرریز Numeric مبالغ
+- **آزمون بار (دسته ۶ سند):** `perf/smoke.js` + `perf/load.js` (ramp ۱→۲۰ VU) — بیس‌لاین: ۶٬۲۶۵ درخواست، ۰ خطا، p95=45ms، 62 req/s؛ `perf/README.md`
+- تست‌ها: ۱۷ آزمون جدید؛ کل ۳۰۲ passed، 1 skipped؛ build tsc+vite ✓؛ E2E ۴/۴ ✓
+
 ## فاز ۳۸ — پاکت پاسخ استاندارد /api/v2 (ADR-03) + اجرای کامل E2E + عملیاتی‌سازی MinIO (v0.38.0)
 - **ADR-03 پاکت `{data, meta, errors}`:** میان‌افزار پاکت روی `/api/v2` — همان روت‌های v1 با قرارداد استاندارد سند: موفقیت `{data, meta, errors:null}`، خطا `{data:null, meta, errors:[{code,message,details?}]}`؛ meta شامل `request_id/timestamp/version/duration_ms` + اکوی `Idempotency-Key`؛ فهرست‌های `{items,...}` → `data` + `meta.pagination`؛ نگاشت خطاها به کد پایدار؛ دانلود فایل (B39) بدون پاکت؛ **v1 بدون هیچ تغییری** (سازگاری فرانت/موبایل)؛ سند `docs/adr/ADR-03-response-envelope.md`
 - **اجرای کامل E2E:** `@playwright/test` + Chromium — **۴/۴ passed** روی سرورهای در حال اجرا (سلامت API، هدایت احراز، ورود واقعی مدیر از /login، بارگذاری اعلان‌ها)؛ نتایج در `frontend/e2e/README.md`

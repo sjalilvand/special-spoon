@@ -26,6 +26,9 @@ with _admin.connect() as _c:
     _c.execute(text(f"CREATE DATABASE {TEST_DB}"))
 
 os.environ["DATABASE_URL"] = TEST_URL
+# فاز ۳۹: محیط آزمون = test تا کوکی refresh پرچم secure نگیرد و TestClient
+# (http) بتواند آن را در جریان refresh ارسال کند (رفتار production دست‌نخورده).
+os.environ.setdefault("ENVIRONMENT", "test")
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402

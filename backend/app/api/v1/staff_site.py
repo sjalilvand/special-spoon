@@ -107,7 +107,7 @@ def _out(db: Session, r: ConsultationRequest) -> dict:
 @router.get("/consultation-requests")
 def list_consultation_requests(
     status: str = Query(default="", max_length=20),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     _actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN", "COUNSELOR")),

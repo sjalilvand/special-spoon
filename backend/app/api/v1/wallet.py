@@ -52,7 +52,7 @@ def my_wallet_entries(
 
 
 class TopupCreate(BaseModel):
-    amount: int = Field(gt=0, description="مبلغ شارژ (ریال)")
+    amount: int = Field(gt=0, le=1_000_000_000_000, description="مبلغ شارژ (ریال) — سقف برای جلوگیری از سرریز Numeric(16,2)")
     gateway: str | None = Field(default=None, max_length=30)
 
 
@@ -139,7 +139,7 @@ def user_wallet_entries(
 
 
 class AdjustCreate(BaseModel):
-    amount: int = Field(description="مثبت = شارژ، منفی = کسر (ریال)")
+    amount: int = Field(ge=-1_000_000_000_000, le=1_000_000_000_000, description="مثبت = شارژ، منفی = کسر (ریال)")
     note: str = Field(min_length=3, max_length=300)
 
 

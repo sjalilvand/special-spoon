@@ -59,7 +59,7 @@ def _check_identifier_unique(db: Session, value: str | None, column, label: str)
 @router.get("")
 def list_applicants(
     search: str = Query(default="", max_length=100),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     _actor=Depends(require_roles(*MANAGE_ROLES)),

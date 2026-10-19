@@ -1,0 +1,320 @@
+{
+    "root_group": {
+        "checks": {},
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+                "setup": {
+                    "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                    "groups": {},
+                    "checks": {
+                            "login 200": {
+                                "passes": 1,
+                                "fails": 0,
+                                "name": "login 200",
+                                "path": "::setup::login 200",
+                                "id": "647055af8ffe21e58084ae4b140cdda0"
+                            },
+                            "پاکت v2": {
+                                "name": "پاکت v2",
+                                "path": "::setup::پاکت v2",
+                                "id": "83f20b36d51d73b11b73167aadeabdd5",
+                                "passes": 1,
+                                "fails": 0
+                            }
+                        },
+                    "name": "setup",
+                    "path": "::setup"
+                },
+                "سلامت": {
+                    "id": "503c02692e42e1b1d176436f65c43887",
+                    "groups": {},
+                    "checks": {
+                            "health 200": {
+                                "name": "health 200",
+                                "path": "::سلامت::health 200",
+                                "id": "cc439488a4e09bbb4896cf2f83208afa",
+                                "passes": 12,
+                                "fails": 0
+                            }
+                        },
+                    "name": "سلامت",
+                    "path": "::سلامت"
+                },
+                "ورود v2": {
+                    "name": "ورود v2",
+                    "path": "::ورود v2",
+                    "id": "74cccc8a7b97b6126348533a91dd17ea",
+                    "groups": {},
+                    "checks": {
+                            "login 200": {
+                                "path": "::ورود v2::login 200",
+                                "id": "6e00f197a372b0d3478f38d84e1e1f53",
+                                "passes": 12,
+                                "fails": 0,
+                                "name": "login 200"
+                            },
+                            "پاکت v2 با access_token": {
+                                "fails": 0,
+                                "name": "پاکت v2 با access_token",
+                                "path": "::ورود v2::پاکت v2 با access_token",
+                                "id": "3b7133fb25d02c4d8516873ecd4cb786",
+                                "passes": 12
+                            }
+                        }
+                },
+                "فهرست کاربران v2 (صفحه‌بندی)": {
+                    "groups": {},
+                    "checks": {
+                            "users 200": {
+                                "path": "::فهرست کاربران v2 (صفحه‌بندی)::users 200",
+                                "id": "f3ae1fc96783237c50e074da4154830e",
+                                "passes": 12,
+                                "fails": 0,
+                                "name": "users 200"
+                            },
+                            "items → data آرایه": {
+                                "name": "items → data آرایه",
+                                "path": "::فهرست کاربران v2 (صفحه‌بندی)::items → data آرایه",
+                                "id": "492f55b0932a0e9d597d5f53a8fcd9fa",
+                                "passes": 12,
+                                "fails": 0
+                            },
+                            "meta.pagination.total": {
+                                "name": "meta.pagination.total",
+                                "path": "::فهرست کاربران v2 (صفحه‌بندی)::meta.pagination.total",
+                                "id": "999de5bd6d85dbc248934e3058f0d751",
+                                "passes": 12,
+                                "fails": 0
+                            }
+                        },
+                    "name": "فهرست کاربران v2 (صفحه‌بندی)",
+                    "path": "::فهرست کاربران v2 (صفحه‌بندی)",
+                    "id": "51084b01d366e342052dc71cbbc605fd"
+                },
+                "اعلان‌ها v2 (پاسخ intact)": {
+                    "checks": {
+                        "notifications 200": {
+                            "name": "notifications 200",
+                            "path": "::اعلان‌ها v2 (پاسخ intact)::notifications 200",
+                            "id": "115a87c1445846c7c2705f6cc184db7d",
+                            "passes": 12,
+                            "fails": 0
+                        },
+                        "{items,unread} حفظ شده": {
+                            "id": "f27ed01d898d9ddd2ec5493509746c16",
+                            "passes": 12,
+                            "fails": 0,
+                            "name": "{items,unread} حفظ شده",
+                            "path": "::اعلان‌ها v2 (پاسخ intact)::{items,unread} حفظ شده"
+                        }
+                    },
+                    "name": "اعلان‌ها v2 (پاسخ intact)",
+                    "path": "::اعلان‌ها v2 (پاسخ intact)",
+                    "id": "569ba33ac1cbf612428426d1f816294d",
+                    "groups": {}
+                },
+                "پروفایل کاربر v2 (پاسخ intact)": {
+                    "groups": {},
+                    "checks": {
+                            "me 200": {
+                                "id": "27688ca7369f6f65c7956efbcc9087fd",
+                                "passes": 12,
+                                "fails": 0,
+                                "name": "me 200",
+                                "path": "::پروفایل کاربر v2 (پاسخ intact)::me 200"
+                            },
+                            "شیء دست‌نخورده": {
+                                "id": "4c038e994fd5a7bf79e0d760845eada7",
+                                "passes": 12,
+                                "fails": 0,
+                                "name": "شیء دست‌نخورده",
+                                "path": "::پروفایل کاربر v2 (پاسخ intact)::شیء دست‌نخورده"
+                            }
+                        },
+                    "name": "پروفایل کاربر v2 (پاسخ intact)",
+                    "path": "::پروفایل کاربر v2 (پاسخ intact)",
+                    "id": "53a6d52b02a08d16cb78dff5d4ee7516"
+                }
+            }
+    },
+    "metrics": {
+        "rosepsy_v2_cases_duration": {
+            "p(95)": 7.659399499999998,
+            "avg": 4.951822833333334,
+            "min": 3.637066,
+            "med": 4.109923,
+            "max": 8.960012,
+            "p(90)": 6.5741994
+        },
+        "checks": {
+            "passes": 122,
+            "fails": 0,
+            "value": 1
+        },
+        "rosepsy_v2_users_duration": {
+            "avg": 8.816257166666668,
+            "min": 6.567207,
+            "med": 7.34119,
+            "max": 23.801148,
+            "p(90)": 10.234151,
+            "p(95)": 16.47746514999999,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0
+        },
+        "http_req_waiting": {
+            "min": 1.149325,
+            "med": 6.916874,
+            "max": 245.259868,
+            "p(90)": 116.854221,
+            "p(95)": 143.400704,
+            "avg": 32.782732590163924
+        },
+        "http_req_duration{scenario:default}": {
+            "max": 245.357569,
+            "p(90)": 115.10581619999999,
+            "p(95)": 145.04788754999993,
+            "avg": 31.346834016666666,
+            "min": 1.274606,
+            "med": 6.9388325,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        },
+        "data_sent": {
+            "count": 19319,
+            "rate": 2830.0437160217693
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 1
+        },
+        "http_req_blocked": {
+            "avg": 0.01197590163934426,
+            "min": 0.002199,
+            "med": 0.003574,
+            "max": 0.359037,
+            "p(90)": 0.007053,
+            "p(95)": 0.008952
+        },
+        "http_req_sending": {
+            "max": 0.188285,
+            "p(90)": 0.023293,
+            "p(95)": 0.039524,
+            "avg": 0.01952626229508197,
+            "min": 0.007612,
+            "med": 0.01372
+        },
+        "http_req_receiving": {
+            "avg": 0.06433688524590163,
+            "min": 0.03705,
+            "med": 0.060147,
+            "max": 0.134865,
+            "p(90)": 0.091026,
+            "p(95)": 0.098442
+        },
+        "group_duration": {
+            "p(95)": 145.2995748499999,
+            "avg": 31.52108918333333,
+            "min": 1.42717,
+            "med": 7.084572,
+            "max": 245.615507,
+            "p(90)": 115.30436320000001
+        },
+        "rosepsy_v2_login_duration": {
+            "p(95)": 219.33656904999998,
+            "avg": 131.98149408333333,
+            "min": 90.900227,
+            "med": 115.92336499999999,
+            "max": 245.357569,
+            "p(90)": 195.64825100000002,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "http_req_duration": {
+            "avg": 32.86659573770492,
+            "min": 1.274606,
+            "med": 6.974057,
+            "max": 245.357569,
+            "p(90)": 116.945301,
+            "p(95)": 143.520799
+        },
+        "http_req_duration{expected_response:true}": {
+            "min": 1.274606,
+            "med": 6.974057,
+            "max": 245.357569,
+            "p(90)": 116.945301,
+            "p(95)": 143.520799,
+            "avg": 32.86659573770492
+        },
+        "http_req_connecting": {
+            "p(95)": 0,
+            "avg": 0.006061868852459017,
+            "min": 0,
+            "med": 0,
+            "max": 0.294341,
+            "p(90)": 0
+        },
+        "rosepsy_v2_notifications_duration": {
+            "p(95)": 15.54936275,
+            "avg": 9.508176333333333,
+            "min": 5.408936,
+            "med": 8.248418000000001,
+            "max": 15.64682,
+            "p(90)": 15.226962300000002
+        },
+        "iterations": {
+            "count": 12,
+            "rate": 1.7578821156509772
+        },
+        "http_req_failed{scenario:default}": {
+            "passes": 0,
+            "fails": 60,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_reqs": {
+            "count": 61,
+            "rate": 8.935900754559135
+        },
+        "data_received": {
+            "count": 28853,
+            "rate": 4226.681056906471
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 61,
+            "value": 0
+        },
+        "iteration_duration": {
+            "max": 673.668467,
+            "p(90)": 626.1126770999999,
+            "p(95)": 648.8580901999999,
+            "avg": 558.3935966666667,
+            "min": 514.152716,
+            "med": 538.736634
+        },
+        "vus_max": {
+            "value": 1,
+            "min": 1,
+            "max": 1
+        }
+    },
+    "setup_data": {
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmYWMzMjg3YS00MTE0LTQ0NGItODQyNi02NDhhZTgwYWNiOTMiLCJ2ZXIiOjEsImlhdCI6MTc5MjQxMjM4NCwiZXhwIjoxNzkyNDEzMjg0LCJ0eXAiOiJhY2Nlc3MifQ.oCJWFpv06JH3bQ0nncwjx8cfDyveGvVqLmMOcQ2GAXY"
+    }
+}
