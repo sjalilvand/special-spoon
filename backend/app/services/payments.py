@@ -58,6 +58,24 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def generate_order_number(db: Session) -> str:
+    """شماره یکتای سفارش ORD-<سال شمسی>-<ترتیب ۶ رقمی> — مشترک بین
+    سفارش خدمت (فاز ۲۹) و سفارش دوره/آزمون (فاز ۳۴)."""
+    from app.core.dates import gregorian_to_jalali
+
+    now = datetime.now(timezone.utc)
+    jy, _, _ = gregorian_to_jalali(now.year, now.month, now.day)
+    for _ in range(30):
+        rows = db.execute(
+            text("SELECT COUNT(*) FROM orders WHERE order_number LIKE :pfx"),
+            {"pfx": f"ORD-{jy:04d}-%"},
+        ).scalar() or 0
+        candidate = f"ORD-{jy:04d}-{rows + 1:06d}"
+        if db.scalars(select(Order.id).where(Order.order_number == candidate)).first() is None:
+            return candidate
+    raise GatewayError("تولید شماره سفارش ناموفق بود")
+
+
 # ---------------------------------------------------------------- sandbox
 def _sandbox_signature(authority: str, amount: int) -> str:
     msg = f"{authority}:{amount}".encode()
@@ -279,6 +297,17 @@ def _settle_order_side_effects(db: Session, order: Order, payment: Payment) -> N
                 note=f"شارژ کیف پول - سفارش {order.order_number}",
                 created_by=order.owner_user_id,
             )
+        elif getattr(order, "kind", "service") == "course" and order.course_id is not None:
+            # فاز ۳۴ - B34: فعال‌سازی ثبت‌نام دوره پس از پرداخت موفق (pending → active)
+            from datetime import datetime, timezone as _tz
+            from app.models.learning import CourseEnrollment, EnrollmentStatus
+            enr = db.scalars(
+                select(CourseEnrollment).where(CourseEnrollment.order_id == order.id)
+            ).first()
+            if enr is not None and enr.status == EnrollmentStatus.PENDING:
+                enr.status = EnrollmentStatus.ACTIVE
+                enr.activated_at = datetime.now(_tz.utc)
+        # kind='exam': دسترسی آزمون با سفارش پرداخت‌شده کنترل می‌شود؛ رکورد اضافه لازم نیست
     except Exception:
         db.rollback()
 

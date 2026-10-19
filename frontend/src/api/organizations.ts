@@ -56,6 +56,17 @@ export interface ReceivableRow {
   created_at: string | null;
 }
 
+export interface OrgStatementRef {
+  id: string;
+  statement_no: string;
+  period_from: string;
+  period_to: string;
+  status: "issued" | "settled";
+  orders_count: number;
+  org_share_total: number;
+  created_at: string | null;
+}
+
 export interface ReceivablesReport {
   organization_id: string;
   organization_name: string;
@@ -63,7 +74,10 @@ export interface ReceivablesReport {
   total_amount: number;
   org_share_total: number;
   applicant_share_total: number;
-  note: string;
+  settled_total: number;
+  issued_unsettled_total: number;
+  outstanding_total: number;
+  statements: OrgStatementRef[];
   items: ReceivableRow[];
 }
 
@@ -99,5 +113,52 @@ export async function updateContract(id: string, payload: Record<string, unknown
 
 export async function fetchReceivables(orgId: string): Promise<ReceivablesReport> {
   const r = await apiClient.get<ReceivablesReport>(`/organizations/${orgId}/receivables`);
+  return r.data;
+}
+
+// ---------------------------------------------------------------- فاز ۳۴ - B21-plus: صورتحساب دوره‌ای
+export interface StatementItem {
+  order_id: string;
+  order_number: string;
+  amount: number;
+  org_share_amount: number;
+  applicant_share_amount: number;
+  coverage_percent: number | null;
+}
+
+export interface OrgStatement {
+  id: string;
+  statement_no: string;
+  organization_id: string;
+  period_from: string;
+  period_to: string;
+  status: "issued" | "settled";
+  orders_count: number;
+  total_amount: number;
+  org_share_total: number;
+  applicant_share_total: number;
+  currency: string;
+  journal_entry_id: string | null;
+  note: string | null;
+  settled_at: string | null;
+  created_at: string | null;
+  items: StatementItem[];
+}
+
+export async function fetchStatements(orgId: string): Promise<OrgStatement[]> {
+  const r = await apiClient.get<{ items: OrgStatement[] }>(`/organizations/${orgId}/statements`);
+  return r.data.items;
+}
+
+export async function createStatement(
+  orgId: string,
+  payload: { period_from: string; period_to: string; note?: string },
+): Promise<OrgStatement> {
+  const r = await apiClient.post<OrgStatement>(`/organizations/${orgId}/statements`, payload);
+  return r.data;
+}
+
+export async function settleStatement(statementId: string): Promise<OrgStatement> {
+  const r = await apiClient.post<OrgStatement>(`/statements/${statementId}/settle`, {});
   return r.data;
 }

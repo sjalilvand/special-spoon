@@ -57,23 +57,8 @@ def _active_contract_for(db: Session, organization_id, service_id):
 
 
 def _order_number(db: Session) -> str:
-    from app.core.dates import gregorian_to_jalali
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    jy, _, _ = gregorian_to_jalali(now.year, now.month, now.day)
-    from sqlalchemy import text
-
-    for _ in range(30):
-        count = db.execute(
-            text("SELECT COUNT(*) FROM orders WHERE order_number LIKE :pfx"),
-            {"pfx": f"ORD-{jy:04d}-%"},
-        ).scalar() or 0
-        candidate = f"ORD-{jy:04d}-{count + 1:06d}"
-        taken = db.scalars(select(Order.id).where(Order.order_number == candidate)).first()
-        if taken is None:
-            return candidate
-    raise HTTPException(status_code=500, detail="تولید شماره سفارش ناموفق بود")
+    """فاز ۳۴: تولید شماره سفارش به سرویس مشترک منتقل شد (سفارش دوره/آزمون هم همان را می‌گیرد)."""
+    return pay.generate_order_number(db)
 
 
 def _order_out(db: Session, o: Order, with_invoice: bool = True) -> dict:

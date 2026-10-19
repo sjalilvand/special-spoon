@@ -54,6 +54,20 @@ from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLoc
 from app.models.recommendation import Recommendation
 from app.models.referral import Referral
 from app.models.refund import Refund, RefundRequest, RefundRequestStatus
+from app.models.learning import (
+    AttemptStatus,
+    Certificate,
+    Content,
+    Course,
+    CourseEnrollment,
+    CourseSession,
+    EnrollmentStatus,
+    Exam,
+    ExamAttempt,
+    ExamQuestion,
+    PublishStatus,
+)
+from app.models.org_statement import OrgStatement, OrgStatementItem, OrgStatementStatus
 from app.models.topics import ServiceTopic, Topic
 from app.models.wallet import (
     Wallet,

@@ -412,6 +412,32 @@ def entry_for_settlement(db: Session, settlement, *, commit: bool = False) -> Jo
     )
 
 
+def entry_for_org_statement(db: Session, statement, *, commit: bool = False) -> JournalEntry | None:
+    """فاز ۳۴ - B21-plus: سند تسویه صورتحساب سازمان —
+    Dr 1101 بانک (مبلغ سهم سازمان)  |  Cr 1104 دریافتنی از سازمان‌ها.
+    idempotent با (source_type='org_statement', source_id)."""
+    amount = int(Decimal(statement.org_share_total or 0))
+    if amount <= 0:
+        return None
+    bank = account_by_code(db, ACCOUNT_CODE["bank"])
+    org_rec = account_by_code(db, ACCOUNT_CODE["org_receivable"])
+    lines = [
+        {"account_id": bank.id, "debit": amount, "credit": 0,
+         "description": f"وصول مطالبه سازمان - صورتحساب {statement.statement_no}"},
+        {"account_id": org_rec.id, "debit": 0, "credit": amount,
+         "description": f"تسویه دریافتنی سازمان {statement.statement_no}"},
+    ]
+    return post_entry(
+        db,
+        lines=lines,
+        description=f"تسویه صورتحساب دوره‌ای سازمان - {statement.statement_no}",
+        kind="org_statement_settlement",
+        source_type=JournalSource.ORG_STATEMENT,
+        source_id=statement.id,
+        commit=commit,
+    )
+
+
 # ------------------------------------------------ backfill & گزارش
 def backfill_financial_events(db: Session, *, actor=None, commit: bool = True) -> dict:
     """سند زدن رویدادهای مالی بدون سند (idempotent) — مغایرت‌گیری و مهاجرت."""
@@ -534,10 +560,13 @@ def reconciliation(db: Session) -> dict:
 
     tb = trial_balance(db)
 
-    # تطبیق فروش گزارش (سفارش‌های خدمت) با درآمد شناسایی‌شده در دفتر
+    # تطبیق فروش گزارش (سفارش‌های خدمت/دوره/آزمون فاز ۳۴) با درآمد شناسایی‌شده در دفتر؛
+    # سهم سازمان (B21) هم در گزارش و هم در دفتر جزو فروش است (فاز ۳۴: اصلاح تطبیق)
     sales_net = db.execute(
-        select(func.coalesce(func.sum(Order.payable_amount - Order.refunded_amount), 0))
-        .where(Order.status == "paid", Order.kind == "service")
+        select(func.coalesce(func.sum(
+            Order.payable_amount - Order.refunded_amount + func.coalesce(Order.org_share_amount, 0)
+        ), 0))
+        .where(Order.status == "paid", Order.kind.in_(("service", "course", "exam")))
     ).scalar() or 0
     revenue_acc = db.scalars(select(Account).where(Account.code == ACCOUNT_CODE["service_revenue"])).first()
     returns_acc = db.scalars(select(Account).where(Account.code == ACCOUNT_CODE["sales_returns"])).first()

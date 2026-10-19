@@ -24,6 +24,7 @@ import Level3AlertsPage from "../pages/Level3AlertsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import LoginPage from "../pages/LoginPage";
 import OrganizationsPage from "../pages/OrganizationsPage";
+import LearningPage from "../pages/LearningPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
 import OrdersPage from "../pages/OrdersPage";
@@ -93,6 +94,12 @@ export default function AppRoutes() {
       <Route path="/organizations" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]}>
           <Layout><OrganizationsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۴ - B33–B36: محتوا/دوره/آزمون/گواهی */}
+      <Route path="/learning" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><LearningPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/verification-reviews" element={

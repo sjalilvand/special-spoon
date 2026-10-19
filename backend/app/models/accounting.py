@@ -47,6 +47,7 @@ class JournalSource:
     REFUND = "refund"                          # استرداد اجراشده
     WALLET_ADJUSTMENT = "wallet_adjustment"    # تعدیل دستی مدیر (فقط reason=adjustment)
     SETTLEMENT = "settlement"                  # تسویه دوره درگاه
+    ORG_STATEMENT = "org_statement"            # فاز ۳۴ - B21-plus: تسویه صورتحساب سازمان
     MANUAL = "manual"                          # سند دستی
     REVERSAL = "reversal"                      # سند برگشتی
 
@@ -87,7 +88,7 @@ class JournalEntry(Base):
     __tablename__ = "journal_entries"
     __table_args__ = (
         UniqueConstraint("source_type", "source_id", name="uq_journal_source_event"),
-        CheckConstraint("source_type IN ('payment','refund','wallet_adjustment','settlement','manual','reversal')",
+        CheckConstraint("source_type IN ('payment','refund','wallet_adjustment','settlement','org_statement','manual','reversal')",
                         name="ck_journal_source_type"),
         Index("ix_journal_entries_date", "entry_date"),
         Index("ix_journal_entries_source", "source_type", "source_id"),

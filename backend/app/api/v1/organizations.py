@@ -1,4 +1,5 @@
-"""فاز ۳۳ - B21 سند جامع: سازمان‌ها، قراردادها و سهم پرداخت.
+"""فاز ۳۳/۳۴ - B21 + B21-plus سند جامع: سازمان‌ها، قراردادها، سهم پرداخت
+و صورتحساب دوره‌ای سازمان.
 
 قواعد پذیرش:
 - slug سازمان یکتا (۴۰۹)؛ شناسه ملی سازمان در صورت ورود یکتا؛
@@ -7,22 +8,27 @@
   اعمال نمی‌شود»؛
 - دامنه خدمت قرارداد: بدون ردیف = همه خدمات؛ با ردیف = فقط همان خدمات؛
 - تقسیم سهم در ساخت سفارش (payments.create_order) snapshot می‌شود؛
-- گزارش مطالبات از سازمان: جمع سهم سازمان سفارش‌های پرداخت‌شده.
+- B21-plus (فاز ۳۴): صورتحساب دوره‌ای از سفارش‌های پرداخت‌شده دارای سهم
+  در بازه snapshot می‌شود؛ هر سفارش حداکثر یک‌بار (uq)؛ صدور سند جدید
+  نمی‌زند؛ تسویه سند می‌زند: Dr 1101 بانک | Cr 1104 دریافتنی سازمان؛
+  تسویه فقط برای issued؛ تکرار ۴۰۹.
 """
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
 from app.models.catalog import Service
 from app.models.org_contract import Contract, ContractService, Organization
+from app.models.org_statement import OrgStatement, OrgStatementItem, OrgStatementStatus
 from app.models.payment import Order, OrderStatus
 from app.models.user import User
+from app.services.accounting import entry_for_org_statement
 
 router = APIRouter(tags=["organizations"])
 
@@ -337,6 +343,196 @@ def update_contract(
     return _contract_out(db, contract)
 
 
+# ---------------------------------------------------------------- statements (B21-plus، فاز ۳۴)
+class StatementCreate(BaseModel):
+    period_from: date
+    period_to: date
+    note: str | None = Field(default=None, max_length=500)
+
+
+def _next_statement_number(db: Session) -> str:
+    """شماره یکتای صورتحساب: ORG-<سال شمسی>-<ترتیب ۶ رقمی>."""
+    from app.core.dates import gregorian_to_jalali
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    jy, _, _ = gregorian_to_jalali(now.year, now.month, now.day)
+    for _ in range(30):
+        rows = db.execute(
+            text("SELECT COUNT(*) FROM org_statements WHERE statement_no LIKE :pfx"),
+            {"pfx": f"ORG-{jy:04d}-%"},
+        ).scalar() or 0
+        candidate = f"ORG-{jy:04d}-{rows + 1:06d}"
+        if db.scalars(select(OrgStatement.id).where(OrgStatement.statement_no == candidate)).first() is None:
+            return candidate
+    raise HTTPException(status_code=500, detail="تولید شماره صورتحساب ناموفق بود")
+
+
+def _statement_out(st: OrgStatement) -> dict:
+    return {
+        "id": str(st.id),
+        "statement_no": st.statement_no,
+        "organization_id": str(st.organization_id),
+        "period_from": str(st.period_from),
+        "period_to": str(st.period_to),
+        "status": st.status,
+        "orders_count": int(st.orders_count or 0),
+        "total_amount": int(st.total_amount or 0),
+        "org_share_total": int(st.org_share_total or 0),
+        "applicant_share_total": int(st.applicant_share_total or 0),
+        "currency": st.currency,
+        "journal_entry_id": str(st.journal_entry_id) if st.journal_entry_id else None,
+        "note": st.note,
+        "settled_at": st.settled_at.isoformat() if st.settled_at else None,
+        "created_at": st.created_at.isoformat() if st.created_at else None,
+        "items": [
+            {
+                "order_id": str(it.order_id),
+                "order_number": it.order_number,
+                "amount": int(it.amount or 0),
+                "org_share_amount": int(it.org_share_amount or 0),
+                "applicant_share_amount": int(it.applicant_share_amount or 0),
+                "coverage_percent": float(it.coverage_percent) if it.coverage_percent is not None else None,
+            }
+            for it in st.items
+        ],
+    }
+
+
+@router.post("/organizations/{org_id}/statements", status_code=201)
+def create_statement(
+    org_id: uuid.UUID,
+    payload: StatementCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """صورتحساب دوره‌ای سازمان — snapshot سفارش‌های پرداخت‌شده دارای سهم
+    سازمان در بازه؛ هر سفارش حداکثر یک‌بار در کل صورتحساب‌ها (uq)."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="سازمان یافت نشد")
+    if payload.period_to < payload.period_from:
+        raise HTTPException(status_code=422, detail="تاریخ پایان بازه نمی‌تواند پیش از شروع باشد")
+    start_dt = datetime.combine(payload.period_from, datetime.min.time())
+    end_dt = datetime.combine(payload.period_to + timedelta(days=1), datetime.min.time())
+    rows = db.execute(
+        select(Order)
+        .outerjoin(OrgStatementItem, OrgStatementItem.order_id == Order.id)
+        .where(
+            Order.organization_id == org_id,
+            Order.status == OrderStatus.PAID,
+            Order.org_share_amount.isnot(None),
+            Order.org_share_amount > 0,
+            Order.created_at >= start_dt,
+            Order.created_at < end_dt,
+            OrgStatementItem.id.is_(None),
+        )
+        .order_by(Order.created_at)
+    ).scalars().all()
+    if not rows:
+        raise HTTPException(
+            status_code=422,
+            detail="سفارش قابل صورتحساب (پرداخت‌شده با سهم سازمان، بدون صورتحساب قبلی) در این بازه یافت نشد",
+        )
+    st = OrgStatement(
+        statement_no=_next_statement_number(db),
+        organization_id=org_id,
+        period_from=payload.period_from,
+        period_to=payload.period_to,
+        status=OrgStatementStatus.ISSUED,
+        orders_count=len(rows),
+        total_amount=sum(int(o.amount or 0) for o in rows),
+        org_share_total=sum(int(o.org_share_amount or 0) for o in rows),
+        applicant_share_total=sum(int(o.applicant_share_amount or 0) for o in rows),
+        note=payload.note,
+        issued_by=actor.id,
+    )
+    db.add(st)
+    db.flush()
+    for o in rows:
+        db.add(
+            OrgStatementItem(
+                statement_id=st.id,
+                order_id=o.id,
+                order_number=o.order_number,
+                amount=int(o.amount or 0),
+                org_share_amount=int(o.org_share_amount or 0),
+                applicant_share_amount=int(o.applicant_share_amount or 0),
+                coverage_percent=float(o.coverage_percent) if o.coverage_percent is not None else None,
+            )
+        )
+    db.commit()
+    db.refresh(st)
+    return _statement_out(st)
+
+
+@router.get("/organizations/{org_id}/statements")
+def list_statements(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*VIEW_ROLES)),
+) -> dict:
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="سازمان یافت نشد")
+    rows = db.scalars(
+        select(OrgStatement)
+        .where(OrgStatement.organization_id == org_id)
+        .order_by(OrgStatement.created_at.desc())
+    ).all()
+    return {"items": [_statement_out(st) for st in rows]}
+
+
+@router.get("/organizations/{org_id}/statements/{statement_id}")
+def get_statement(
+    org_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*VIEW_ROLES)),
+) -> dict:
+    st = db.get(OrgStatement, statement_id)
+    if st is None or st.organization_id != org_id:
+        raise HTTPException(status_code=404, detail="صورتحساب یافت نشد")
+    return _statement_out(st)
+
+
+@router.post("/statements/{statement_id}/settle")
+def settle_statement(
+    statement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """تسویه مطالبات با سند ۱۱۰۴ — Dr 1101 بانک | Cr 1104 دریافتنی سازمان؛
+    idempotent با (source_type, source_id)؛ تسویه مجدد ۴۰۹."""
+    st = db.get(OrgStatement, statement_id)
+    if st is None:
+        raise HTTPException(status_code=404, detail="صورتحساب یافت نشد")
+    if st.status == OrgStatementStatus.SETTLED:
+        raise HTTPException(status_code=409, detail="این صورتحساب قبلاً تسویه شده است")
+    try:
+        entry = entry_for_org_statement(db, st, commit=False)
+    except Exception as exc:  # AccountingError و...
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if entry is None:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="مبلغ صورتحساب برای تسویه صفر است")
+    st.status = OrgStatementStatus.SETTLED
+    st.journal_entry_id = entry.id
+    st.settled_by = actor.id
+    st.settled_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(st)
+    out = _statement_out(st)
+    out["journal_entry"] = {
+        "id": str(entry.id),
+        "entry_no": entry.entry_no,
+        "kind": entry.kind,
+        "source_type": entry.source_type,
+    }
+    return out
+
+
 # ---------------------------------------------------------------- receivables
 @router.get("/organizations/{org_id}/receivables")
 def organization_receivables(
@@ -360,6 +556,31 @@ def organization_receivables(
     ).all()
     total_org = sum(int(o.org_share_amount or 0) for o in rows)
     total_amount = sum(int(o.amount) for o in rows)
+    # فاز ۳۴ - B21-plus: تسویه‌شده از طریق صورتحساب‌های سازمان (سند ۱۱۰۴) کسر می‌شود
+    settled_total = int(
+        db.scalar(
+            select(func.coalesce(func.sum(OrgStatement.org_share_total), 0)).where(
+                OrgStatement.organization_id == org_id,
+                OrgStatement.status == OrgStatementStatus.SETTLED,
+            )
+        )
+        or 0
+    )
+    issued_total = int(
+        db.scalar(
+            select(func.coalesce(func.sum(OrgStatement.org_share_total), 0)).where(
+                OrgStatement.organization_id == org_id,
+                OrgStatement.status == OrgStatementStatus.ISSUED,
+            )
+        )
+        or 0
+    )
+    statements = db.scalars(
+        select(OrgStatement)
+        .where(OrgStatement.organization_id == org_id)
+        .order_by(OrgStatement.created_at.desc())
+        .limit(50)
+    ).all()
     return {
         "organization_id": str(org_id),
         "organization_name": org.name,
@@ -367,7 +588,22 @@ def organization_receivables(
         "total_amount": total_amount,
         "org_share_total": total_org,
         "applicant_share_total": total_amount - total_org,
-        "note": "سهم سازمان سفارش‌های پرداخت‌شده؛ صورتحساب دوره‌ای سازمان خارج از دامنه فعلی است",
+        "settled_total": settled_total,
+        "issued_unsettled_total": issued_total,
+        "outstanding_total": max(0, total_org - settled_total),
+        "statements": [
+            {
+                "id": str(st.id),
+                "statement_no": st.statement_no,
+                "period_from": str(st.period_from),
+                "period_to": str(st.period_to),
+                "status": st.status,
+                "orders_count": int(st.orders_count or 0),
+                "org_share_total": int(st.org_share_total or 0),
+                "created_at": st.created_at.isoformat() if st.created_at else None,
+            }
+            for st in statements
+        ],
         "items": [
             {
                 "order_id": str(o.id),

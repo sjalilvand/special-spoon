@@ -1,6 +1,4 @@
-// فاز ۳۳ - B21 سند جامع: سازمان‌ها/قرارداد/سهم پرداخت —
-// slug و شناسه ملی یکتا، درصد/سقف/بازه اعتبار، وضعیت قرارداد،
-// تقسیم سهم در سفارش snapshot می‌شود؛ مطالبه از سازمان گزارش می‌شود
+// فاز ۳۳/۳۴ - B21 + B21-plus: سازمان‌ها/قراردادها + صورتحساب دوره‌ای و تسویه مطالبات
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
   InputLabel, ListItemText, MenuItem, OutlinedInput, Paper, Select, Snackbar, Stack, Switch,
@@ -12,7 +10,8 @@ import { errDetail } from "../api/client";
 import { fetchAllServices } from "../api/branches";
 import {
   Contract, Organization, ReceivablesReport, createContract, createOrganization,
-  fetchContracts, fetchOrganizations, fetchReceivables, updateContract, updateOrganization,
+  createStatement, fetchContracts, fetchOrganizations, fetchReceivables, settleStatement,
+  updateContract, updateOrganization,
 } from "../api/organizations";
 
 const fa = (n: number | null | undefined) =>
@@ -215,10 +214,13 @@ export default function OrganizationsPage() {
         onSubmit={(payload) => newContractFor && createContractMut.mutate({ orgId: newContractFor.id, payload })}
       />
       <ReceivablesDialog
+        orgId={receivablesOrg?.id ?? ""}
         report={receivables.data ?? null}
         orgName={receivablesOrg?.name ?? ""}
         loading={receivables.isLoading}
         onClose={() => setReceivablesOrg(null)}
+        onChanged={(m) => { setOkMsg(m); void qc.invalidateQueries({ queryKey: ["receivables"] }); }}
+        onError={(e) => setError(errDetail(e))}
       />
 
       <Snackbar open={!!okMsg} autoHideDuration={4000} onClose={() => setOkMsg(null)}
@@ -373,12 +375,28 @@ function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
   );
 }
 
-function ReceivablesDialog({ report, orgName, loading, onClose }: {
+function ReceivablesDialog({ orgId, report, orgName, loading, onClose, onChanged, onError }: {
+  orgId: string;
   report: ReceivablesReport | null;
   orgName: string;
   loading: boolean;
   onClose: () => void;
+  onChanged: (msg: string) => void;
+  onError: (e: unknown) => void;
 }) {
+  // فاز ۳۴ - B21-plus: صورتحساب دوره‌ای + تسویه مطالبات با سند ۱۱۰۴
+  const [stFrom, setStFrom] = useState(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [stTo, setStTo] = useState(new Date().toISOString().slice(0, 10));
+  const createStMut = useMutation({
+    mutationFn: () => createStatement(orgId, { period_from: stFrom, period_to: stTo }),
+    onSuccess: (st) => onChanged(`صورتحساب ${st.statement_no} صادر شد (${st.orders_count} سفارش — ${fa(st.org_share_total)} ریال)`),
+    onError,
+  });
+  const settleMut = useMutation({
+    mutationFn: (id: string) => settleStatement(id),
+    onSuccess: (st) => onChanged(`صورتحساب ${st.statement_no} تسویه شد — سند Dr 1101 / Cr 1104 ثبت شد`),
+    onError,
+  });
   if (!report && !loading) return null;
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
@@ -387,25 +405,73 @@ function ReceivablesDialog({ report, orgName, loading, onClose }: {
         {loading && <Typography>در حال بارگذاری…</Typography>}
         {report && (
           <Stack spacing={2}>
-            <Alert severity="info">{report.note}</Alert>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 170 }}>
                 <Typography variant="caption">سفارش پرداخت‌شده با سهم سازمان</Typography>
                 <Typography fontWeight={800}>{fa(report.paid_orders_with_share)}</Typography>
               </Paper>
-              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 170 }}>
                 <Typography variant="caption">مطالبه از سازمان (B21)</Typography>
                 <Typography fontWeight={800} color="warning.main">{fa(report.org_share_total)}</Typography>
               </Paper>
-              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
-                <Typography variant="caption">دریافتی از متقاضی</Typography>
-                <Typography fontWeight={800} color="success.main">{fa(report.applicant_share_total)}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 170 }}>
+                <Typography variant="caption">تسویه‌شده با سند ۱۱۰۴</Typography>
+                <Typography fontWeight={800} color="success.main">{fa(report.settled_total)}</Typography>
               </Paper>
-              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 180 }}>
-                <Typography variant="caption">جمع مبلغ سفارش‌ها</Typography>
-                <Typography fontWeight={800}>{fa(report.total_amount)}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, minWidth: 170 }}>
+                <Typography variant="caption">مانده مطالبات</Typography>
+                <Typography fontWeight={800} color="error.main">{fa(report.outstanding_total)}</Typography>
               </Paper>
             </Stack>
+            <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                صورتحساب دوره‌ای سازمان (B21-plus) — تسویه سند می‌زند: بانک ۱۱۰۱ / دریافتنی سازمان ۱۱۰۴
+              </Typography>
+              <Stack direction="row" spacing={1} mb={1}>
+                <TextField size="small" label="از تاریخ" type="date" value={stFrom}
+                  onChange={(e) => setStFrom(e.target.value)} />
+                <TextField size="small" label="تا تاریخ" type="date" value={stTo}
+                  onChange={(e) => setStTo(e.target.value)} />
+                <Button variant="contained" onClick={() => createStMut.mutate()}
+                  disabled={createStMut.isPending}>صدور صورتحساب</Button>
+              </Stack>
+              {report.statements.length > 0 && (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>شماره</TableCell><TableCell>بازه</TableCell>
+                        <TableCell>سفارش‌ها</TableCell><TableCell>مبلغ</TableCell>
+                        <TableCell>وضعیت</TableCell><TableCell> </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {report.statements.map((st) => (
+                        <TableRow key={st.id}>
+                          <TableCell dir="ltr"><code>{st.statement_no}</code></TableCell>
+                          <TableCell dir="ltr" sx={{ fontSize: 12 }}>{st.period_from} ← {st.period_to}</TableCell>
+                          <TableCell>{fa(st.orders_count)}</TableCell>
+                          <TableCell>{fa(st.org_share_total)}</TableCell>
+                          <TableCell>
+                            <Chip size="small" variant="outlined"
+                              color={st.status === "settled" ? "success" : "warning"}
+                              label={st.status === "settled" ? "تسویه‌شده" : "صادرشده"} />
+                          </TableCell>
+                          <TableCell>
+                            {st.status === "issued" && (
+                              <Button size="small" color="success"
+                                onClick={() => settleMut.mutate(st.id)} disabled={settleMut.isPending}>
+                                تسویه
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paper>
             {report.items.length > 0 && (
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">

@@ -3,6 +3,8 @@
 B10 - سفارش/پرداخت:
 - سفارش از snapshot قیمت نوبت (فاز ۲۸، B07) ساخته می‌شود؛ مبلغ سفارش
   پس از ساخت با تغییر تعرفه تغییر نمی‌کند.
+- فاز ۳۴: kind ها extends شدند ('service','topup','course','exam')؛
+  سفارش دوره/آزمون course_id/exam_id دارد (فاز ۳۴).
 - پرداخت فقط پس از «تأیید قطعی سمت سرور» موفق می‌شود (verify server-side)؛
   callback تکراری بی‌اثر است (idempotent با authority یکتا).
 
@@ -65,7 +67,7 @@ class Order(Base):
         CheckConstraint("amount >= 0", name="ck_orders_amount_nonneg"),
         CheckConstraint("discount_amount IS NULL OR discount_amount >= 0", name="ck_orders_discount_nonneg"),
         CheckConstraint("payable_amount >= 0", name="ck_orders_payable_nonneg"),
-        CheckConstraint("kind IN ('service','topup')", name="ck_orders_kind"),
+        CheckConstraint("kind IN ('service','topup','course','exam')", name="ck_orders_kind"),
         CheckConstraint("refunded_amount >= 0", name="ck_orders_refunded_nonneg"),
         CheckConstraint("org_share_amount IS NULL OR org_share_amount >= 0",
                         name="ck_orders_org_share_nonneg"),
@@ -106,6 +108,13 @@ class Order(Base):
         UUID(as_uuid=True), ForeignKey("discounts.id", ondelete="RESTRICT"), nullable=True
     )
     refunded_amount: Mapped[int] = mapped_column(Numeric(16, 2), default=0)
+    # فاز ۳۴ - B34/B35: سفارش ثبت‌نام دوره / دسترسی آزمون (بدون نوبت)
+    course_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=True
+    )
+    exam_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("exams.id", ondelete="RESTRICT"), nullable=True
+    )
     # فاز ۳۳ - B21: تقسیم سهم پرداخت سازمان — snapshot در لحظه ساخت سفارش
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
