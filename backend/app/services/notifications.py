@@ -6,6 +6,9 @@
 - محتوای حساس بالینی در متن اعلان نمی‌آید؛ فقط عنوان کلی و ارجاع.
 - فاز ۲۷ (B12+): برای گیرنده دارای ایمیل، ردیفی در صف خروجی SMTP ساخته
   می‌شود؛ ارسال غیرهمگام و شکست آن جریان اصلی را متوقف نمی‌کند.
+- فاز ۳۶ (B28): برای گیرنده دارای موبایل و فعال بودن سرویس پیامک، ردیفی
+  در صف خروجی پیامک ساخته می‌شود (آداپتور پلاگین‌پذیر همان الگو)؛ محتوای
+  حساس بالینی هرگز در متن پیامک نمی‌آید.
 """
 
 import uuid
@@ -22,6 +25,28 @@ CATEGORIES = ("case", "assessment", "appointment", "consent", "system")
 SEVERITIES = ("info", "warning", "critical")
 
 _EMAIL_FOOTER = "این پیام به‌صورت خودکار توسط سامانه Rosepsy ارسال شده است؛ به این ایمیل پاسخ ندهید."
+_SMS_FOOTER = "\n- سامانه Rosepsy"
+
+
+def _queue_sms_copy(db: Session, user: User, title: str, body: str | None, notification_id) -> None:
+    """B28 فاز ۳۶: قرار دادن کپی پیامک اعلان در صف خروجی (بدون توقف جریان)."""
+    try:
+        if not get_settings().notifications_sms_enabled:
+            return
+        if not user.mobile:
+            return
+        from app.services.integrations import queue_sms
+
+        text = "\n".join(filter(None, [title, body])) + _SMS_FOOTER
+        queue_sms(
+            db,
+            recipient_mobile=user.mobile,
+            purpose="notification",
+            body=text[:1000],
+            notification_id=notification_id,
+        )
+    except Exception:
+        pass
 
 
 def _queue_email_copy(db: Session, user: User, title: str, body: str | None, notification_id) -> None:
@@ -73,9 +98,11 @@ def notify_user(
             db.add(n)
             db.flush()
             # B12+ فاز ۲۷: کپی ایمیل برای گیرنده دارای ایمیل
+            # B28 فاز ۳۶: کپی پیامک برای گیرنده دارای موبایل
             user = db.get(User, recipient_user_id)
             if user is not None:
                 _queue_email_copy(db, user, n.title, n.body, n.id)
+                _queue_sms_copy(db, user, n.title, n.body, n.id)
         return n
     except Exception:
         return None

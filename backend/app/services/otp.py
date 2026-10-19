@@ -6,6 +6,11 @@
 - انقضای کد (OTP_CODE_TTL_SECONDS) و انقضای توکن اثبات تأیید
 - سقف تلاش (OTP_MAX_ATTEMPTS) و سقف درخواست در بازه زمانی
 - کد مصرف‌شده دوباره پذیرفته نمی‌شود
+
+فاز ۳۶ (B28 + D04 تکمیلی): در فعال بودن سرویس پیامک با آداپتور کلیددار
+(kavenegar/smsir)، کد به‌صورت مستقیم ارسال می‌شود؛ «کد خام هرگز در
+پایگاه‌داده ذخیره نمی‌شود» و شکست ارسال جریان صدور کد را متوقف نمی‌کند
+(ارسال در مسیر درخواست = بدهی مستند در ADR-02 صف کار).
 """
 import hashlib
 import secrets
@@ -88,8 +93,30 @@ def request_otp(db: Session, mobile: str, purpose: str, ip: str | None = None) -
         dev_code = code
         # الزام «نمایش در لاگ» از roadmap فاز ۲۶ - کد هرگز در audit ذخیره نمی‌شود
         print(f"[OTP-DEV] mobile={mobile} purpose={purpose} code={code}")
+    _try_send_otp_sms(settings, mobile, code, purpose)
     record_audit(db, action="auth.otp_requested", detail={"purpose": purpose, "ip": ip})
     return {"challenge": ch, "dev_code": dev_code, "rate_limited": False}
+
+
+def _try_send_otp_sms(settings, mobile: str, code: str, purpose: str) -> None:
+    """B28 فاز ۳۶: ارسال مستقیم OTP با آداپتور کلیددار — بدون ذخیره کد در DB.
+
+    فقط وقتی سرویس پیامک فعال است و آداپتور واقعی (کلیددار) فعال است؛ در
+    حالت log توسعه/آزمون کد در پاسخ API (otp_dev_mode) نمایش داده می‌شود.
+    شکست هرگز جریان اصلی را متوقف نمی‌کند.
+    """
+    try:
+        from app.services.integrations import active_sms_provider, _send
+
+        if not getattr(settings, "sms_enabled", False):
+            return
+        provider, fallback = active_sms_provider(settings)
+        if fallback or provider == "log":
+            return  # بدون آداپتور واقعی، ارسال پیامکی انجام نمی‌شود
+        body = f"کد تأیید شما در سامانه Rosepsy: {code}\nاعتبار: {settings.otp_code_ttl_seconds // 60} دقیقه"
+        _send(settings, provider, mobile, body)
+    except Exception:
+        pass
 
 
 def verify_otp(db: Session, mobile: str, purpose: str, code: str, ip: str | None = None) -> dict:

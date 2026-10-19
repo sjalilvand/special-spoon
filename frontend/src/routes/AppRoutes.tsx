@@ -28,6 +28,7 @@ import PsychTestsPage from "../pages/PsychTestsPage";
 import AssistantPage from "../pages/AssistantPage";
 import OrganizationsPage from "../pages/OrganizationsPage";
 import LearningPage from "../pages/LearningPage";
+import IntegrationsPage from "../pages/IntegrationsPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
 import OrdersPage from "../pages/OrdersPage";
@@ -121,6 +122,12 @@ export default function AppRoutes() {
       <Route path="/assistant" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "APPLICANT"]}>
           <Layout><AssistantPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۳۶ - B28: یکپارچه‌سازی‌های بیرونی */}
+      <Route path="/integrations" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
+          <Layout><IntegrationsPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/verification-reviews" element={

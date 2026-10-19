@@ -80,6 +80,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]) && (
             <Button color="inherit" onClick={() => navigate("/assistant")}>دستیار (AI)</Button>
           )}
+          {has(["SYSTEM_ADMIN", "ORG_MANAGER"]) && (
+            <Button color="inherit" onClick={() => navigate("/integrations")}>یکپارچه‌سازی‌ها (B28)</Button>
+          )}
           {has(["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]) && (
             <Button color="inherit" onClick={() => navigate("/branches")}>شعب (B31)</Button>
           )}

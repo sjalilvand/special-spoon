@@ -19,6 +19,7 @@ from app.api.v1.email_outbox import router as email_outbox_router
 from app.api.v1.health import router as health_router
 from app.api.v1.intake import router as intake_router
 from app.api.v1.imports import router as imports_router
+from app.api.v1.integrations import router as integrations_router
 from app.api.v1.learning import router as learning_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
@@ -89,6 +90,7 @@ app.include_router(learning_router, prefix=settings.api_prefix)
 app.include_router(support_router, prefix=settings.api_prefix)
 app.include_router(psych_tests_router, prefix=settings.api_prefix)
 app.include_router(ai_router, prefix=settings.api_prefix)
+app.include_router(integrations_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)

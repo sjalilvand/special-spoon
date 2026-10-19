@@ -39,6 +39,7 @@ from app.models.discount import Discount, DiscountKind, DiscountRedemption
 from app.models.email_outbox import EmailOutbox, EmailOutboxStatus
 from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
+from app.models.integration import SmsOutbox, SmsOutboxStatus
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
 from app.models.org_contract import Contract, ContractService, Organization
@@ -104,7 +105,7 @@ __all__ = [
     "CounselorCredential", "CredentialKind", "CredentialVerificationStatus",
     "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Invoice", "InvoiceItem",
-    "InvoiceStatus", "Notification",
+    "InvoiceStatus", "Notification", "SmsOutbox", "SmsOutboxStatus",
     "Contract", "ContractService", "Organization", "Order", "OrderStatus",
     "OrganizationUnit", "Payment", "PaymentStatus",
     "Recommendation", "Referral", "Refund", "RefundRequest", "RefundRequestStatus",

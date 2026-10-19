@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.35.0"
+    app_version: str = "0.36.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -83,6 +83,19 @@ class Settings(BaseSettings):
     ai_provider: str = "rule"
     # کلید سرویس AI؛ خالی = fallback به rule (fail-soft)؛ کلید هرگز به کلاینت/لاگ نمی‌رود
     ai_api_key: str = ""
+
+    # فاز ۳۶ - B28: یکپارچه‌سازی‌های بیرونی — سرویس پیامک پلاگین‌پذیر
+    # همان الگوی D02/D03/D07:
+    # sms_provider = "log" (پیش‌فرض: توسعه/آزمون، بدون کلید، قطعی) | "kavenegar" | "smsir"
+    # sms_enabled=False → ردیف‌های صف به «disabled» علامت می‌خورند (شفافیت DPO)
+    sms_enabled: bool = False
+    sms_provider: str = "log"
+    # کلید سرویس پیامک؛ خالی = fallback به log (fail-soft)؛ کلید هرگز به کلاینت/لاگ نمی‌رود
+    sms_api_key: str = ""
+    sms_sender: str = ""
+    sms_max_attempts: int = 5
+    # کپی اعلان‌های درون‌برنامه‌ای به پیامک (فقط گیرنده دارای موبایل)
+    notifications_sms_enabled: bool = True
 
     # MIME های مجاز؛ فایل خارج از فهرست در قرنطینه می‌رود
     allowed_mime_types: str = (
