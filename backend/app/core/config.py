@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.31.0"
+    app_version: str = "0.32.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     # زرین‌پال REST v4؛ merchant_id خالی = درگاه غیرفعال
     zarinpal_merchant_id: str = ""
     zarinpal_sandbox: bool = True
+    # فاز ۳۲ - B40 + تصمیم D03: نقشه شعب با سرویس نقشه پلاگین‌پذیر
+    # همان الگوی D02: پیش‌فرض OSM/Leaflet بدون کلید؛ نشنال/Map.ir برای تولید
+    # map_provider = "osm" | "neshan" | "mapir"
+    map_provider: str = "osm"
+    # کلیدهای سرویس نقشه؛ خالی = درگاه غیرفعال (کلید هرگز به کلاینت نمی‌رود)
+    neshan_api_key: str = ""
+    mapir_api_key: str = ""
+
     # MIME های مجاز؛ فایل خارج از فهرست در قرنطینه می‌رود
     allowed_mime_types: str = (
         "application/pdf,image/png,image/jpeg,image/webp,"

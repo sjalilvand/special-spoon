@@ -36,6 +36,8 @@ export interface Branch {
   status: "draft" | "published";
   clinic_name?: string | null;
   services?: BranchServiceRef[];
+  // فاز ۳۲ - B40: فقط در پاسخ nearby؛ برای شعب بی‌مختصات null
+  distance_km?: number | null;
   created_at: string | null;
 }
 
@@ -96,4 +98,52 @@ export async function fetchAllServices(): Promise<ServiceLite[]> {
     params: { page_size: 100 },
   });
   return r.data.items.map((s) => ({ id: s.id, title: s.title, status: s.status }));
+}
+
+// فاز ۳۲ - B40 + D03: نقشه شعب — سرویس نقشه پلاگین‌پذیر (پیش‌فرض OSM بدون کلید)
+export interface MapProviderInfo {
+  code: string;
+  title: string;
+  enabled: boolean;
+  is_default: boolean;
+  tile_url: string | null;
+  attribution: string;
+  requires_key: boolean;
+}
+
+export interface MapConfig {
+  provider: { code: string; title: string; tile_url: string | null; attribution: string };
+  providers: MapProviderInfo[];
+  privacy_note: string;
+}
+
+export interface NearbyBranchesResponse {
+  items: Branch[];
+  total: number;
+  sorted_by: "distance" | "name";
+  privacy_note: string;
+}
+
+export async function fetchMapConfig(): Promise<MapConfig> {
+  const r = await apiClient.get<MapConfig>("/public/map/config");
+  return r.data;
+}
+
+export async function fetchNearbyBranches(params?: {
+  lat?: number;
+  lng?: number;
+  limit?: number;
+  city?: string;
+  service_id?: string;
+}): Promise<NearbyBranchesResponse> {
+  const q: Record<string, string> = {};
+  if (params?.lat !== undefined && params?.lng !== undefined) {
+    q.lat = String(params.lat);
+    q.lng = String(params.lng);
+  }
+  if (params?.limit) q.limit = String(params.limit);
+  if (params?.city) q.city = params.city;
+  if (params?.service_id) q.service_id = params.service_id;
+  const r = await apiClient.get<NearbyBranchesResponse>("/public/branches/nearby", { params: q });
+  return r.data;
 }

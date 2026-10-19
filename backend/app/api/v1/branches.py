@@ -5,6 +5,14 @@
 - شعبه منتشرنشده عمومی نیست؛
 - «خدمت ناموجود برای شعبه نشان داده نشود» — خروجی عمومی فقط خدمتِ
   فعالِ offering فعالِ شعبه منتشرشده را برمی‌گرداند.
+
+فاز ۳۲ - B40 + تصمیم D03: نقشه شعب با سرویس نقشه پلاگین‌پذیر
+- /public/branches/nearby: مرتب‌سازی شعب با فاصله هاروساین از مختصات کاربر؛
+  پذیرش سند: «مکان کاربر فقط برای مرتب‌سازی، ذخیره نمی‌شود» — مختصات کاربر
+  در پایگاه‌داده نوشته نمی‌شود، در audit ثبت نمی‌شود و در پاسخ بازتاب
+  نمی‌یابد (بدون لاگ).
+- /public/map/config: متادیتای سرویس نقشه فعال (D03) — کلید سرویس نقشه
+  هرگز به کلاینت ارسال نمی‌شود.
 """
 import re
 import uuid
@@ -18,6 +26,7 @@ from app.api.deps import get_current_user, get_db, require_roles
 from app.models.branch import Branch, BranchServiceOffering, BranchStatus, Clinic
 from app.models.catalog import Service
 from app.models.user import User
+from app.services.maps import active_map_provider, configured_map_providers, haversine_km
 
 router = APIRouter(tags=["branches"])
 
@@ -357,3 +366,97 @@ def public_branches(
         ]
         out.append(item)
     return {"items": out}
+
+
+@router.get("/public/branches/nearby")
+def public_branches_nearby(
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lng: float | None = Query(default=None, ge=-180, le=180),
+    limit: int = Query(default=10, ge=1, le=50),
+    city: str | None = Query(default=None, max_length=80),
+    service_id: uuid.UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """فاز ۳۲ - B40: شعب منتشرشده با مرتب‌سازی بر پایه فاصله (هاروساین).
+
+    پذیرش سند: «مکان کاربر فقط برای مرتب‌سازی، ذخیره نمی‌شود» —
+    مختصات کاربر (lat/lng) فقط پارامتر فراخوانی هستند؛ هیچ ردیفی در
+    پایگاه‌داده نوشته نمی‌شود، هیچ رویداد audit با مختصات ثبت نمی‌شود و
+    مختصات در پاسخ نیز بازتاب نمی‌یابد. فاقد مختصات در انتها می‌آیند.
+    اگر lat/lng ناقص باشد، مرتب‌سازی نامی (مطابق /public/branches) است.
+    """
+    if (lat is None) != (lng is None):
+        raise HTTPException(status_code=422, detail="هر دو مختصات lat و lng لازم است")
+    q = (
+        select(Branch)
+        .options(joinedload(Branch.clinic))
+        .where(Branch.status == BranchStatus.PUBLISHED)
+    )
+    if city:
+        q = q.where(Branch.city == city.strip())
+    if service_id is not None:
+        q = q.join(
+            BranchServiceOffering, BranchServiceOffering.branch_id == Branch.id
+        ).where(
+            BranchServiceOffering.service_id == service_id,
+            BranchServiceOffering.is_active.is_(True),
+        )
+    branches = db.scalars(q.order_by(Branch.city, Branch.name)).unique().all()
+
+    located: list[tuple[float, dict]] = []
+    unlocated: list[dict] = []
+    for b in branches:
+        item = _branch_out(db, b)
+        item["clinic_name"] = b.clinic.name if b.clinic else None
+        rows = db.execute(
+            select(BranchServiceOffering, Service)
+            .join(Service, Service.id == BranchServiceOffering.service_id)
+            .where(
+                BranchServiceOffering.branch_id == b.id,
+                BranchServiceOffering.is_active.is_(True),
+                Service.status == "active",
+            )
+            .order_by(Service.title)
+        ).all()
+        item["services"] = [
+            {"id": str(svc.id), "title": svc.title, "session_type": svc.session_type}
+            for _off, svc in rows
+        ]
+        if lat is not None and lng is not None and b.latitude is not None and b.longitude is not None:
+            # فاصله فقط در حافظه محاسبه و در پاسخ برمی‌گردد؛ هیچ‌جا ذخیره نمی‌شود
+            item["distance_km"] = round(
+                haversine_km(lat, lng, float(b.latitude), float(b.longitude)), 2
+            )
+            located.append((item["distance_km"], item))
+        else:
+            item["distance_km"] = None
+            unlocated.append(item)
+
+    if lat is not None:
+        located.sort(key=lambda pair: pair[0])
+        items = [item for _dist, item in located] + unlocated
+        sorted_by = "distance"
+    else:
+        items = unlocated
+        sorted_by = "name"
+    return {
+        "items": items[:limit],
+        "total": len(items),
+        "sorted_by": sorted_by,
+        "privacy_note": "مکان کاربر فقط برای مرتب‌سازی استفاده شد و ذخیره نمی‌شود",
+    }
+
+
+@router.get("/public/map/config")
+def public_map_config() -> dict:
+    """فاز ۳۲ - D03: سرویس نقشه فعال برای رندر نقشه شعب در کلاینت.
+
+    کلید سرویس‌های دارای کلید (نشنال/Map.ir) هرگز در پاسخ نیست؛
+    برای آن‌ها tile_url صادر نمی‌شود و در تولید از SDK رسمی استفاده می‌شود.
+    """
+    provider = active_map_provider()
+    return {
+        "provider": provider,
+        "providers": configured_map_providers(),
+        "privacy_note": "مکان کاربر فقط برای مرتب‌سازی شعب استفاده می‌شود و ذخیره نمی‌شود",
+    }

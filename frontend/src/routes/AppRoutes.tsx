@@ -8,6 +8,7 @@ import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApplicantsPage from "../pages/ApplicantsPage";
 import AssessmentFormPage from "../pages/AssessmentFormPage";
 import AuditEventsPage from "../pages/AuditEventsPage";
+import BranchMapPage from "../pages/BranchMapPage";
 import BranchesPage from "../pages/BranchesPage";
 import CaseDetailPage from "../pages/CaseDetailPage";
 import CasesPage from "../pages/CasesPage";
@@ -51,6 +52,8 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivatePage />} />
+      {/* فاز ۳۲ - B40: نقشه شعب عمومی (بدون احراز هویت، مانند API عمومی) */}
+      <Route path="/branch-map" element={<Layout><BranchMapPage /></Layout>} />
       <Route path="/" element={<RoleRedirect />} />
       <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={
