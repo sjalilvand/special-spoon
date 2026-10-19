@@ -199,6 +199,13 @@
 - بخش storage در `/integrations/config` (۶ یکپارچه‌سازی) + سند `docs/adr/ADR-04-object-storage.md` (آستانه اجرا + طرح مهاجرت ۴ گام)
 - اسکلت Playwright در `frontend/e2e/` (smoke: سلامت API، هدایت احراز، ورود، اعلان‌ها) — خارج از build فرانت
 
+## فاز ۴۰ — گام ۳ هر دو طرح: مهاجرت موبایل به v2 (ADR-03) + سوییچ STORAGE_BACKEND=s3 (ADR-04) (v0.40.0)
+- **مهاجرت اپ Flutter به /api/v2 (گام ۳ طرح ۴ گام ADR-03):** اپ B17 مستقیماً روی v2 (بدون گذر از v1) — نقطه واحد سازگاری `mobile/lib/api/api_client.dart`: پاسخ‌خوانی پاکت (`data` → payload واقعی، `meta` → `lastMeta` با `request_id` برای ردیابی پشتیبانی فنی B23)، پیام خطا از `errors[0].message` (fallback `detail` برای سازگاری با پایه قدیمی دستی)؛ صفحات تغییری نکردند — پاسخ‌های مصرفی اپ همه `{items, unread}` و اشیای فلت‌اند که طبق تدقیق 0.39.0 دست‌نخورده در `data` عبور می‌کنند؛ `mobile/README.md` به‌روز شد (`ROSEPSY_API_BASE=.../api/v2`)
+- **سوییچ Object Storage به s3 (گام ۳ طرح ۴ گام ADR-04):** پیش‌فرض `storage_backend` در config و `STORAGE_BACKEND` در compose/.env.example به `s3` رفت — نبود کلیدها/کتابخانه یا خطای سرویس → fallback شفاف به local (سپر خرابی fail-soft؛ وضعیت در `/integrations/config`)؛ پیام scan_detail تعمیم یافت تا «پیکربندی ناقص» و «خطای سرویس» را بدون ادعای نادرست پوشش دهد
+- **پیش‌نیاز عملیاتی سوییچ:** اجرای MinIO با پروفایل storage و انتقال فایل‌های موجود:
+  `docker compose --profile storage up -d` سپس `docker compose run --rm api python scripts/migrate_files_to_s3.py --loop`؛ بازگشت کامل: `STORAGE_BACKEND=local` در `.env`
+- بدون تغییر شکننده در قرارداد v1/v2 و بدون تغییر شِما — سوییچ صرفاً پیکربندی است و با رگرسیون کامل (۳۰۲ آزمون) تأیید شد
+
 ## فاز ۳۹ — مهاجرت فرانت به پاکت v2 + آزمون قرارداد Schemathesis + آزمون بار k6 (v0.39.0)
 - **مهاجرت فرانت‌اند به /api/v2 (گام ۲ طرح ADR-03):** interceptor گشونده پاکت در `src/api/client.ts` — تنها نقطه سازگاری بین سیم v2 و شکل مصرف داخلی؛ `res.meta` (متادیتا + pagination) با augmentation تایپ axios؛ ۱۱ تابع لایه api شکل `{items, total}` صفحات را از `meta.pagination` بازچینی می‌کنند تا صفحات تغییر نکنند؛ `errDetail` پاکت‌محور؛ پاسخ‌های blob (B39) دست‌نخورده
 - **تدقیق قرارداد تفکیک فهرست‌ها:** تفکیک فقط برای پاسخ‌های واقعاً صفحه‌بندی‌شده (نشانگر total/page/...) — پاسخ‌های تکی با items داخلی (فاکتور/فرم/import/اعلان‌ها) دست‌نخورده؛ کشف‌شده از تحلیل ۹۹ نقطه مصرف فرانت

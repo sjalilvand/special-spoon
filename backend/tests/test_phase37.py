@@ -296,7 +296,11 @@ def test_adr04_integrations_config_contains_storage_without_secrets(client, env,
     assert "storage" in data
     stg = data["storage"]
     assert stg["decision"] == "ADR-04"
-    assert stg["configured_backend"] == "local"
+    # فاز ۴۰ - گام ۳ طرح ADR-04: پیش‌فرض پیکربندی به s3 سوییچ شد؛ با کلیدهای
+    # ناقص (بدون endpoint) وضعیت باید fallback شفاف به local را نشان دهد
+    assert stg["configured_backend"] == "s3"
+    assert stg["active_backend"] == "local"
+    assert stg["fallback_applied"] is True
     assert "TOP-SECRET-ACCESS" not in raw and "TOP-SECRET-SECRET" not in raw
     assert "access_key" not in raw and "secret_key" not in raw
 

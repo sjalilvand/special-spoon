@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.39.0"
+    app_version: str = "0.40.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -23,11 +23,11 @@ class Settings(BaseSettings):
 
     # فاز ۳۷ - ADR-04: Object Storage پلاگین‌پذیر (تصمیم سند: MinIO/S3)
     # همان الگوی D02/D03/D07/B28:
-    # storage_backend = "local" (پیش‌فرض: دایرکتوری volume، بدون کلید) | "s3"
+    # storage_backend = "s3" (پیش‌فرض از فاز ۴۰ - گام ۳ طرح مهاجرت ADR-04) | "local"
     # آداپتور s3 فقط با endpoint + bucket + access_key + secret_key فعال می‌شود؛
-    # نبود هر کدام یا خطای سرویس → fallback به local (fail-soft) با گزارش شفاف؛
-    # کلیدها هرگز به کلاینت/لاگ/پاسخ API نمی‌روند.
-    storage_backend: str = "local"
+    # نبود هر کدام، نبود کتابخانه boto3 یا خطای سرویس → fallback شفاف به local
+    # (سپر خرابی fail-soft)؛ کلیدها هرگز به کلاینت/لاگ/پاسخ API نمی‌روند.
+    storage_backend: str = "s3"
     s3_endpoint_url: str = ""   # نمونه تولید: http://minio:9000
     s3_bucket: str = "rosepsy-files"
     s3_access_key: str = ""

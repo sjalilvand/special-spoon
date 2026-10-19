@@ -103,7 +103,8 @@ def upload_file(
     if metadata_stripped:
         detail = f"{detail} - فراداده تصویر حذف شد"
     if st_fallback:
-        detail = f"{detail} - ذخیره‌سازی به محلی بازگشت (سرویس S3 در دسترس نبود)"
+        # فاز ۴۰: پیام یکسان برای «پیکربندی ناقص» و «خطای سرویس» — بدون ادعای نادرست
+        detail = f"{detail} - ذخیره‌سازی به محلی بازگشت (S3 فعال/در دسترس نبود)"
 
     f = StoredFile(
         case_id=case.id if case else None,

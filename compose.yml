@@ -78,8 +78,11 @@ services:
     env_file: .env
     environment:
       CLAMAV_HOST: clamav
-      # فاز ۳۸ - ADR-04: آدرس داخلی MinIO (فقط وقتی STORAGE_BACKEND=s3 در .env
-      # باشد استفاده می‌شود؛ در حالت local بی‌اثر است). کلیدها از .env می‌آیند.
+      # فاز ۴۰ - گام ۳ طرح ADR-04: سوییچ به s3 — نبود کلیدها/سرویس → fallback
+      # شفاف به local (سپر خرابی)؛ بازگشت کامل با STORAGE_BACKEND=local در .env
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      # آدرس داخلی MinIO (فقط وقتی STORAGE_BACKEND=s3 باشد استفاده می‌شود؛
+      # در حالت local بی‌اثر است). کلیدها از .env می‌آیند.
       S3_ENDPOINT_URL: http://minio:9000
     volumes:
       - private_uploads:/app/uploads

@@ -1,6 +1,9 @@
-# اپ موبایل Rosepsy — B17 (فاز ۳۶)
+# اپ موبایل Rosepsy — B17 (فاز ۳۶؛ مهاجرت به v2 در فاز ۴۰)
 
-کلاینت Flutter برای API سامانه Rosepsy (`/api/v1`). این پروژه **منبع Dart**
+کلاینت Flutter برای API سامانه Rosepsy روی **`/api/v2`** با پاکت پاسخ
+استاندارد `{data, meta, errors}` (ADR-03 — گام ۳ طرح مهاجرت). نقطه واحد
+سازگاری: `lib/api/api_client.dart` (پاسخ‌خوانی `data/errors` + نگهداری
+`request_id` در `lastMeta` برای ردیابی پشتیبانی فنی B23). این پروژه **منبع Dart**
 است و ساخت خروجی آن به Flutter SDK نیاز دارد (در مخزن CI بک‌اند/فرانت
 اجرا می‌شود؛ build اپ در CI جداگانه موبایل).
 
@@ -28,10 +31,10 @@ OTP در وب کامل است) و در نسخه بعدی اپ اضافه می‌
 ```bash
 cd mobile
 flutter pub get
-# شبیه‌ساز اندروید: آدرس میزبان 10.0.2.2 است (پیش‌فرض)
-flutter run --dart-define=ROSEPSY_API_BASE=http://10.0.2.2:8080/api/v1
+# شبیه‌ساز اندروید: آدرس میزبان 10.0.2.2 است (پیش‌فرض روی /api/v2)
+flutter run --dart-define=ROSEPSY_API_BASE=http://10.0.2.2:8080/api/v2
 # تولید:
-flutter build apk --release --dart-define=ROSEPSY_API_BASE=https://<دامنه>/api/v1
+flutter build apk --release --dart-define=ROSEPSY_API_BASE=https://<دامنه>/api/v2
 ```
 
 ## ساختار
