@@ -26,6 +26,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.models.file import StoredFile
 from app.models.integration import SmsOutbox, SmsOutboxStatus
 from app.services.object_storage import storage_status
 
@@ -66,15 +67,20 @@ def sms_config_out(s: Settings | None = None) -> dict:
     }
 
 
-def integrations_config_out() -> dict:
-    """وضعیت همه یکپارچه‌سازی‌های بیرونی — بدون هیچ کلیدی (شفافیت B28)."""
+def integrations_config_out(db: Session | None = None) -> dict:
+    """وضعیت همه یکپارچه‌سازی‌های بیرونی — بدون هیچ کلیدی (شفافیت B28).
+
+    فاز ۴۱ (ADR-04 گام ۴): اگر db داده شود، شمارش ردیف‌های هنوز local
+    (``local_rows``) هم می‌آید تا اپراتور بداند تسویه volume محلی کی ممکن است
+    (صفر شدن این شمارش = پیش‌نیاز «فقط-خواندنی/حذف volume» مطابق طرح).
+    """
     s = get_settings()
     payment_ready = bool(
         (s.payment_gateway == "sandbox") or (s.payment_gateway == "zarinpal" and s.zarinpal_merchant_id)
     )
     map_ready = bool(s.map_provider == "osm" or getattr(s, f"{s.map_provider}_api_key", ""))
     smtp_ready = bool(s.smtp_enabled and s.smtp_host)
-    return {
+    out = {
         "payment_gateway": {
             "configured": s.payment_gateway,
             "ready": payment_ready,
@@ -100,6 +106,19 @@ def integrations_config_out() -> dict:
         # همیشه ready: پیش‌فرض local بدون کلید کار می‌کند؛ S3 ناقص → fallback شفاف
         "storage": {**storage_status(s), "ready": True, "decision": "ADR-04"},
     }
+    if db is not None:
+        # فاز ۴۱ - گام ۴ طرح ADR-04: دید عملیاتی تسویه volume محلی (بدون کلید)
+        local_rows = (
+            db.execute(
+                select(func.count())
+                .select_from(StoredFile)
+                .where(StoredFile.storage == "local")
+            ).scalar()
+            or 0
+        )
+        out["storage"]["local_rows"] = int(local_rows)
+        out["storage"]["settlement_ready"] = int(local_rows) == 0
+    return out
 
 
 # ---------------------------------------------------------------- queue

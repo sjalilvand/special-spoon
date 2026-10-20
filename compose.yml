@@ -84,7 +84,14 @@ services:
       # آدرس داخلی MinIO (فقط وقتی STORAGE_BACKEND=s3 باشد استفاده می‌شود؛
       # در حالت local بی‌اثر است). کلیدها از .env می‌آیند.
       S3_ENDPOINT_URL: http://minio:9000
+      # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (warn = فقط هدر؛ readonly = رد نوشتن‌ها با 410)
+      V1_DEPRECATION_MODE: ${V1_DEPRECATION_MODE:-warn}
+      V1_SUNSET_DATE: ${V1_SUNSET_DATE:-2027-04-20}
     volumes:
+      # فاز ۴۱ - گام ۴ طرح ADR-04: پس از تسویه کامل (گزارش پاک اسکریپت
+      # settle_local_storage.py) برای «فقط-خواندنی» شدن volume کافی است
+      # private_uploads:/app/uploads:ro شود — سپر fallback فاز ۴۰ در
+      # نبود دیسک-نوشتنی خطای S3 را با شکست آپلود آشکار می‌کند (تصمیم دستی)
       - private_uploads:/app/uploads
     depends_on:
       db:

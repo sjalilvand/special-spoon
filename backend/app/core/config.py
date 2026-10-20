@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.40.0"
+    app_version: str = "0.41.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_connect_timeout_seconds: float = 3.0
+
+    # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1
+    # warn (پیش‌فرض): فقط هدرهای Deprecation/Sunset/Warning روی پاسخ‌های /api/v1
+    # readonly: کلید اضطراری چرخه حذف — متدهای نوشتاری v1 با 410 رد می‌شوند؛
+    # فعال‌سازی فقط پس از یک چرخه انتشار کامل با حالت warn (پایش مصرف‌کننده جامانده)
+    v1_deprecation_mode: str = "warn"
+    # تاریخ پیشنهادی قطع v1 (YYYY-MM-DD) — در هدر Sunset به شکل HTTP-date می‌رود
+    v1_sunset_date: str = "2027-04-20"
 
     # فاز ۲۶ - B09: نگهداشت موقت اسلات
     booking_hold_minutes: int = 10

@@ -44,9 +44,16 @@ def _out(row: SmsOutbox) -> dict:
 
 
 @router.get("/integrations/config")
-def integrations_config(_actor=Depends(require_roles(*ADMIN_ROLES))) -> dict:
-    """شفافیت B28 — وضعیت همه یکپارچه‌سازی‌های بیرونی بدون هیچ کلیدی."""
-    return {"integrations": integrations_config_out()}
+def integrations_config(
+    db: Session = Depends(get_db),
+    _actor=Depends(require_roles(*ADMIN_ROLES)),
+) -> dict:
+    """شفافیت B28 — وضعیت همه یکپارچه‌سازی‌های بیرونی بدون هیچ کلیدی.
+
+    فاز ۴۱ (ADR-04 گام ۴): بخش storage شمارش ردیف‌های local (``local_rows``)
+    و پرچم ``settlement_ready`` هم می‌آید (دید عملیاتی تسویه volume محلی).
+    """
+    return {"integrations": integrations_config_out(db)}
 
 
 @router.get("/sms-outbox")

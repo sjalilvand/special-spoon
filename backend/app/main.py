@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.core.deprecation import V1DeprecationMiddleware
 from app.core.envelope import API_V2_PREFIX, EnvelopeMiddleware
 from app.core.guards import NullByteGuardMiddleware
 
@@ -112,6 +113,9 @@ for _router, _ in _ROUTERS:
 # فاز ۳۹: محافظ NUL داخلی‌تر از پاکت است تا رد 422 آن هم روی v2 پاکت‌بندی شود
 app.add_middleware(NullByteGuardMiddleware)
 app.add_middleware(EnvelopeMiddleware)
+# فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (هدرهای Deprecation/Sunset/Warning
+# فقط روی /api/v1؛ readonly = کلید اضطراری چرخه حذف) — بیرونی‌ترین لایه
+app.add_middleware(V1DeprecationMiddleware)
 
 
 @app.get("/", include_in_schema=False)

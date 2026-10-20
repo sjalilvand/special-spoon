@@ -199,6 +199,15 @@
 - بخش storage در `/integrations/config` (۶ یکپارچه‌سازی) + سند `docs/adr/ADR-04-object-storage.md` (آستانه اجرا + طرح مهاجرت ۴ گام)
 - اسکلت Playwright در `frontend/e2e/` (smoke: سلامت API، هدایت احراز، ورود، اعلان‌ها) — خارج از build فرانت
 
+## فاز ۴۱ — گام ۴ هر دو طرح: انقضای اعلام‌شده v1 (ADR-03) + ابزار تسویه volume محلی (ADR-04) (v0.41.0)
+- **انقضای v1 با هدرهای استاندارد (گام ۴ طرح ADR-03 — مرحله «اعلام»):** میان‌افزار `app/core/deprecation.py` روی همه پاسخ‌های `/api/v1` (موفق و خطا): `Deprecation: version="v1"` + `Sunset: <HTTP-date>` (RFC 8594 — پیش‌فرض 2027-04-20 از `V1_SUNSET_DATE`) + `Warning: 299`؛ v2 و ریشه سامانه پاک می‌مانند
+- **دو حالت عملیاتی (`V1_DEPRECATION_MODE`):** `warn` (پیش‌فرض — فقط هدر؛ سازگاری کامل، هیچ رفتاری عوض نمی‌شود) و `readonly` (کلید اضطراری چرخه حذف — متدهای نوشتاری v1 با 410 Gone و بدنه قرارداد v1 رد می‌شوند، خواندن برقرار)؛ به‌کارگیری readonly فقط پس از یک چرخه انتشار کامل با warn — حذف کامل v1 در چرخه بعد (فاصله الزامی سند ADR-03)
+- **ابزار تسویه volume محلی (گام ۴ طرح ADR-04):** سرویس `app/services/storage_settlement.py` + اسکریپت idempotent `backend/scripts/settle_local_storage.py` (`--dry-run` / `--enforce` / `--loop`) — مهاجرت باقی‌مانده‌های local + پاک‌سازی نسخه‌های محلی ردیف‌های s3 **فقط پس از خواندن مجدد از S3 و تطبیق sha256** (خطا/ناسازگاری → حفظ نسخه محلی)؛ حذف فیزیکی فقط با `--enforce`
+  - اجرا: `docker compose run --rm api python scripts/settle_local_storage.py --dry-run` سپس `--enforce --loop`
+  - پس از گزارش پاک: volume فقط-خواندنی (`:ro` در compose — راهنما کامنت‌شده) و سپس حذف؛ local فقط برای توسعه/آزمون
+- **شفافیت عملیاتی:** بخش storage در `/integrations/config` اکنون `local_rows` + `settlement_ready` دارد (صفر شدن شمارش = مجوز فقط-خواندنی کردن volume)
+- تست‌ها: ۱۷ آزمون جدید؛ کل ۳۱۹ passed، 1 skipped
+
 ## فاز ۴۰ — گام ۳ هر دو طرح: مهاجرت موبایل به v2 (ADR-03) + سوییچ STORAGE_BACKEND=s3 (ADR-04) (v0.40.0)
 - **مهاجرت اپ Flutter به /api/v2 (گام ۳ طرح ۴ گام ADR-03):** اپ B17 مستقیماً روی v2 (بدون گذر از v1) — نقطه واحد سازگاری `mobile/lib/api/api_client.dart`: پاسخ‌خوانی پاکت (`data` → payload واقعی، `meta` → `lastMeta` با `request_id` برای ردیابی پشتیبانی فنی B23)، پیام خطا از `errors[0].message` (fallback `detail` برای سازگاری با پایه قدیمی دستی)؛ صفحات تغییری نکردند — پاسخ‌های مصرفی اپ همه `{items, unread}` و اشیای فلت‌اند که طبق تدقیق 0.39.0 دست‌نخورده در `data` عبور می‌کنند؛ `mobile/README.md` به‌روز شد (`ROSEPSY_API_BASE=.../api/v2`)
 - **سوییچ Object Storage به s3 (گام ۳ طرح ۴ گام ADR-04):** پیش‌فرض `storage_backend` در config و `STORAGE_BACKEND` در compose/.env.example به `s3` رفت — نبود کلیدها/کتابخانه یا خطای سرویس → fallback شفاف به local (سپر خرابی fail-soft؛ وضعیت در `/integrations/config`)؛ پیام scan_detail تعمیم یافت تا «پیکربندی ناقص» و «خطای سرویس» را بدون ادعای نادرست پوشش دهد

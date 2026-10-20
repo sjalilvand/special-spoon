@@ -61,6 +61,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       S3_ENDPOINT_URL: http://minio:9000
+      # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (هدرهای Deprecation/Sunset روی v1)
+      V1_DEPRECATION_MODE: ${V1_DEPRECATION_MODE:-warn}
+      V1_SUNSET_DATE: ${V1_SUNSET_DATE:-2027-04-20}
     volumes:
       - ./backend:/app
       - ./backend/uploads_dev:/app/uploads
