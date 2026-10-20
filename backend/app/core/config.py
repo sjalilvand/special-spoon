@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.41.0"
+    app_version: str = "0.42.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     v1_deprecation_mode: str = "warn"
     # تاریخ پیشنهادی قطع v1 (YYYY-MM-DD) — در هدر Sunset به شکل HTTP-date می‌رود
     v1_sunset_date: str = "2027-04-20"
+
+    # فاز ۴۲ - ADR-05 گام ۳: Idempotency-Key واقعی عملیات مالی
+    # رزرو بدون پاسخ (سقوط سرور بین دو فاز) پس از این TTL کهنه و جایگزین می‌شود
+    idempotency_pending_ttl_seconds: int = 600
+    # عمر نگهداری ردیف‌های ثبت‌شده (طرح ADR-05: پاک‌سازی ۲۴ ساعته) — purge ادمین/تنبل
+    idempotency_retention_hours: int = 24
+    # حداقل فاصله پاک‌سازی تنبل خودکار داخل reserve (بدون نیاز به beat)
+    idempotency_lazy_purge_interval_seconds: int = 3600
 
     # فاز ۲۶ - B09: نگهداشت موقت اسلات
     booking_hold_minutes: int = 10

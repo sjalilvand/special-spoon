@@ -108,6 +108,26 @@ def _can_view_order(actor: User, order: Order) -> bool:
 
 
 # ---------------------------------------------------------------- orders
+# فاز ۴۲ - ADR-05 گام ۳: مستندسازی هدر Idempotency-Key در OpenAPI برای کلاینت‌ها
+# (هدر در میان‌افزار خوانده می‌شود؛ اینجا فقط قراردادِ سند API)
+_IDEMPOTENCY_OPENAPI_EXTRA = {
+    "parameters": [
+        {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": False,
+            "description": (
+                "کلید یکتای کلاینت (UUID) برای جلوگیری از ثبت دوباره عملیات مالی "
+                "(ADR-05 گام ۳) — مثلاً دوبار-زدن دکمه پرداخت روی شبکه ناپایدار. "
+                "تکرار همان کلید با همان بدنه → همان پاسخ قبلی؛ همان کلید با "
+                "بدنه/مسیر متفاوت → ۴۰۹. تا ۱۲۸ نویسه."
+            ),
+            "schema": {"type": "string", "minLength": 1, "maxLength": 128},
+        }
+    ]
+}
+
+
 class OrderCreate(BaseModel):
     appointment_id: uuid.UUID | None = None
     service_id: uuid.UUID | None = None
@@ -168,7 +188,7 @@ def get_order(
     return out
 
 
-@router.post("/orders", status_code=201)
+@router.post("/orders", status_code=201, openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA)
 def create_order(
     payload: OrderCreate,
     db: Session = Depends(get_db),
@@ -330,7 +350,7 @@ def gateways(_actor: User = Depends(get_current_user)) -> dict:
     return {"items": pay.configured_gateways()}
 
 
-@router.post("/orders/{order_id}/payments", status_code=201)
+@router.post("/orders/{order_id}/payments", status_code=201, openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA)
 def start_payment(
     order_id: uuid.UUID,
     payload: PaymentInit,

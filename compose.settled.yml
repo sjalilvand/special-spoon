@@ -1,0 +1,34 @@
+# =============================================================================
+# فاز ۴۲ - اجرای عملیاتی گام ۴ طرح‌های ADR-03 و ADR-04 (کلید اضطراری چرخه حذف)
+# =============================================================================
+# پیش‌نیاز (روی سرور، قبل از اعمال این فایل):
+#   ۱) مهاجرت/تسویه کامل فایل‌ها به Object Storage:
+#        docker compose run --rm api python scripts/settle_local_storage.py --dry-run
+#        docker compose run --rm api python scripts/settle_local_storage.py --enforce --loop
+#   ۲) اطمینان از گزارش پاک: GET /api/v1/integrations/config
+#      → بخش storage: "local_rows" = 0 و "settlement_ready" = true
+#   ۳) یک چرخه انتشار کامل با V1_DEPRECATION_MODE=warn (فاز ۴۱) و پایش لاگ
+#      برای مصرف‌کننده جامانده v1 — سپس فعال‌سازی readonly.
+#
+# اعمال (یک دستور):
+#   docker compose -f compose.yml -f compose.settled.yml up -d api
+# بازگشت (rollback فوری):
+#   docker compose -f compose.yml up -d api
+#
+# اثر این override روی سرویس api:
+#   - V1_DEPRECATION_MODE=readonly → متدهای نوشتاری /api/v1 با 410 Gone رد
+#     می‌شوند و خواندن برقرار می‌ماند (فاز ۴۱)؛ مصرف‌کنندگان باید روی /api/v2 باشند.
+#   - volume فایل‌ها فقط-خواندنی (:ro) می‌شود — سپر fallback فاز ۴۰ در
+#     نبود دیسک-نوشتنی خطای S3 را با شکست آشکار آپلود نشان می‌دهد (تصمیم
+#     دستی گام ۴ سند ADR-04)؛ volume محلی دیگر پاک‌نشدنی نیست و پس از یک
+#     چرخه انتشار پایدار می‌توانید آن را از compose.yml حذف کنید.
+# =============================================================================
+services:
+  api:
+    environment:
+      V1_DEPRECATION_MODE: readonly
+    volumes:
+      - private_uploads:/app/uploads:ro
+
+# توجه: حذف نهایی volume (freedisk) فقط پس از یک چرخه انتشار پایدار با این
+# override و پشتیبان‌گیری از سرویس — گام پایانی بند ۵ سند ADR-04.

@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.core.deprecation import V1DeprecationMiddleware
 from app.core.envelope import API_V2_PREFIX, EnvelopeMiddleware
 from app.core.guards import NullByteGuardMiddleware
+from app.core.idempotency import FinancialIdempotencyMiddleware
 
 from app.api.v1.ai import router as ai_router
 from app.api.v1.applicants import router as applicants_router
@@ -21,6 +22,7 @@ from app.api.v1.compliance import router as compliance_router
 from app.api.v1.discounts import router as discounts_router
 from app.api.v1.email_outbox import router as email_outbox_router
 from app.api.v1.health import router as health_router
+from app.api.v1.idempotency import router as idempotency_router
 from app.api.v1.intake import router as intake_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.integrations import router as integrations_router
@@ -60,6 +62,7 @@ app = FastAPI(
 # {data, meta, errors}؛ خارج از OpenAPI تا طرح مستندات تمیز بماند).
 _ROUTERS: list[tuple[object, list[str] | None]] = [
     (health_router, ["health"]),
+    (idempotency_router, None),
     (auth_router, None),
     (accounting_router, None),
     (users_router, None),
@@ -112,6 +115,10 @@ for _router, _ in _ROUTERS:
 
 # فاز ۳۹: محافظ NUL داخلی‌تر از پاکت است تا رد 422 آن هم روی v2 پاکت‌بندی شود
 app.add_middleware(NullByteGuardMiddleware)
+# فاز ۴۲ - ADR-05 گام ۳: Idempotency-Key واقعی عملیات مالی — داخل‌تر از پاکت
+# تا پاسخ بازپخش‌شده روی v2 هم عیناً پاکت‌بندی شود؛ بیرونی‌تر از محافظ NUL
+# تا رد 422 آن هم رزرو کلید را آزاد کند
+app.add_middleware(FinancialIdempotencyMiddleware)
 app.add_middleware(EnvelopeMiddleware)
 # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (هدرهای Deprecation/Sunset/Warning
 # فقط روی /api/v1؛ readonly = کلید اضطراری چرخه حذف) — بیرونی‌ترین لایه

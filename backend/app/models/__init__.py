@@ -39,6 +39,7 @@ from app.models.discount import Discount, DiscountKind, DiscountRedemption
 from app.models.email_outbox import EmailOutbox, EmailOutboxStatus
 from app.models.file import FileScan, StoredFile
 from app.models.import_job import ImportJob, ImportRow
+from app.models.idempotency import IdempotencyKey
 from app.models.integration import SmsOutbox, SmsOutboxStatus
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
