@@ -256,6 +256,7 @@
 - **آزمون/آموزش/پشتیبانی:** ۲۴ اجرای آزمون با نمره، برچسب تفسیر و ریزنمره زیرمقیاس (snapshot)؛ ۴ محتوا، ۲ دوره + ۸ جلسه + ۱۰ ثبت‌نام، آزمون CBT با ۶ سؤال + ۶ تلاش + ۳ گواهی؛ ۵ تیکت + ۹ پیام + ۱ شکایت؛ ۱۴ اعلان، ۴ ایمیل، ۳ پیامک، ۱۳ رخداد حسابرسی، ۱ job ورود اکسل با ۸ سطر (شامل خطا/تکرار)
 - **حساب‌های دمو:** `admin / Rosepsy@Admin2026` (مدیر) — `reception1`، `manager1`، `supervisor1`، `dpo1`، `counselor1..8`، `user2001..user2020` با رمز `Demo@1234` (فقط برای دمو)
 - اجرا: `docker compose run --rm api python seed_demo_rich.py` (پاک‌سازی: `--reset`) — گزارش بصری شکل و شمایل و گردش کار در `download/rosepsy-demo-report.html` (بیرون از مخزن)
+- **رفع اشکال استقرار (v0.44.2):** `backend/Dockerfile` اکنون همه اسکریپت‌های ریشه‌ای (`COPY *.py`) و پوشه `psych_seed/` را داخل ایمیج کپی می‌کند — پیش‌تر فقط سه فایل کپی می‌شد و `seed_demo_rich.py` (و `seed_psych_tests.py` که آن import می‌کند) در کانتینر یافت نمی‌شد (`can't open file '/app/seed_demo_rich.py'`)؛ پس از `git pull` یک بار دیگر `docker compose up -d --build` لازم است (لایه COPY از cache خارج می‌شود)
 
 ## فاز ۴۱ — گام ۴ هر دو طرح: انقضای اعلام‌شده v1 (ADR-03) + ابزار تسویه volume محلی (ADR-04) (v0.41.0)
 - **انقضای v1 با هدرهای استاندارد (گام ۴ طرح ADR-03 — مرحله «اعلام»):** میان‌افزار `app/core/deprecation.py` روی همه پاسخ‌های `/api/v1` (موفق و خطا): `Deprecation: version="v1"` + `Sunset: <HTTP-date>` (RFC 8594 — پیش‌فرض 2027-04-20 از `V1_SUNSET_DATE`) + `Warning: 299`؛ v2 و ریشه سامانه پاک می‌مانند
