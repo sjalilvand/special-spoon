@@ -18,7 +18,7 @@ export default function About() {
             src={img}
             alt={texts.aboutTitle}
             onError={() => setImgOk(false)}
-            sx={{ width: { xs: "100%", md: 360 }, borderRadius: 4, boxShadow: "0 14px 34px rgba(176,74,90,.16)", border: "1px solid #f6e3e8" }}
+            sx={{ width: { xs: "100%", md: 360 }, borderRadius: "20px", boxShadow: "0 18px 44px rgba(168,58,84,.16)", border: "1px solid #f3e2e7" }}
           />
         )}
         <Stack spacing={2}>

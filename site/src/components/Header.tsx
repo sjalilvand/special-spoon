@@ -1,65 +1,121 @@
-import { AppBar, Box, Button, Stack, Toolbar, Typography } from "@mui/material";
+import {
+  AppBar, Box, Button, Container, Drawer, IconButton, List, ListItem,
+  Stack, Toolbar, Typography, useScrollTrigger,
+} from "@mui/material";
+import { useState } from "react";
 import { SUGGESTED } from "../content/assets";
 import { texts } from "../content/texts";
 
 export default function Header() {
+  const [open, setOpen] = useState(false);
+  const raised = useScrollTrigger({ disableHysteresis: true, threshold: 8 });
+
   return (
-    <AppBar
-      position="sticky"
-      elevation={0}
-      sx={{ bgcolor: "rgba(255,255,255,0.96)", backdropFilter: "blur(8px)", borderBottom: "1px solid #f6e3e8" }}
-    >
-      <Toolbar sx={{ gap: 1 }}>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ flexGrow: 1 }}>
-          {SUGGESTED.logo ? (
-            <Box component="img" src={SUGGESTED.logo} alt={texts.brand} sx={{ height: 46 }} />
-          ) : (
-            <Typography variant="h6" fontWeight={800} color="primary">
-              {texts.brand}
-            </Typography>
-          )}
-          <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
-            {texts.brandSub}
-          </Typography>
+    <>
+      {/* نوار اطلاع‌رسانی بالای سایت */}
+      <Box sx={{ background: "linear-gradient(90deg,#7c2740,#a83a54 55%,#5c4a6e)", color: "#fff", py: 0.7, textAlign: "center" }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, letterSpacing: 0.2 }}>
+          ✦ {texts.topbar}
+        </Typography>
+      </Box>
+
+      <AppBar
+        position="sticky"
+        elevation={0}
+        sx={{
+          bgcolor: raised ? "rgba(255,255,255,0.97)" : "rgba(255,255,255,0.88)",
+          backdropFilter: "blur(10px)",
+          borderBottom: "1px solid #f3dce2",
+          transition: "background .25s ease",
+        }}
+      >
+        <Container maxWidth="lg">
+          <Toolbar disableGutters sx={{ gap: 1, minHeight: { xs: 64, md: 72 } }}>
+            <Stack direction="row" alignItems="center" spacing={1.2} sx={{ flexGrow: 1 }}>
+              {SUGGESTED.logo ? (
+                <Box component="img" src={SUGGESTED.logo} alt={texts.brand} sx={{ height: 44 }} />
+              ) : (
+                <Typography variant="h6" fontWeight={800} color="primary">
+                  {texts.brand}
+                </Typography>
+              )}
+              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", lg: "block" } }}>
+                {texts.brandSub}
+              </Typography>
+            </Stack>
+
+            {texts.nav.map((n) => (
+              <Button
+                key={n.id}
+                href={`#${n.id}`}
+                sx={{
+                  color: "text.primary",
+                  display: { xs: "none", lg: "inline-flex" },
+                  fontWeight: 600,
+                  fontSize: 14.5,
+                  "&:hover": { color: "primary.main", bgcolor: "rgba(168,58,84,.06)" },
+                }}
+              >
+                {n.label}
+              </Button>
+            ))}
+
+            <Button
+              href="/panel/"
+              variant="outlined"
+              size="small"
+              sx={{
+                display: { xs: "none", md: "inline-flex" },
+                borderColor: "#d9c9e2",
+                color: "secondary.main",
+                fontWeight: 700,
+                "&:hover": { borderColor: "secondary.main", bgcolor: "rgba(92,74,110,.06)" },
+              }}
+            >
+              ورود به سامانه
+            </Button>
+            <Button href="/booking" variant="contained" size="small" sx={{ display: { xs: "none", sm: "inline-flex" }, px: 2.2 }}>
+              رزرو نوبت
+            </Button>
+
+            {/* دکمه همبرگری — بدون وابستگی به @mui/icons-material */}
+            <IconButton
+              onClick={() => setOpen(true)}
+              sx={{ display: { lg: "none" }, color: "primary.main" }}
+              aria-label="باز کردن منو"
+            >
+              <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <Box sx={{ width: 20, height: 2, bgcolor: "currentColor", borderRadius: 2 }} />
+                <Box sx={{ width: 20, height: 2, bgcolor: "currentColor", borderRadius: 2 }} />
+                <Box sx={{ width: 14, height: 2, bgcolor: "currentColor", borderRadius: 2 }} />
+              </Box>
+            </IconButton>
+          </Toolbar>
+        </Container>
+      </AppBar>
+
+      <Drawer anchor="left" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: 300, p: 2 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6" fontWeight={800} color="primary">{texts.brand}</Typography>
+          <IconButton onClick={() => setOpen(false)} aria-label="بستن منو">
+            <Box component="span" sx={{ fontSize: 20, lineHeight: 1 }}>✕</Box>
+          </IconButton>
         </Stack>
-        {texts.nav.map((n) => (
-          <Button
-            key={n.id}
-            href={`#${n.id}`}
-            sx={{ color: "text.primary", display: { xs: "none", md: "inline-flex" }, fontWeight: 600 }}
-          >
-            {n.label}
+        <List sx={{ mb: 2 }}>
+          {texts.nav.map((n) => (
+            <ListItem key={n.id} component="a" href={`#${n.id}`} onClick={() => setOpen(false)}
+              sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
+              {n.label}
+            </ListItem>
+          ))}
+        </List>
+        <Stack spacing={1.2}>
+          <Button href="/booking" variant="contained" fullWidth>رزرو نوبت</Button>
+          <Button href="/panel/" variant="outlined" fullWidth sx={{ borderColor: "secondary.main", color: "secondary.main" }}>
+            ورود به سامانه
           </Button>
-        ))}
-        <Button
-          href="/booking"
-          variant="outlined"
-          size="small"
-          sx={{ borderColor: "primary.main", color: "primary.main", fontWeight: 700 }}
-        >
-          رزرو نوبت
-        </Button>
-        <Button
-          href="/panel/"
-          variant="outlined"
-          size="small"
-          sx={{ display: { xs: "none", md: "inline-flex" }, borderColor: "secondary.main", color: "secondary.main", fontWeight: 700 }}
-        >
-          ورود به سامانه
-        </Button>
-        <Button
-          href="#consult"
-          size="small"
-          sx={{
-            background: "linear-gradient(135deg,#b04a5a 0%,#8a3342 100%)",
-            color: "#fff",
-            fontWeight: 700,
-            "&:hover": { background: "linear-gradient(135deg,#a03e4e 0%,#7a2c3a 100%)" },
-          }}
-        >
-          درخواست مشاوره
-        </Button>
-      </Toolbar>
-    </AppBar>
+        </Stack>
+      </Drawer>
+    </>
   );
 }

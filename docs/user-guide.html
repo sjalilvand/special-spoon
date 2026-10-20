@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>راهنمای جامع سامانه رزپسی — نسخه ۰.۴۳</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #a83a54; --primary-dark: #7c2740; --secondary: #5c4a6e;
+    --ink: #2e2228; --muted: #7a6a72; --bg: #fbf7f4; --line: #f0dbe1;
+    --tint: #fdf3f5; --gold: #c99a5b; --ok: #2e7d32; --warn: #ed6c02;
+  }
+  body { font-family: 'Vazirmatn', Tahoma, sans-serif; background: var(--bg); color: var(--ink); line-height: 2; }
+
+  /* ===== سربرگ ===== */
+  .topbar { background: linear-gradient(135deg, var(--primary-dark), var(--primary) 55%, var(--secondary)); color: #fff; padding: 34px 22px 30px; text-align: center; position: relative; overflow: hidden; }
+  .topbar::before, .topbar::after { content: ''; position: absolute; border-radius: 50%; filter: blur(50px); background: rgba(255,255,255,.10); }
+  .topbar::before { width: 300px; height: 300px; top: -140px; left: -80px; }
+  .topbar::after { width: 240px; height: 240px; bottom: -120px; right: -60px; }
+  .topbar h1 { font-size: 27px; font-weight: 800; position: relative; }
+  .topbar p { opacity: .92; font-size: 14.5px; margin-top: 6px; position: relative; }
+  .topbar .ver { display: inline-flex; gap: 8px; margin-top: 14px; position: relative; }
+  .topbar .ver span { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 99px; padding: 3px 14px; font-size: 12.5px; }
+
+  /* ===== چیدمان ===== */
+  .shell { max-width: 1180px; margin: 26px auto; display: grid; grid-template-columns: 262px 1fr; gap: 22px; padding: 0 16px; }
+  @media (max-width: 940px) { .shell { grid-template-columns: 1fr; } aside { position: static !important; height: auto !important; } }
+
+  /* ===== فهرست کنار ===== */
+  aside { position: sticky; top: 14px; height: fit-content; max-height: calc(100vh - 28px); overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+  aside .search { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 9px 12px; font-family: inherit; font-size: 13.5px; margin-bottom: 10px; outline: none; }
+  aside .search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(168,58,84,.12); }
+  aside nav a { display: block; padding: 7.5px 11px; border-radius: 11px; color: var(--ink); text-decoration: none; font-size: 13.5px; font-weight: 600; transition: background .2s; }
+  aside nav a:hover { background: var(--tint); color: var(--primary); }
+  aside nav a.h { margin-top: 8px; font-size: 11.5px; color: var(--muted); font-weight: 800; letter-spacing: .3px; }
+
+  /* ===== کارت‌ها ===== */
+  main { min-width: 0; }
+  section.card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 20px; margin-bottom: 22px; scroll-margin-top: 16px; }
+  .card > h2 { font-size: 20px; font-weight: 800; color: var(--primary-dark); display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .card > h2 .ic { width: 42px; height: 42px; border-radius: 13px; background: linear-gradient(135deg,#fbe9ee,#efe9f5); display: inline-flex; align-items: center; justify-content: center; font-size: 21px; flex-shrink: 0; }
+  .card .path { font-size: 12.5px; color: var(--muted); background: var(--tint); border: 1px dashed #e9c9d2; border-radius: 10px; padding: 5px 12px; display: inline-block; margin: 6px 0 12px; }
+  .card p.desc { font-size: 14.5px; color: #4a3c43; margin-bottom: 14px; }
+  .card h3 { font-size: 15.5px; font-weight: 800; color: var(--secondary); margin: 20px 0 10px; padding-right: 12px; border-right: 4px solid var(--primary); }
+
+  /* ===== چیپ نقش‌ها ===== */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 14px; }
+  .chip { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3.5px 13px; }
+  .chip.role { background: #faeef1; color: var(--primary); border: 1px solid #f0d3da; }
+  .chip.role.adm { background: #f0ebf6; color: var(--secondary); border: 1px solid #e0d6ea; }
+  .chip.info { background: #e8f2ea; color: var(--ok); border: 1px solid #cde5d1; }
+  .chip.warn { background: #fdf1e3; color: var(--warn); border: 1px solid #f5dcc0; }
+
+  /* ===== فیلدها — شبیه فرم MUI ===== */
+  .form { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #fffdfd; margin-bottom: 14px; }
+  .form .form-title { font-size: 13px; font-weight: 800; color: var(--primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .form .form-title::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 11px; }
+  .field { border: 1.5px solid #e6cdd4; border-radius: 11px; padding: 8px 12px 7px; background: #fff; }
+  .field .lbl { font-size: 12px; font-weight: 700; color: #8d5a68; }
+  .field .lbl .req { color: #d32f2f; }
+  .field .hint { font-size: 11.8px; color: var(--muted); line-height: 1.9; }
+
+  /* ===== جدول ===== */
+  table { width: 100%; border-collapse: collapse; font-size: 13.2px; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th { background: linear-gradient(135deg,#a83a54,#8a2f47); color: #fff; font-weight: 700; padding: 9px 12px; text-align: right; font-size: 12.8px; }
+  td { border-top: 1px solid #f6e7eb; padding: 8px 12px; vertical-align: top; }
+  tr:nth-child(even) td { background: #fdf8f9; }
+  td b { color: var(--primary-dark); }
+
+  /* ===== گام‌ها ===== */
+  .steps { counter-reset: st; margin: 8px 0 14px; }
+  .step { display: flex; gap: 12px; padding: 9px 0; }
+  .step .n { counter-increment: st; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: linear-gradient(135deg,#b34460,#8a2f47); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 6px 14px rgba(168,58,84,.25); }
+  .step .n::before { content: counter(st, persian); }
+  .step .t b { display: block; font-size: 13.8px; }
+  .step .t span { font-size: 13px; color: var(--muted); }
+
+  /* ===== فراخوان‌ها ===== */
+  .callout { border-radius: 13px; padding: 11px 15px; font-size: 13.2px; margin: 10px 0 14px; border: 1px solid; }
+  .callout.info { background: #f3f0f8; border-color: #ddd3ea; color: #55446a; }
+  .callout.ok { background: #f0f7f1; border-color: #cfe4d3; color: #2c5e34; }
+  .callout.warn { background: #fdf4e7; border-color: #f2ddc0; color: #8a5410; }
+
+  ul.plain { padding-right: 22px; margin: 6px 0 14px; font-size: 13.6px; }
+  ul.plain li { margin-bottom: 5px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 18px 0 30px; }
+  .backtop { position: fixed; bottom: 22px; left: 22px; width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 20px; box-shadow: 0 10px 24px rgba(168,58,84,.35); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>📖 راهنمای جامع سامانه رزپسی</h1>
+  <p>شرح کامل بخش‌ها، فرم‌ها، فرایندها و امکانات — به همان زبانی که سامانه با شما حرف می‌زند</p>
+  <div class="ver"><span>نسخه ۰.۴۳ (فاز ۴۳)</span><span>پنل: <code>/panel/</code></span><span>سایت: <code>/</code></span></div>
+</header>
+
+<div class="shell">
+<aside>
+  <input class="search" id="q" placeholder="جست‌وجو در فهرست…">
+  <nav id="nav">
+    <a class="h">شروع</a>
+    <a href="#intro">معرفی و نقش‌ها</a>
+    <a href="#auth">ورود و حساب کاربری</a>
+    <a class="h">سایت عمومی</a>
+    <a href="#public-booking">رزرو نوبت آنلاین</a>
+    <a href="#public-consult">درخواست مشاوره</a>
+    <a class="h">پذیرش و جریان مراجع</a>
+    <a href="#dashboards">داشبوردها</a>
+    <a href="#applicants">متقاضیان</a>
+    <a href="#imports">ورود داده با اکسل</a>
+    <a href="#consultreq">درخواست‌های مشاوره</a>
+    <a href="#cases">پرونده‌ها</a>
+    <a href="#assessments">ارزیابی‌ها</a>
+    <a class="h">جریان بالینی</a>
+    <a href="#worklist">کارتابل مشاور</a>
+    <a href="#reviews">بازبینی و نظارت</a>
+    <a href="#processes">فرایندها (BPMN)</a>
+    <a class="h">ساختار کلینیک</a>
+    <a href="#counselors">مشاوران</a>
+    <a href="#services">خدمات و تعرفه‌ها</a>
+    <a href="#topics">دسته‌بندی موضوعی</a>
+    <a href="#orgs">سازمان‌ها و شعب</a>
+    <a class="h">مالی</a>
+    <a href="#orders">سفارش و پرداخت</a>
+    <a href="#wallet">کیف پول</a>
+    <a href="#accounting">حسابداری</a>
+    <a class="h">محتوا و ابزارها</a>
+    <a href="#learning">محتوا و دوره</a>
+    <a href="#psych">تست روان‌شناسی</a>
+    <a href="#tools">پشتیبانی، دستیار AI، یکپارچه‌سازی</a>
+    <a href="#notifications">اعلان‌ها</a>
+    <a class="h">مدیریت سامانه</a>
+    <a href="#users">کاربران</a>
+    <a href="#verification">بازبینی صلاحیت</a>
+    <a href="#governance">امنیت و حاکمیت</a>
+    <a href="#me-panel">پنل متقاضی</a>
+  </nav>
+</aside>
+
+<main>
+
+<!-- ============ معرفی ============ -->
+<section class="card" id="intro">
+  <h2><span class="ic">🌹</span> معرفی سامانه و نقش‌های کاربری</h2>
+  <p class="desc">
+    <b>رزپسی</b> سامانه جامع مدیریت کلینیک مشاوره و روان‌درمانی است. دو روبرو (واجهه) دارد:
+    <b>سایت عمومی</b> برای مراجعان (رزرو نوبت، درخواست مشاوره، آشنایی با خدمات) و
+    <b>پنل مدیریت</b> برای کارکنان کلینیک (پذیرش، پرونده، درمان، مالی، مدیریت).
+    هر درخواست HTTP با پاکت استاندارد پاسخ می‌گیرد، عملیات مالی با کلید idempotency محافظت می‌شوند
+    و روی همه مسیرها سقف نرخ معقول اعمال است.
+  </p>
+  <h3>نقش‌های سامانه</h3>
+  <table>
+    <tr><th>نقش</th><th>جایگاه</th><th>خلاصه دسترسی‌ها</th></tr>
+    <tr><td><b>SYSTEM_ADMIN</b></td><td>مدیر ارشد سامانه</td><td>همه‌چیز: کاربران، حسابداری، حسابرسی، تنظیمات یکپارچه‌سازی</td></tr>
+    <tr><td><b>ORG_MANAGER</b></td><td>مدیر مجموعه</td><td>داشبورد مدیر، گزارش DPO، درخواست‌ها، مالی، ساختار کلینیک</td></tr>
+    <tr><td><b>RECEPTION</b></td><td>پذیرش</td><td>متقاضیان، درخواست‌ها، تشکیل پرونده، ورود اکسل، سفارش و پرداخت</td></tr>
+    <tr><td><b>TECHNICAL_SUPERVISOR</b></td><td>ناظر فنی</td><td>بازبینی ارزیابی‌ها، پرونده‌های تحت نظارت، هشدار سطح ۳</td></tr>
+    <tr><td><b>COUNSELOR</b></td><td>مشاور/روان‌درمانگر</td><td>کارتابل، پرونده‌های تخصیصی، ثبت ارزیابی و جلسات</td></tr>
+    <tr><td><b>APPLICANT</b></td><td>متقاضی/مراجع</td><td>«پنل من»: وضعیت پرونده، نوبت‌ها، ارزیابی‌های تخصیصی</td></tr>
+    <tr><td><b>DPO</b></td><td>مسئول حفاظت داده</td><td>گزارش DPO و موضوعات حریم خصوصی</td></tr>
+  </table>
+  <div class="callout info">🔐 دسترسی هر منو به نقش شما وابسته است؛ منویی که نمی‌بینید یعنی برای نقش شما فعال نیست. همه کنش‌های حساس در <b>لاگ حسابرسی (Audit)</b> ثبت می‌شود.</div>
+</section>
+
+<!-- ============ ورود ============ -->
+<section class="card" id="auth">
+  <h2><span class="ic">🔑</span> ورود، فعال‌سازی و تغییر رمز</h2>
+  <p class="desc">نخستین باری که مدیر برای شما حساب می‌سازد، رمز اولیه به‌صورت یک‌بارمصرف صادر و <b>لینک فعال‌سازی</b> برایتان ارسال می‌شود. با اولین ورود، سامانه شما را ناچار به تغییر رمز می‌کند.</p>
+  <div class="chips"><span class="chip role">همه نقش‌ها</span></div>
+
+  <h3>فرم ورود — مسیر: صفحه اصلی پنل</h3>
+  <div class="form">
+    <div class="form-title">ورود به سامانه</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام کاربری <span class="req">*</span></div><div class="hint">نام کاربری که پذیرش برایتان ساخته است</div></div>
+      <div class="field"><div class="lbl">رمز عبور <span class="req">*</span></div><div class="hint">در صورت فراموشی با مدیر سامانه تماس بگیرید</div></div>
+    </div>
+  </div>
+
+  <h3>فرم فعال‌سازی — مسیر: لینک پیامک‌شده (<code>/activate?token=…</code>)</h3>
+  <div class="form">
+    <div class="form-title">تنظیم رمز نخست</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">رمز جدید</div><div class="hint">حداقل ۱۰ نویسه؛ ترکیب حرف بزرگ/کوچک، رقم و نماد</div></div>
+      <div class="field"><div class="lbl">تکرار رمز جدید</div><div class="hint">باید دقیقاً با رمز جدید یکی باشد</div></div>
+    </div>
+  </div>
+
+  <h3>فرم تغییر رمز — مسیر: منوی حساب کاربری</h3>
+  <div class="form">
+    <div class="form-title">تغییر رمز عبور</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">رمز عبور فعلی <span class="req">*</span></div><div class="hint">اعتبارسنجی می‌شود</div></div>
+      <div class="field"><div class="lbl">رمز جدید (حداقل ۱۰ نویسه) <span class="req">*</span></div><div class="hint">نباید با رمزهای قبلی یکسان باشد</div></div>
+      <div class="field"><div class="lbl">تکرار رمز جدید <span class="req">*</span></div><div class="hint">تطبیق دو ورودی</div></div>
+    </div>
+  </div>
+  <div class="callout ok">✅ نشست‌ها با <b>Cookie امن</b> نگه داشته می‌شوند و توکن دسترسی به‌صورت خودکار با توکن نوسازی (Refresh) تمدید می‌شود؛ خروج از سامانه هر دو را باطل می‌کند.</div>
+</section>
+<!-- ============ رزرو نوبت ============ -->
+<section class="card" id="public-booking">
+  <h2><span class="ic">📅</span> سایت عمومی — رزرو نوبت آنلاین</h2>
+  <p class="desc">مراجع بدون ثبت‌نام قبلی، در چهار گام نوبت می‌گیرد. این همان مسیری است که از دکمه «رزرو نوبت» در سایت عمومی (<code>/booking</code>) باز می‌شود.</p>
+  <div class="chips"><span class="chip info">بدون نیاز به ورود</span><span class="chip warn">نیازمند تأیید شماره موبایل (OTP)</span></div>
+  <div class="steps">
+    <div class="step"><div class="n"></div><div class="t"><b>انتخاب مشاور</b><span>فهرست مشاوران از API عمومی خوانده می‌شود؛ نام، عنوان حرفه‌ای و تخصص نمایش داده می‌شود.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>انتخاب روز و ساعت</b><span>تقویم شمسی، روزهای آزاد و اسلات‌های هر روز را نشان می‌دهد. با انتخاب اسلات، یک <b>نگهداشت موقت</b> (Hold) چنددقیقه‌ای ساخته می‌شود تا کسی آن نوبت را نگیرد؛ تایمر معکوس بالای فرم دیده می‌شود.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>تأیید شماره موبایل</b><span>کد یک‌بارمصرف پیامک می‌شود؛ در محیط آزمایشی، کد توسعه در پاسخ نمایش داده می‌شود. کد تا ۲ دقیقه اعتبار دارد.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>تکمیل اطلاعات و ثبت</b><span>نام و توضیح کوتاه؛ پس از ثبت، <b>کد رهگیری</b> به مراجع داده می‌شود و نوبت در کارتابل پذیرش می‌افتد.</span></div></div>
+  </div>
+  <div class="callout info">💡 اگر تایمر نگهداشت تمام شود، نوبت آزاد و باید از ابتدا انتخاب شود — این رفتار از «رزرو فانتوم» جلوگیری می‌کند.</div>
+</section>
+
+<!-- ============ درخواست مشاوره سایت ============ -->
+<section class="card" id="public-consult">
+  <h2><span class="ic">📝</span> سایت عمومی — فرم درخواست مشاوره</h2>
+  <p class="desc">برای کسانی که هنوز مطمئن نیستند کدام خدمت/مشاور مناسب است. فرم پایین صفحه اصلی (<code>#consult</code>) است و پس از ارسال، <b>کد رهگیری</b> می‌دهد؛ پیگیری بعدی با همین کد در پذیرش انجام می‌شود.</p>
+  <div class="chips"><span class="chip info">بدون نیاز به ورود</span></div>
+  <h3>فیلدهای فرم</h3>
+  <div class="form">
+    <div class="form-title">درخواست مشاوره</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام و نام خانوادگی <span class="req">*</span></div><div class="hint">نام واقعی برای تماس پذیرش</div></div>
+      <div class="field"><div class="lbl">شماره موبایل <span class="req">*</span></div><div class="hint">قالب 09121234567</div></div>
+      <div class="field"><div class="lbl">موضوع درخواست <span class="req">*</span></div><div class="hint">از فهرست: مشاوره فردی، زوج‌درمانی، کودک و نوجوان، گروهی، نوروفیدبک، سایر</div></div>
+      <div class="field"><div class="lbl">بازه زمانی ترجیحی</div><div class="hint">صبح / عصر / هر زمان</div></div>
+      <div class="field"><div class="lbl">تاریخ ترجیحی تماس</div><div class="hint">تقویم شمسی</div></div>
+      <div class="field"><div class="lbl">شهر</div><div class="hint">اختیاری — برای تطبیق شعبه</div></div>
+      <div class="field"><div class="lbl">نحوه آشنایی با ما</div><div class="hint">جست‌وجوی اینترنتی، معرفی آشنایان، شبکه‌های اجتماعی، تابلو، سایر</div></div>
+      <div class="field"><div class="lbl">توضیح کوتاه</div><div class="hint">چند خط درباره موضوع (اختیاری)</div></div>
+    </div>
+  </div>
+  <div class="callout warn">🛡️ فرم یک فیلد «وب‌سایت» پنهان (Honeypot) دارد؛ ربات‌ها که آن را پر کنند، درخواست‌شان بی‌سروصدا رد می‌شود.</div>
+</section>
+
+<!-- ============ داشبوردها ============ -->
+<section class="card" id="dashboards">
+  <h2><span class="ic">📊</span> داشبوردها و گزارش‌های مدیریتی</h2>
+  <p class="desc">دو داشبورد اصلی + یک گزارش تخصصی حریم خصوصی.</p>
+  <h3>داشبورد پرسنل — مسیر: منوی «داشبورد»</h3>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span><span class="chip role">TECHNICAL_SUPERVISOR</span><span class="chip role">COUNSELOR</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <p class="desc">نمای کلی عملیات روز: وضعیت پرونده‌ها، درخواست‌های در انتظار، نوبت‌های پیش‌رو و شاخص‌های عملیاتی. کارت‌ها کلیک‌پذیرند و به فهرست مربوط می‌برند.</p>
+  <h3>داشبورد مدیر (B24) — مسیر: «داشبورد مدیر»</h3>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <p class="desc">شاخص‌های تجاری: روند مراجعان، نرخ تبدیل درخواست به پرونده، درآمد به تفکیک خدمت/شعبه، عملکرد مشاوران و اشغال ظرفیت نوبت‌ها.</p>
+  <h3>گزارش DPO — مسیر: «گزارش DPO»</h3>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">DPO</span></div>
+  <p class="desc">گزارش حاکمیت داده شخصی: تعداد دسترسی‌ها به پرونده‌ها، درخواست‌های حذف/اصلاح داده و رصدهای حریم خصوصی. مبنای پاسخ‌گویی به نهادهای ناظر.</p>
+</section>
+
+<!-- ============ متقاضیان ============ -->
+<section class="card" id="applicants">
+  <h2><span class="ic">👥</span> متقاضیان — ثبت و پذیرش</h2>
+  <p class="desc">حلقه اول تماس مراجع با کلینیک. از اینجا هویت متقاضی ساخته و در صورت نیاز «حساب کاربری» با لینک فعال‌سازی برایش صادر می‌شود.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span></div>
+  <h3>فرم ثبت/ویرایش متقاضی</h3>
+  <div class="form">
+    <div class="form-title">مشخصات متقاضی</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام <span class="req">*</span> / نام خانوادگی <span class="req">*</span></div><div class="hint">نام واقعی شناسنامه</div></div>
+      <div class="field"><div class="lbl">کد ملی</div><div class="hint">۱۰ رقم — یکتا؛ مبنای جلوگیری از ثبت تکراری</div></div>
+      <div class="field"><div class="lbl">موبایل</div><div class="hint">شماره تماس اصلی؛ همان شماره OTP و پیامک‌ها</div></div>
+      <div class="field"><div class="lbl">تاریخ تولد</div><div class="hint">برای پرونده و گروه سنی</div></div>
+      <div class="field"><div class="lbl">جنسیت</div><div class="hint">زن / مرد / دیگر / اظهارنظرنکردن</div></div>
+      <div class="field"><div class="lbl">شماره پرسنلی</div><div class="hint">برای قراردادهای سازمانی (اختیاری)</div></div>
+      <div class="field"><div class="lbl">شناسه جایگزین</div><div class="hint">هر کد مرجع دیگری که مجموعه استفاده می‌کند</div></div>
+      <div class="field"><div class="lbl">محل خدمت / واحد سازمانی</div><div class="hint">برای مراجعان سازمانی — به سازمان/واحد وصل می‌شود</div></div>
+      <div class="field"><div class="lbl">منبع ارجاع</div><div class="hint">این متقاضی از کجا آمد؟ (سایت، معرفی، شعبه و…)</div></div>
+      <div class="field"><div class="lbl">نام کاربری حساب</div><div class="hint">اگر پر شود، حساب با لینک فعال‌سازی ساخته می‌شود</div></div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n"></div><div class="t"><b>جست‌وجوی قبلی</b><span>با نام، کد ملی، پرسنلی یا شناسه — از ثبت دوباره جلوگیری کنید.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>ثبت متقاضی</b><span>پس از ذخیره، رکورد در جدول با نشان وضعیت حساب می‌آید.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>صدور لینک فعال‌سازی</b><span>برای متقاضیانی که به پنل نیاز دارند؛ لینک یک‌بارمصرف است.</span></div></div>
+  </div>
+</section>
+
+<!-- ============ ورود اکسل ============ -->
+<section class="card" id="imports">
+  <h2><span class="ic">📥</span> ورود داده با اکسل</h2>
+  <p class="desc">برای مهاجرت فهرست‌های بزرگ (متقاضیان سازمانی و…) بدون ثبت دستی.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span></div>
+  <div class="form">
+    <div class="form-title">فرم ورود داده</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نوع ورود <span class="req">*</span></div><div class="hint">مثلاً «متقاضیان» — قالب فایل با سربرگ استاندارد</div></div>
+      <div class="field"><div class="lbl">فایل اکسل <span class="req">*</span></div><div class="hint">xlsx؛ سطر اول سربرگ‌ها</div></div>
+      <div class="field"><div class="lbl">رد کردن تکراری‌ها</div><div class="hint">رکوردهایی که کد ملی/شناسه‌شان از قبل هست، رد می‌شوند</div></div>
+      <div class="field"><div class="lbl">به‌روزرسانی فیلدهای مجاز</div><div class="hint">برای رکوردهای موجود، فیلدهای مجاز از فایل به‌روز می‌شود</div></div>
+    </div>
+  </div>
+  <p class="desc">پس از بارگذاری، <b>گزارش نتیجه</b> نمایش داده می‌شود: تعداد موفق، ردشده و خطای هر سطر با شماره سطر — تا اصلاح فایل و اجرای دوباره آسان باشد.</p>
+</section>
+
+<!-- ============ درخواست‌های مشاوره ============ -->
+<section class="card" id="consultreq">
+  <h2><span class="ic">📨</span> درخواست‌های مشاوره — کارتابل پذیرش</h2>
+  <p class="desc">همه درخواست‌های ثبت‌شده از سایت عمومی اینجا می‌آید. کار پذیرش: تماس، بررسی، و <b>تبدیل به پرونده</b> یا <b>نوبت اولیه</b>.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span><span class="chip role">COUNSELOR</span></div>
+  <h3>فرم پیگیری/تکمیل درخواست</h3>
+  <div class="form">
+    <div class="form-title">اقدام روی درخواست</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">مشاور</div><div class="hint">تخصیص مشاور پیشنهادی (اختیاری)</div></div>
+      <div class="field"><div class="lbl">مرکز ارائه خدمت</div><div class="hint">کدام شعبه/مرکز پیگیری شود</div></div>
+      <div class="field"><div class="lbl">نوبت اولیه</div><div class="hint">در صورت توافق تلفنی، اسلات مشخص انتخاب می‌شود</div></div>
+      <div class="field"><div class="lbl">تشکیل پرونده جدید</div><div class="hint">با یک کلیک، از درخواست پرونده بسازید — داده‌ها منتقل می‌شود</div></div>
+      <div class="field"><div class="lbl">توضیح مراجع</div><div class="hint">متن ارسالی مراجع در فرم سایت</div></div>
+      <div class="field"><div class="lbl">بازه ترجیحی / تاریخ ترجیحی تماس</div><div class="hint">همان انتخاب‌های مراجع در فرم</div></div>
+    </div>
+  </div>
+  <div class="callout info">🔎 مراجع با <b>کد رهگیری</b> می‌تواند وضعیت درخواست را پیگیری کند؛ پذیرش همان کد را برای جست‌وجو استفاده می‌کند.</div>
+</section>
+
+<!-- ============ پرونده‌ها ============ -->
+<section class="card" id="cases">
+  <h2><span class="ic">🗂️</span> پرونده‌ها — قلب بالینی سامانه</h2>
+  <p class="desc">هر مراجعِ پذیرفته‌شده یک پرونده دارد. پرونده، کانون همه چیز است: ارزیابی‌ها، جلسات، سفارش‌ها و اسناد مالی به آن وصل می‌شوند.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span><span class="chip role">TECHNICAL_SUPERVISOR</span><span class="chip role">COUNSELOR</span></div>
+  <h3>فرم تشکیل پرونده</h3>
+  <div class="form">
+    <div class="form-title">پرونده جدید</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">متقاضی <span class="req">*</span></div><div class="hint">انتخاب از فهرست متقاضیان ثبت‌شده</div></div>
+      <div class="field"><div class="lbl">نوع خدمت <span class="req">*</span></div><div class="hint">خدمت اصلیِ این پرونده</div></div>
+      <div class="field"><div class="lbl">مشاور اصلی</div><div class="hint">در تخصیص اولیه می‌تواند خالی بماند</div></div>
+      <div class="field"><div class="lbl">علت تخصیص</div><div class="hint">مبنای انتخاب مشاور — مهم برای نظارت</div></div>
+      <div class="field"><div class="lbl">محل ارائه خدمت</div><div class="hint">حضوری در شعبه / آنلاین / تلفنی</div></div>
+      <div class="field"><div class="lbl">اولویت</div><div class="hint">عادی / فوری — موارد بحرانی اولویت بالاتر</div></div>
+      <div class="field"><div class="lbl">وضعیت</div><div class="hint">چرخه: جدید → در جریان → در انتظار ارزیابی → بسته</div></div>
+    </div>
+  </div>
+  <h3>صفحه جزئیات پرونده</h3>
+  <ul class="plain">
+    <li><b>خلاصه</b> — مشخصات متقاضی، خدمت، مشاور، وضعیت و اولویت</li>
+    <li><b>خط زمانی</b> — همه رویدادها به‌ترتیب: تشکیل، تخصیص، ارزیابی‌ها، جلسات، سفارش‌ها</li>
+    <li><b>ارزیابی‌ها</b> — فهرست فرم‌های ارزیابی ثبت‌شده + دکمه فرم جدید (برای نقش بالینی)</li>
+    <li><b>سفارش‌ها و مالی</b> — سفارش‌های وابسته به این پرونده و وضعیت پرداخت آن‌ها</li>
+    <li><b>یادداشت‌ها</b> — یادداشت‌های داخلی تیم درمان</li>
+  </ul>
+  <div class="callout warn">🧷 دسترسی به پرونده فقط برای نقش‌های مرتبط است و هر بازکردنِ پرونده در لاگ حسابرسی ثبت می‌شود.</div>
+</section>
+
+<!-- ============ ارزیابی‌ها ============ -->
+<section class="card" id="assessments">
+  <h2><span class="ic">🧪</span> ارزیابی‌ها — فرم‌های بالینی</h2>
+  <p class="desc">مشاور/ناظر فنی روی هر پرونده فرم ارزیابی ثبت می‌کند؛ نوع فرم بر اساس خدمت و پروتکل کلینیک انتخاب می‌شود. ارزیابی، مبنای طراحی برنامه درمان است.</p>
+  <div class="chips"><span class="chip role">COUNSELOR</span><span class="chip role">TECHNICAL_SUPERVISOR</span></div>
+  <h3>فرم ارزیابی جدید</h3>
+  <div class="form">
+    <div class="form-title">ثبت ارزیابی</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نوع فرم <span class="req">*</span></div><div class="hint">انواع فرم ارزیابی تعریف‌شده (مصاحبه اولیه، ارزیابی ریسک و…)</div></div>
+      <div class="field"><div class="lbl">محتوای فرم</div><div class="hint">پرسش‌های فرم بر اساس نوع انتخابی بارگذاری می‌شود</div></div>
+      <div class="field"><div class="lbl">توضیح برگشت (الزامی در صورت برگشت)</div><div class="hint">اگر ناظر فنی ارزیابی را برگشت بزند، نوشتن دلیل الزامی است (بند ۷.۲ سند حاکمیت)</div></div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n"></div><div class="t"><b>ثبت پیش‌نویس</b><span>فرم می‌تواند در حالت پیش‌نویس بماند و بعداً تکمیل شود.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>ثبت نهایی</b><span>پس از ثبت نهایی، فرم برای بازبینی ناظر فنی می‌رود.</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>بازبینی</b><span>ناظر تأیید یا با «توضیح برگشت الزامی» برمی‌گرداند؛ نسخه‌ها حفظ می‌شوند.</span></div></div>
+  </div>
+</section>
+<!-- ============ کارتابل ============ -->
+<section class="card" id="worklist">
+  <h2><span class="ic">🧑‍⚕️</span> جریان کاری مشاور</h2>
+  <p class="desc">سه صفحه مخصوص مشاور تا هیچ کاری از قلم نافتد.</p>
+  <div class="chips"><span class="chip role">COUNSELOR</span></div>
+  <h3>کارتابل — مسیر: «کارتابل»</h3>
+  <p class="desc">فهرست همه کارهای در انتظار شما: پرونده‌های تخصیص‌یافته جدید، ارزیابی‌های برگشتی، جلسات امروز. ترتیب بر اساس اولویت و مهلت.</p>
+  <h3>ارزیابی‌های من — مسیر: «ارزیابی‌های من»</h3>
+  <p class="desc">همه ارزیابی‌هایی که خودتان ثبت کرده‌اید، با وضعیت پیش‌نویس/در بازبینی/تأیید/برگشتی و میان‌بر به ویرایش.</p>
+  <h3>پرونده‌های تحت نظارت (برای ناظر فنی)</h3>
+  <div class="chips"><span class="chip role">TECHNICAL_SUPERVISOR</span></div>
+  <p class="desc">پرونده‌هایی که ناظری هستید؛ با دید کامل به ارزیابی‌ها و امکان بازخورد. «بررسی‌های فنی» صف ارزیابی‌های منتظر تأیید شماست و «هشدار سطح ۳» موارد بحرانی (ریسک بالا) را فوری نمایش می‌دهد.</p>
+  <div class="callout warn">🚨 «هشدار سطح ۳» جدی است: هر مورد اینجا باید در سریع‌ترین زمان بررسی و مستند شود.</div>
+</section>
+
+<!-- ============ فرایندها ============ -->
+<section class="card" id="processes">
+  <h2><span class="ic">🔁</span> فرایندها (BPMN)</h2>
+  <p class="desc">نقشه‌های فرایند استاندارد BPMN کلینیک اینجا نگه‌داری می‌شوند: مسیر پذیرش، جریان ارزیابی، فرایند درمان و خروج مراجع.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span><span class="chip role">TECHNICAL_SUPERVISOR</span><span class="chip role">COUNSELOR</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <ul class="plain">
+    <li><b>نمودار تعاملی</b> — هر فرایند با نمایشگر BPMN باز می‌شود؛ زوم و جابه‌جایی با ماوس</li>
+    <li><b>نسخه‌های فرایند</b> — تغییر فرایند، نسخه جدید می‌سازد و تاریخچه حفظ می‌شود</li>
+    <li><b>فایل‌های نمونه</b> — چند فرایند آماده (پذیرش تلفنی، مورد حاد، پذیرش کلی و…) از پیش بارگذاری شده</li>
+  </ul>
+</section>
+
+<!-- ============ مشاوران ============ -->
+<section class="card" id="counselors">
+  <h2><span class="ic">🧑‍🏫</span> مشاوران — پرونده حرفه‌ای همکاران</h2>
+  <p class="desc">تعریف مشاوران، تخصص‌ها، مجوزها و ظرفیت پذیرش. مشاورِ تعریف‌شده در فهرست عمومی سایت هم ظاهر می‌شود.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">RECEPTION</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <h3>فرم مشاور</h3>
+  <div class="form">
+    <div class="form-title">مشخصات مشاور</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام <span class="req">*</span> / نام خانوادگی <span class="req">*</span></div><div class="hint">نام حرفه‌ای</div></div>
+      <div class="field"><div class="lbl">عنوان حرفه‌ای</div><div class="hint">مثلاً «کارشناس ارشد روان‌درمانی»</div></div>
+      <div class="field"><div class="lbl">تخصص</div><div class="hint">گرایش اصلی — در فیلتر سایت استفاده می‌شود</div></div>
+      <div class="field"><div class="lbl">شماره مجوز <span class="req">*</span></div><div class="hint">مجوز نظام روان‌شناسی</div></div>
+      <div class="field"><div class="lbl">تاریخ صدور / انقضا / اعتبار مجوز</div><div class="hint">هشدار انقضای نزدیک خودکار نمایش داده می‌شود</div></div>
+      <div class="field"><div class="lbl">عنوان مدرک</div><div class="hint">آخرین مدرک تحصیلی</div></div>
+      <div class="field"><div class="lbl">ظرفیت</div><div class="hint">سقف مراجع هم‌زمان — در تخصیص کنترل می‌شود</div></div>
+      <div class="field"><div class="lbl">تماس کاری</div><div class="hint">داخلی یا شماره اداری</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ خدمات ============ -->
+<section class="card" id="services">
+  <h2><span class="ic">🧾</span> خدمات و تعرفه‌ها</h2>
+  <p class="desc">کاتالوگ خدمات کلینیک + تعرفه تاریخ‌دار برای هر خدمت. سفارش‌ها و فاکتورها همیشه از همین تعرفه‌ها قیمت می‌گیرند.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <h3>فرم خدمت</h3>
+  <div class="form">
+    <div class="form-title">خدمت</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">عنوان خدمت <span class="req">*</span></div><div class="hint">مثلاً «جلسه روان‌درمانی فردی»</div></div>
+      <div class="field"><div class="lbl">تخصص</div><div class="hint">ارتباط خدمت با گرایش‌های مشاوران</div></div>
+      <div class="field"><div class="lbl">نوع جلسه</div><div class="hint">حضوری / آنلاین / تلفنی</div></div>
+      <div class="field"><div class="lbl">مدت (دقیقه)</div><div class="hint">مدت استاندارد جلسه</div></div>
+      <div class="field"><div class="lbl">شرح</div><div class="hint">توضیح نمایش‌داده‌شده به مراجع</div></div>
+    </div>
+  </div>
+  <h3>فرم تعرفه</h3>
+  <div class="form">
+    <div class="form-title">تعرفه خدمت</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">خدمت <span class="req">*</span></div><div class="hint">خدمت مربوطه</div></div>
+      <div class="field"><div class="lbl">مبلغ <span class="req">*</span></div><div class="hint">به ریال</div></div>
+      <div class="field"><div class="lbl">ارز</div><div class="hint">پیش‌فرض IRR</div></div>
+      <div class="field"><div class="lbl">اعتبار از / تا</div><div class="hint">بازه اثر تعرفه؛ «بدون تاریخ پایان (باز-پایان)» یعنی تا اطلاع بعدی</div></div>
+    </div>
+  </div>
+  <div class="callout info">💡 تعرفه‌ها تاریخ‌دارند: تغییر قیمت، تعرفه قبلی را باطل و ردیف جدید می‌سازد؛ فاکتورهای قدیمی همیشه با تعرفه روز صدور خودشان قابل بازخوانی‌اند.</div>
+</section>
+
+<!-- ============ موضوعات ============ -->
+<section class="card" id="topics">
+  <h2><span class="ic">🏷️</span> دسته‌بندی موضوعی (B32)</h2>
+  <p class="desc">گروه‌بندی موضوعی خدمات و محتوا — مثلاً «اضطراب»، «زوج‌درمانی»، «کودک». برای فیلتر در سایت، گزارش‌ها و پیوند محتوا به خدمت به‌کار می‌رود.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <div class="form">
+    <div class="form-title">موضوع</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">عنوان <span class="req">*</span></div><div class="hint">نام دسته</div></div>
+      <div class="field"><div class="lbl">شرح</div><div class="hint">توضیح کوتاه کاربرد دسته</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ سازمان‌ها و شعب ============ -->
+<section class="card" id="orgs">
+  <h2><span class="ic">🏢</span> سازمان‌ها (B21) و شعب (B31)</h2>
+  <p class="desc">کلینیک می‌تواند به سازمان‌ها (قرارداد کارگزینی) و شعب متعدد سرویس بدهد. سازمان، قرارداد و فهرست پرسنل خودش را دارد؛ شعبه، خدمات و ساعات و موقعیت جغرافیایی.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">ORG_MANAGER</span></div>
+  <h3>فرم شعبه/مرکز</h3>
+  <div class="form">
+    <div class="form-title">شعبه</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام مرکز <span class="req">*</span> / نام شعبه <span class="req">*</span></div><div class="hint">مرکز اصلی و شعب زیرمجموعه</div></div>
+      <div class="field"><div class="lbl">استان / شهر</div><div class="hint">برای فیلتر و نمایش نقشه</div></div>
+      <div class="field"><div class="lbl">عرض / طول جغرافیایی</div><div class="hint">بین −۹۰ تا ۹۰ و −۱۸۰ تا ۱۸۰ — پین روی «نقشه شعب»</div></div>
+      <div class="field"><div class="lbl">تلفن</div><div class="hint">تماس عمومی شعبه</div></div>
+      <div class="field"><div class="lbl">خدمات ارائه‌شده</div><div class="hint">کدام خدمات در این شعبه فعال‌اند</div></div>
+      <div class="field"><div class="lbl">slug یکتا</div><div class="hint">نام لاتین در URL — فقط حروف کوچک</div></div>
+      <div class="field"><div class="lbl">شرح</div><div class="hint">معرفی شعبه برای سایت</div></div>
+    </div>
+  </div>
+  <div class="callout info">🗺️ «نقشه شعب» صفحه عمومی است (بدون ورود) و موقعیت شعب فعال را روی Leaflet نمایش می‌دهد.</div>
+</section>
+
+<!-- ============ سفارش و پرداخت ============ -->
+<section class="card" id="orders">
+  <h2><span class="ic">💳</span> سفارش و پرداخت (B10)</h2>
+  <p class="desc">ساخت سفارش برای خدمت پرونده، اعمال کد تخفیف، پرداخت با درگاه یا کیف پول، و صدور فاکتور. هر پرداخت با <b>کلید Idempotency</b> محافظت می‌شود — دوبار زدن دکمه هرگز دوبار پول کم نمی‌کند.</p>
+  <div class="chips"><span class="chip role">RECEPTION</span><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <h3>فرم سفارش جدید</h3>
+  <div class="form">
+    <div class="form-title">سفارش</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">خدمت <span class="req">*</span></div><div class="hint">انتخاب خدمت — قیمت از تعرفه فعال می‌آید</div></div>
+      <div class="field"><div class="lbl">کد تخفیف (اختیاری — B19)</div><div class="hint">اعتبارسنجی سقف کل و سقف هر کاربر به‌صورت خودکار</div></div>
+      <div class="field"><div class="lbl">یادداشت</div><div class="hint">هر توضیحی برای این سفارش</div></div>
+    </div>
+  </div>
+  <h3>پرداخت</h3>
+  <div class="form">
+    <div class="form-title">ثبت پرداخت</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">درگاه پرداخت (D02)</div><div class="hint">درگاه واقعی یا شبیه‌ساز محیط آزمایشی</div></div>
+      <div class="field"><div class="lbl">شارژ کیف پول</div><div class="hint">پرداخت از موجودی کیف پول مراجع</div></div>
+      <div class="field"><div class="lbl">نتیجه درگاه شبیه‌ساز</div><div class="hint">در محیط آزمایشی، نتیجه موفق/ناموفق را می‌توانید شبیه‌سازی کنید</div></div>
+    </div>
+  </div>
+  <h3>کد تخفیف</h3>
+  <div class="form">
+    <div class="form-title">تعریف کد تخفیف (B19)</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">کد <span class="req">*</span></div><div class="hint">کد یکتا که مراجع وارد می‌کند</div></div>
+      <div class="field"><div class="lbl">نوع</div><div class="hint">درصدی یا مبلغ ثابت</div></div>
+      <div class="field"><div class="lbl">تاریخ پایان</div><div class="hint">اعتبار کد</div></div>
+      <div class="field"><div class="lbl">سقف کل / سقف هر کاربر</div><div class="hint">محدودیت استفاده — اختیاری</div></div>
+      <div class="field"><div class="lbl">حداقل مبلغ سفارش</div><div class="hint">شرط اعمال کد</div></div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n"></div><div class="t"><b>ساخت سفارش</b><span>قیمت از تعرفه فعال + تخفیف → مبلغ نهایی</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>پرداخت</b><span>درگاه یا کیف پول؛ با کلید یکتا تا اتمام عملیات</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>فاکتور</b><span>فاکتور قابل چاپ از صفحه سفارش — مسیر «فاکتور»</span></div></div>
+  </div>
+</section>
+
+<!-- ============ کیف پول ============ -->
+<section class="card" id="wallet">
+  <h2><span class="ic">👛</span> کیف پول (B18)</h2>
+  <p class="desc">موجودی مراجع برای پرداخت‌های سریع. هر تراکنش مستند و دارای یادداشت الزامی است.</p>
+  <div class="chips"><span class="chip role">RECEPTION</span><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <div class="form">
+    <div class="form-title">شارژ / اصلاح موجودی</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">مبلغ شارژ (ریال)</div><div class="hint">شارژ عادی از طریق درگاه</div></div>
+      <div class="field"><div class="lbl">مبلغ دستی (مثبت = شارژ، منفی = کسر)</div><div class="hint">فقط مدیر — برای اصلاح/برگشت وجه</div></div>
+      <div class="field"><div class="lbl">یادداشت <span class="req">*</span></div><div class="hint">دلیل تراکنش دستی — الزامی و در تاریخچه می‌ماند</div></div>
+    </div>
+  </div>
+  <p class="desc">صفحه کیف پول: موجودی فعلی، تاریخچه تراکنش‌ها (شارژ، کسر، پرداخت سفارش، برگشت) با پیوند به سند حسابداری مربوط.</p>
+</section>
+
+<!-- ============ حسابداری ============ -->
+<section class="card" id="accounting">
+  <h2><span class="ic">📚</span> حسابداری (B22)</h2>
+  <p class="desc">دفتر کل دوطرفه سامانه: هر رویداد مالی (پرداخت، شارژ کیف پول، تخفیف، برگشت) به‌صورت خودکار یک <b>سند حسابداری متوازن</b> می‌سازد.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span><span class="chip role">ORG_MANAGER</span></div>
+  <h3>ساختار سند</h3>
+  <div class="form">
+    <div class="form-title">سند حسابداری</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">شرح سند <span class="req">*</span></div><div class="hint">توضیح کلی سند</div></div>
+      <div class="field"><div class="lbl">تاریخ (میلادی) <span class="req">*</span></div><div class="hint">تاریخ سند</div></div>
+      <div class="field"><div class="lbl">ردیف‌ها: حساب + بدهکار / بستانکار</div><div class="hint">جمع دو طرف باید برابر شود — سامانه «متوازن» را نشان می‌دهد</div></div>
+      <div class="field"><div class="lbl">منبع رویداد</div><div class="hint">لینک به سفارش/پرداخت مولد سند</div></div>
+    </div>
+  </div>
+  <h3>دفتر و مغایرت</h3>
+  <ul class="plain">
+    <li><b>فیلترها</b> — از تاریخ/تا تاریخ، حساب، درگاه، منبع رویداد، شرح</li>
+    <li><b>نمای دوسویه</b> — بدهکار و بستانکار هر حساب در بازه انتخابی</li>
+    <li><b>برگشتی</b> — نشان اسنادی که بازگشت (Reverse) شده‌اند</li>
+  </ul>
+</section>
+<!-- ============ محتوا و دوره ============ -->
+<section class="card" id="learning">
+  <h2><span class="ic">🎓</span> محتوا و دوره (B33–B36)</h2>
+  <p class="desc">آکادمی درون سامانه: ساخت دوره‌ها، درس‌ها و محتوای آموزشی برای عموم و همکاران.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">COUNSELOR</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <ul class="plain">
+    <li><b>دوره‌ها</b> — عنوان، شرح، دسته موضوعی، وضعیت انتشار</li>
+    <li><b>درس‌ها</b> — درس‌های وابسته به هر دوره با ترتیب و محتوا</li>
+    <li><b>انتشار</b> — پیش‌نویس → منتشرشده؛ فقط منتشرشده‌ها در سایت/پنل مراجع دیده می‌شود</li>
+  </ul>
+</section>
+
+<!-- ============ تست روان‌شناسی ============ -->
+<section class="card" id="psych">
+  <h2><span class="ic">🧠</span> تست روان‌شناسی (B37)</h2>
+  <p class="desc">تعریف ابزارهای سنجش، سؤالات، نمره‌گذاری و تفسیر؛ اجرا برای مراجع و مشاهده «نتایج من».</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role">COUNSELOR</span><span class="chip role">TECHNICAL_SUPERVISOR</span></div>
+  <h3>فرم ابزار سنجش</h3>
+  <div class="form">
+    <div class="form-title">ابزار تست</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">عنوان ابزار <span class="req">*</span></div><div class="hint">مثلاً «پرسش‌نامه اضطراب بک»</div></div>
+      <div class="field"><div class="lbl">slug (لاتین کوچک) <span class="req">*</span></div><div class="hint">شناسه یکتا در URL</div></div>
+      <div class="field"><div class="lbl">دسته موضوعی</div><div class="hint">پیوند با دسته‌بندی موضوعی</div></div>
+      <div class="field"><div class="lbl">ابزارها</div><div class="hint">ابزارهای وابسته/تکمیلی</div></div>
+    </div>
+  </div>
+  <h3>سؤال و گزینه‌ها</h3>
+  <div class="form">
+    <div class="form-title">سؤال</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">متن سؤال <span class="req">*</span></div><div class="hint">صریح و بدون جهت‌گیری</div></div>
+      <div class="field"><div class="lbl">گزینه‌ها (هر خط: برچسب: امتیاز)</div><div class="hint">مثال: «هرگز: 0» در هر سطر یک گزینه</div></div>
+    </div>
+  </div>
+  <h3>تفسیر نمره</h3>
+  <div class="form">
+    <div class="form-title">بازه‌های تفسیر</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">از نمره / تا نمره</div><div class="hint">بازه عددی هر تفسیر</div></div>
+      <div class="field"><div class="lbl">برچسب تفسیر</div><div class="hint">مثلاً «اضطراب خفیف»</div></div>
+      <div class="field"><div class="lbl">توضیح</div><div class="hint">متن تفسیر برای مراجع</div></div>
+    </div>
+  </div>
+  <div class="callout warn">🛡️ «D08: انتشار فقط با ناظر علمی» — هیچ ابزاری بدون تأیید ناظر علمی منتشر نمی‌شود.</div>
+</section>
+
+<!-- ============ ابزارها ============ -->
+<section class="card" id="tools">
+  <h2><span class="ic">🛠️</span> پشتیبانی، دستیار AI و یکپارچه‌سازی‌ها</h2>
+  <h3>پشتیبانی (B23)</h3>
+  <div class="chips"><span class="chip role">همه کارکنان</span></div>
+  <p class="desc">تیکت‌های داخلی: ثبت مشکل یا درخواست، پیگیری وضعیت (باز/در حال بررسی/بسته) و پاسخ‌ها در یک گفت‌وگو.</p>
+  <h3>دستیار (AI)</h3>
+  <div class="chips"><span class="chip role">COUNSELOR</span><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <p class="desc">دستیار هوشمند برای کمک به کارکنان: خلاصه پرونده، پیش‌نویس متن‌های حرفه‌ای و پاسخ به پرسش‌های راهنمای سامانه. خروجی دستیار «پیشنهاد» است، نه تصمیم بالینی؛ مسئولیت نهایی با متخصص است. دسترسی به مدل با سقف نرخ کنترل می‌شود.</p>
+  <h3>یکپارچه‌سازی‌ها (B28)</h3>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <p class="desc">مدیریت کلیدها و اتصال به سرویس‌های بیرونی (پیامک، پرداخت، نگهداری فایل). کلیدها فقط یک‌بار نمایش داده می‌شوند و در لاگ‌ها هرگز نمی‌آیند.</p>
+</section>
+
+<!-- ============ اعلان‌ها ============ -->
+<section class="card" id="notifications">
+  <h2><span class="ic">🔔</span> اعلان‌ها</h2>
+  <p class="desc">مرکز پیام‌های سامانه: تخصیص پرونده، برگشت ارزیابی، یادآوری جلسه و اعلان‌های مدیریتی.</p>
+  <div class="chips"><span class="chip role">همه کاربران</span></div>
+  <ul class="plain">
+    <li><b>علامت‌گذاری خوانده‌نشده</b> — با کلیک روی هر اعلان</li>
+    <li><b>«همه را خوانده‌شده کن»</b> — دکمه «انجام شد» در نوار بالای صفحه</li>
+    <li><b>نشان unread</b> — تعداد اعلان خوانده‌نشده روی زنگ اعلان در نوار بالا</li>
+  </ul>
+</section>
+
+<!-- ============ کاربران ============ -->
+<section class="card" id="users">
+  <h2><span class="ic">👤</span> کاربران</h2>
+  <p class="desc">مدیریت حساب‌های ورود: ساخت کاربر برای همکاران، تخصیص نقش، فعال/غیرفعال‌سازی و صدور رمز اولیه.</p>
+  <div class="chips"><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <div class="form">
+    <div class="form-title">کاربر جدید</div>
+    <div class="fields">
+      <div class="field"><div class="lbl">نام کاربری <span class="req">*</span></div><div class="hint">یکتا؛ همین برای ورود استفاده می‌شود</div></div>
+      <div class="field"><div class="lbl">نام نمایشی <span class="req">*</span></div><div class="hint">نامی که در سامانه دیده می‌شود</div></div>
+      <div class="field"><div class="lbl">موبایل / ایمیل</div><div class="hint">اختیاری — برای بازیابی و اعلان</div></div>
+      <div class="field"><div class="lbl">نقش‌ها</div><div class="hint">یک یا چند نقش — دسترسی منوها را تعیین می‌کند</div></div>
+    </div>
+  </div>
+  <div class="callout ok">✅ بهترین تمرین: به هر نفر فقط نقش‌های لازم را بدهید (اصل کمترین دسترسی) و حساب‌های بلااستفاده را غیرفعال کنید.</div>
+</section>
+
+<!-- ============ بازبینی صلاحیت ============ -->
+<section class="card" id="verification">
+  <h2><span class="ic">🪪</span> بازبینی صلاحیت مشاوران</h2>
+  <p class="desc">صف بررسی مدارک و مجوزهای مشاوران: شماره مجوز، تاریخ انقضا و وضعیت تأیید. مشاورِ «در انتظار تأیید» در تخصیص خودکار ظاهر نمی‌شود.</p>
+  <div class="chips"><span class="chip role">ORG_MANAGER</span><span class="chip role adm">SYSTEM_ADMIN</span></div>
+  <div class="steps">
+    <div class="step"><div class="n"></div><div class="t"><b>ورود مدرک</b><span>مشاور با مجوز و تاریخ‌ها ثبت شده است</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>بررسی</b><span>مدیر اصالت را بررسی می‌کند</span></div></div>
+    <div class="step"><div class="n"></div><div class="t"><b>تأیید / رد</b><span>نتیجه ثبت و مشاور فعال یا معلق می‌شود</span></div></div>
+  </div>
+</section>
+
+<!-- ============ حاکمیت ============ -->
+<section class="card" id="governance">
+  <h2><span class="ic">🛡️</span> امنیت و حاکمیت داده</h2>
+  <p class="desc">امکاناتی که شاید هر روز نبینید، ولی همیشه فعال‌اند:</p>
+  <table>
+    <tr><th>مکانیزم</th><th>چی‌کار می‌کند</th><th>چرا مهم است</th></tr>
+    <tr><td><b>لاگ حسابرسی (Audit)</b></td><td>ثبت هر کنش حساس: چه کسی، کی، چه چیزی</td><td>پاسخ‌گویی و کشف تخلف — مسیر «حسابرسی» فقط برای SYSTEM_ADMIN</td></tr>
+    <tr><td><b>سقف نرخ سراسری</b></td><td>محدودیت درخواست هر دقیقه به‌ازای کاربر/IP با پاسخ 429 و Retry-After</td><td>ضد سوءاستفاده و حمله؛ معافیت‌های سلامت (health) مستثنا</td></tr>
+    <tr><td><b>کلید Idempotency</b></td><td>عملیات مالی تکراری فقط یک‌بار اجرا می‌شود</td><td>ضد پرداخت دوباره در قطعی شبکه/دوبار کلیک</td></tr>
+    <tr><td><b>پاکت پاسخ v2</b></td><td>قالب استاندارد پاسخ با request_id و timestamp</td><td>ردیابی دقیق هر درخواست در پشتیبانی</td></tr>
+    <tr><td><b>نسخه‌بندی API</b></td><td>v1 با هدرهای Deprecation/Sunset اعلام انقضا می‌کند</td><td>مهاجرت بی‌شکست کلاینت‌ها تا 2027-04-20</td></tr>
+    <tr><td><b>فایل‌ها با آنتی‌ویروس</b></td><td>هر آپلود با ClamAV اسکن می‌شود</td><td>ضد بدافزار در پرونده‌ها</td></tr>
+    <tr><td><b>رمزنگاری در سکون</b></td><td>داده حساس پایگاه‌داده رمز می‌ماند</td><td>حریم خصوصی مراجعان</td></tr>
+  </table>
+</section>
+
+<!-- ============ پنل متقاضی ============ -->
+<section class="card" id="me-panel">
+  <h2><span class="ic">🏡</span> «پنل من» — نمای مراجع</h2>
+  <p class="desc">متقاضیِ دارای حساب، اینجا فقط چیزهایی را می‌بیند که مالِ خودش است:</p>
+  <div class="chips"><span class="chip role">APPLICANT</span></div>
+  <ul class="plain">
+    <li><b>وضعیت پرونده</b> — پرونده‌های به نام او و مرحله فعلی</li>
+    <li><b>نوبت‌ها</b> — نوبت‌های آینده با تاریخ شمسی</li>
+    <li><b>ارزیابی‌های تخصیصی</b> — فرم‌هایی که باید پر کند و نتایج منتشرشده</li>
+    <li><b>پیام‌ها</b> — اعلان‌ها و راهنمای تماس با پذیرش</li>
+  </ul>
+  <div class="callout info">🔒 مراجع هرگز داده‌های دیگران یا یادداشت‌های داخلی تیم درمان را نمی‌بیند — این مرز در سطح API هم تضمین شده است.</div>
+</section>
+
+<footer>
+  راهنمای جامع سامانه رزپسی — نسخه ۰.۴۳ · تولیدشده از روی کد واقعی پروژه · برای به‌روزرسانی، همین فایل را ویرایش کنید
+</footer>
+</main>
+</div>
+
+<a class="backtop" href="#" title="بازگشت به بالا">↑</a>
+<script>
+  // جست‌وجوی فهرست کنار
+  const q = document.getElementById('q');
+  const links = [...document.querySelectorAll('#nav a')];
+  q.addEventListener('input', () => {
+    const s = q.value.trim();
+    links.forEach(a => { a.style.display = (!s || a.textContent.includes(s)) ? '' : 'none'; });
+  });
+</script>
+</body>
+</html>

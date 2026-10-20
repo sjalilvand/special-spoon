@@ -7,7 +7,7 @@ export default function PsychotherapyPage() {
   return (
     <Box>
       <Header />
-      <Box sx={{ background: "linear-gradient(135deg,#b04a5a 0%,#7a5c8a 100%)", color: "#fff", py: 8 }}>
+      <Box sx={{ background: "linear-gradient(135deg,#a83a54 0%,#5c4a6e 100%)", color: "#fff", py: 8 }}>
         <Container>
           <Typography variant="h2" fontWeight={800}>{psycho.title}</Typography>
         </Container>

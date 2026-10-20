@@ -5,7 +5,7 @@ import SectionTitle from "./SectionTitle";
 
 export default function Testimonials() {
   return (
-    <Box sx={{ bgcolor: "#fdf2f4", py: 9 }}>
+    <Box sx={{ bgcolor: "#faf1f4", py: { xs: 6, md: 9 } }}>
       <Container>
         <SectionTitle label="بازخورد" title={texts.testimonialsTitle} sub={texts.testimonialsSub} />
         <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr" }} gap={3}>

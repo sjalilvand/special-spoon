@@ -85,6 +85,11 @@ apiClient.interceptors.request.use((config) => {
 
 const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/activate"];
 
+// فاز ۴۵: base پنل (Docker: /panel؛ dev: /) — ریدایرکت ۴۰۱ باید داخل خود پنل بماند؛
+// ریدایرکت به "/login" مطلق، صفحه index سایت را در /login سرو می‌کرد و router سایت
+// (fallback to /) کاربر را به صفحه اصلی سایت پرت می‌کرد — باگ «خروج فوری از پنل».
+const ROUTER_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 let refreshPromise: Promise<string | null> | null = null;
 
 async function callRefresh(): Promise<string | null> {
@@ -116,8 +121,8 @@ apiClient.interceptors.response.use(unwrapEnvelope, async (error: AxiosError) =>
       return apiClient(original!);
     }
     tokenStore.accessToken = null;
-    if (!window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+    if (!window.location.pathname.startsWith(`${ROUTER_BASE}/login`)) {
+      window.location.href = `${ROUTER_BASE}/login`;
     }
   }
   return Promise.reject(error);

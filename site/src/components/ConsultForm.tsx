@@ -39,6 +39,7 @@ export default function ConsultForm() {
   const [honeypot, setHoneypot] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [trackingCode, setTrackingCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
@@ -46,7 +47,7 @@ export default function ConsultForm() {
     setError(null);
     setBusy(true);
     try {
-      await postConsultation({
+      const result = await postConsultation({
         full_name: fullName.trim(),
         mobile: mobile.trim(),
         topic,
@@ -58,6 +59,7 @@ export default function ConsultForm() {
         website: honeypot,
       });
       setDone(true);
+      setTrackingCode(result.request_id ?? null);
     } catch (err) {
       setError((err as Error).message || "خطا در ارسال");
     } finally {
@@ -66,7 +68,7 @@ export default function ConsultForm() {
   };
 
   return (
-    <Box sx={{ bgcolor: "#fdf2f4", py: 8 }}>
+    <Box sx={{ background: "linear-gradient(180deg,#fbf7f4 0%,#faf1f4 100%)", py: 8 }}>
       <Container id="consult">
         <Typography variant="h4" fontWeight={800} color="primary.main" textAlign="center">
           {texts.consultTitle}
@@ -79,6 +81,11 @@ export default function ConsultForm() {
           <Paper sx={{ p: 4, maxWidth: 640, mx: "auto", textAlign: "center" }}>
             <Alert severity="success">
               درخواست شما ثبت شد. کارشناسان پذیرش در اولین فرصت با شما تماس می‌گیرند.
+              {trackingCode && (
+                <Typography variant="body2" sx={{ mt: 1, fontWeight: 800 }}>
+                  کد رهگیری شما: {trackingCode}
+                </Typography>
+              )}
             </Alert>
           </Paper>
         ) : (
