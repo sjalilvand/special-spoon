@@ -27,6 +27,22 @@ services:
     volumes:
       - clamav_data:/var/lib/clamav
 
+  # فاز ۴۳ - گام ۱ طرح ADR-05: Redis مشترک برای شمارنده‌های سقف نرخ سراسری
+  # (همان زیرساخت آیندهٔ Broker صف کار ADR-02 — بدون مؤلفه جدید).
+  # نبود/محو Redis سرویس را نمی‌شکند: میان‌افزار سقف نرخ fail-open است (بند ۶ سند)
+  # و فقط هشدار ثبت می‌کند. بند ۱۳.۲: Redis در عملیات پورت عمومی ندارد.
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   # فاز ۳۸ - گام ۱ طرح مهاجرت ADR-04: Object Storage سازگار S3 (MinIO)
   # پروفایل storage: فقط با «docker compose --profile storage up -d» بالا می‌آید
   # تا در استقرار پیش‌فرض local سربار اضافه نباشد؛ آداپتور fail-soft است و
@@ -87,6 +103,13 @@ services:
       # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (warn = فقط هدر؛ readonly = رد نوشتن‌ها با 410)
       V1_DEPRECATION_MODE: ${V1_DEPRECATION_MODE:-warn}
       V1_SUNSET_DATE: ${V1_SUNSET_DATE:-2027-04-20}
+      # فاز ۴۳ - گام‌های ۱–۲ طرح ADR-05: سقف نرخ سراسری Redis (fail-open در نبود Redis)
+      RATE_LIMIT_REDIS_URL: ${RATE_LIMIT_REDIS_URL:-redis://redis:6379/0}
+      RATE_LIMIT_PUBLIC_PER_MINUTE: ${RATE_LIMIT_PUBLIC_PER_MINUTE:-120}
+      RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-60}
+      RATE_LIMIT_OVERRIDES: ${RATE_LIMIT_OVERRIDES:-}
+      RATE_LIMIT_WHITELIST_USER_IDS: ${RATE_LIMIT_WHITELIST_USER_IDS:-}
+      RATE_LIMIT_AUDIT_SAMPLE_RATE: ${RATE_LIMIT_AUDIT_SAMPLE_RATE:-0.2}
     volumes:
       # فاز ۴۱ - گام ۴ طرح ADR-04: پس از تسویه کامل (گزارش پاک اسکریپت
       # settle_local_storage.py) برای «فقط-خواندنی» شدن volume کافی است
@@ -97,6 +120,8 @@ services:
       db:
         condition: service_healthy
       clamav:
+        condition: service_started
+      redis:
         condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
@@ -146,5 +171,7 @@ volumes:
   postgres_data:
   private_uploads:
   clamav_data:
+  # فاز ۴۳ - ADR-05: ماندگاری شمارنده‌های سقف نرخ (AOF)
+  redis_data:
   # فاز ۳۸ - ADR-04: volume اختصاصی Object Storage
   minio_data:

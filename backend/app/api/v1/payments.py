@@ -110,6 +110,8 @@ def _can_view_order(actor: User, order: Order) -> bool:
 # ---------------------------------------------------------------- orders
 # فاز ۴۲ - ADR-05 گام ۳: مستندسازی هدر Idempotency-Key در OpenAPI برای کلاینت‌ها
 # (هدر در میان‌افزار خوانده می‌شود؛ اینجا فقط قراردادِ سند API)
+# فاز ۴۳ - تکمیل گام ۴ طرح ADR-05: مستندسازی پاسخ ۴۲۹ سقف نرخ سراسری
+# (گام‌های ۱–۲) با هدر Retry-After برای کلاینت‌ها/مشتریان اداری SLA-دار
 _IDEMPOTENCY_OPENAPI_EXTRA = {
     "parameters": [
         {
@@ -124,7 +126,30 @@ _IDEMPOTENCY_OPENAPI_EXTRA = {
             ),
             "schema": {"type": "string", "minLength": 1, "maxLength": 128},
         }
-    ]
+    ],
+    "responses": {
+        "429": {
+            "description": (
+                "سقف نرخ سراسری پر شده است (ADR-05 گام ۲) — کلاینت باید به اندازهٔ "
+                "هدر Retry-After (ثانیه) صبر کند؛ هدرهای X-RateLimit-Limit و "
+                "X-RateLimit-Remaining برای پایش SLA همراه پاسخ می‌آیند."
+            ),
+            "headers": {
+                "Retry-After": {
+                    "description": "ثانیه تا زمان تلاش مجدد مجاز",
+                    "schema": {"type": "integer", "minimum": 1},
+                },
+                "X-RateLimit-Limit": {
+                    "description": "سقف مجاز در پنجره جاری",
+                    "schema": {"type": "integer"},
+                },
+                "X-RateLimit-Remaining": {
+                    "description": "باقی‌ماندهٔ مجاز در پنجره جاری",
+                    "schema": {"type": "integer"},
+                },
+            },
+        }
+    },
 }
 
 

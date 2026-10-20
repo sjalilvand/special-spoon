@@ -1,6 +1,15 @@
 name: rosepsy-dev
 
 services:
+  # فاز ۴۳ - ADR-05: Redis سقف نرخ در توسعه (پورت ۶۳۷۹ برای دیدن شمارنده‌ها)
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
   db:
     image: postgres:16.4-alpine
     environment:
@@ -64,6 +73,8 @@ services:
       # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (هدرهای Deprecation/Sunset روی v1)
       V1_DEPRECATION_MODE: ${V1_DEPRECATION_MODE:-warn}
       V1_SUNSET_DATE: ${V1_SUNSET_DATE:-2027-04-20}
+      # فاز ۴۳ - گام‌های ۱–۲ طرح ADR-05: سقف نرخ سراسری Redis
+      RATE_LIMIT_REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend:/app
       - ./backend/uploads_dev:/app/uploads
@@ -72,8 +83,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   postgres_dev_data:
   # فاز ۳۸ - ADR-04: volume اختصاصی Object Storage (توسعه)
   minio_dev_data:
+  # فاز ۴۳ - ADR-05: شمارنده‌های سقف نرخ (توسعه)
+  redis_dev_data:

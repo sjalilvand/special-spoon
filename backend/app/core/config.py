@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.42.0"
+    app_version: str = "0.43.0"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 
@@ -41,6 +41,24 @@ class Settings(BaseSettings):
     v1_deprecation_mode: str = "warn"
     # تاریخ پیشنهادی قطع v1 (YYYY-MM-DD) — در هدر Sunset به شکل HTTP-date می‌رود
     v1_sunset_date: str = "2027-04-20"
+
+    # فاز ۴۳ - ADR-05 گام‌های ۱–۲: سقف نرخ سراسری دو لایه‌ای (لایه سرویس Redis)
+    # لایه قاعده (تلاش ورود/OTP/نگهداشت/دستیار) سر جایش است؛ این لایه محافظ اضافه است
+    rate_limit_enabled: bool = True
+    # خالی = غیرفعال (پیش‌فرض توسعه/آزمون)؛ در compose مقدار redis://redis:6379/0
+    # نبود Redis/خطای آن → fail-open با هشدار (بند ۶ ADR-05: دسترس‌پذیری مقدم است)
+    rate_limit_redis_url: str = ""
+    # سقف پیش‌فرض (بند گام ۲ طرح): ۱۲۰/دقیقه ناشناس (کلید route,ip) و ۶۰/دقیقه احرازشده
+    rate_limit_public_per_minute: int = 120
+    rate_limit_auth_per_minute: int = 60
+    # override per-route: JSON مثل
+    #   {"POST /api/v1/auth/login": 10, "GET /api/v1/public/*": 300}
+    # کلید: "METHOD مسیر-نرمال‌شده" (شناسه‌ها :id) یا "* مسیر" یا با "*" پایانی برای پیشوند
+    rate_limit_overrides: str = ""
+    # user_idهای بی‌سقف (توکن‌های سرویس/مشتریان اداری SLA-دار) با کاما جدا می‌شوند
+    rate_limit_whitelist_user_ids: str = ""
+    # نرخ نمونه‌برداری ثبت ۴۲۹ در audit (۱.۰ = همیشه؛ کمتر = کنترل سیل در حمله)
+    rate_limit_audit_sample_rate: float = 0.2
 
     # فاز ۴۲ - ADR-05 گام ۳: Idempotency-Key واقعی عملیات مالی
     # رزرو بدون پاسخ (سقوط سرور بین دو فاز) پس از این TTL کهنه و جایگزین می‌شود

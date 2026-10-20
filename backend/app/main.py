@@ -4,6 +4,7 @@ from app.core.deprecation import V1DeprecationMiddleware
 from app.core.envelope import API_V2_PREFIX, EnvelopeMiddleware
 from app.core.guards import NullByteGuardMiddleware
 from app.core.idempotency import FinancialIdempotencyMiddleware
+from app.core.rate_limit import RateLimitMiddleware
 
 from app.api.v1.ai import router as ai_router
 from app.api.v1.applicants import router as applicants_router
@@ -119,6 +120,10 @@ app.add_middleware(NullByteGuardMiddleware)
 # تا پاسخ بازپخش‌شده روی v2 هم عیناً پاکت‌بندی شود؛ بیرونی‌تر از محافظ NUL
 # تا رد 422 آن هم رزرو کلید را آزاد کند
 app.add_middleware(FinancialIdempotencyMiddleware)
+# فاز ۴۳ - ADR-05 گام‌های ۱–۲: سقف نرخ سراسری Redis — بین پاکت و idempotency؛
+# ۴۲۹ روی v2 پاکت‌بندی می‌شود و روی v1 هدرهای انقضا می‌گیرد؛ درخواستِ رد‌شده
+# هرگز رزرو کلید idempotency نمی‌کند (بیرونی‌تر از میان‌افزار مالی)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(EnvelopeMiddleware)
 # فاز ۴۱ - ADR-03 گام ۴: انقضای اعلام‌شده v1 (هدرهای Deprecation/Sunset/Warning
 # فقط روی /api/v1؛ readonly = کلید اضطراری چرخه حذف) — بیرونی‌ترین لایه
