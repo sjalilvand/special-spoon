@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Rosepsy"
-    app_version: str = "0.44.2"
+    app_version: str = "0.44.3"
     api_prefix: str = "/api/v1"
     environment: str = "production"
 

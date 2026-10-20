@@ -32,6 +32,7 @@ from app.db.session import SessionLocal
 
 # مدل‌ها
 from app.models.people import Applicant, Counselor, OrganizationUnit, ServiceLocation, UserScope
+from app.models.branch import Branch, BranchServiceOffering, Clinic
 from app.models.user import Role, User, UserStatus
 from app.models.org_contract import Contract, ContractService, Organization
 from app.models.catalog import CounselorCredential, Service, Specialty, TariffVersion
@@ -155,14 +156,51 @@ def gen_national_id(used: set) -> str:
             return n
 
 
+def get_or_create(db, model, defaults: dict | None = None, **keys):
+    """بازگرداندن ردیف موجود بر اساس کلید یکتا یا ساخت آن — سازگار با داده قدیمی seed_demo.py و داده ثبت‌شده از پنل."""
+    obj = db.scalar(select(model).filter_by(**keys))
+    if obj is None:
+        obj = model(**keys, **(defaults or {}))
+        db.add(obj)
+        db.flush()
+    return obj
+
+
+def unique_numbered(candidate: str, used: set) -> str:
+    """رشته یکتا با پسوند عددی در صورت تداخل با داده‌های موجود دیتابیس."""
+    if candidate not in used:
+        used.add(candidate)
+        return candidate
+    n = 1
+    while f"{candidate}-{n}" in used:
+        n += 1
+    out = f"{candidate}-{n}"
+    used.add(out)
+    return out
+
+
 def make_user(db, username: str, display: str, role_code: str, password: str = "Demo@1234",
               status: str = UserStatus.ACTIVE, must_change: bool = False,
               email: str | None = None, mobile: str | None = None) -> User:
-    u = User(username=username, display_name=display, status=status,
-             must_change_password=must_change, email=email, mobile=mobile)
-    u.password_hash = hash_password(password)
-    u.roles.append(db.get(Role, role_code))
-    db.add(u)
+    u = db.scalar(select(User).where(User.username == username))
+    if u is None:
+        u = User(username=username, display_name=display, status=status,
+                 must_change_password=must_change, email=email, mobile=mobile)
+        u.password_hash = hash_password(password)
+        db.add(u)
+        db.flush()
+    role = db.get(Role, role_code)
+    if role is not None and role not in u.roles:
+        u.roles.append(role)
+    if username != "admin":
+        # حساب‌های دمو (غیر از admin): فعال و با رمز مستند — حتی اگر از seed قدیمی با وضعیت PENDING مانده باشند
+        u.status = UserStatus.ACTIVE
+        u.must_change_password = False
+        u.password_hash = hash_password("Demo@1234")
+        if email and not u.email:
+            u.email = email
+        if mobile and not u.mobile:
+            u.mobile = mobile
     return u
 
 
@@ -195,16 +233,13 @@ def sample_answers(definition: dict, applicant: Applicant) -> dict:
 def seed_base(db) -> dict:
     """واحدها، محل‌های خدمت، سازمان‌ها/قرارداد، دسته‌ها، خدمات/تعرفه، مشاوران."""
     ref: dict = {}
-    u1 = OrganizationUnit(code="U1", title="واحد اداری و پذیرش")
-    u2 = OrganizationUnit(code="U2", title="واحد بالینی")
-    u3 = OrganizationUnit(code="U3", title="واحد فروش و بازاریابی")
-    db.add_all([u1, u2, u3])
-    db.flush()
-    u4 = OrganizationUnit(code="U4", title="واحد پشتیبانی فنی", parent_id=u3.id)
-    l1 = ServiceLocation(code="L1", title="کلینیک مرکزی - ولیعصر", address="تهران، خیابان ولیعصر، پلاک ۱۲۴۰، طبقه ۳")
-    l2 = ServiceLocation(code="L2", title="شعبه شمال تهران", address="تهران، سعادت‌آباد، بلوار دریا، پلاک ۸۸")
-    l3 = ServiceLocation(code="L3", title="شعبه اصفهان", address="اصفهان، خیابان چهارباغ بالا، پلاک ۲۲۰")
-    db.add_all([u4, l1, l2, l3])
+    u1 = get_or_create(db, OrganizationUnit, defaults={"title": "واحد اداری و پذیرش"}, code="U1")
+    u2 = get_or_create(db, OrganizationUnit, defaults={"title": "واحد بالینی"}, code="U2")
+    u3 = get_or_create(db, OrganizationUnit, defaults={"title": "واحد فروش و بازاریابی"}, code="U3")
+    u4 = get_or_create(db, OrganizationUnit, defaults={"title": "واحد پشتیبانی فنی", "parent_id": u3.id}, code="U4")
+    l1 = get_or_create(db, ServiceLocation, defaults={"title": "کلینیک مرکزی - ولیعصر", "address": "تهران، خیابان ولیعصر، پلاک ۱۲۴۰، طبقه ۳"}, code="L1")
+    l2 = get_or_create(db, ServiceLocation, defaults={"title": "شعبه شمال تهران", "address": "تهران، سعادت‌آباد، بلوار دریا، پلاک ۸۸"}, code="L2")
+    l3 = get_or_create(db, ServiceLocation, defaults={"title": "شعبه اصفهان", "address": "اصفهان، خیابان چهارباغ بالا، پلاک ۲۲۰"}, code="L3")
     db.flush()
     ref["units"] = [u1, u2, u3, u4]
     ref["locations"] = [l1, l2, l3]
@@ -223,36 +258,27 @@ def seed_base(db) -> dict:
     db.flush()
 
     # سازمان‌های کارفرما + قرارداد
-    o1 = Organization(name="سازمان فناوری پارس", slug="pars-tech", phone="02188776655",
-                      email="hr@parstech.ir", address="تهران، میدان آرژانتین")
-    o2 = Organization(name="هلدینگ ساختمانی آرمان", slug="arman-holding", phone="02144556677",
-                      email="welfare@arman.ir", address="تهران، میدان ونک")
-    o3 = Organization(name="آموزشگاه رشد", slug="roshd-edu", phone="03136655443",
-                      email="admin@roshd.edu", address="اصفهان، خیابان سعادت")
-    db.add_all([o1, o2, o3])
+    o1 = get_or_create(db, Organization, defaults={"name": "سازمان فناوری پارس", "phone": "02188776655", "email": "hr@parstech.ir", "address": "تهران، میدان آرژانتین"}, slug="pars-tech")
+    o2 = get_or_create(db, Organization, defaults={"name": "هلدینگ ساختمانی آرمان", "phone": "02144556677", "email": "welfare@arman.ir", "address": "تهران، میدان ونک"}, slug="arman-holding")
+    o3 = get_or_create(db, Organization, defaults={"name": "آموزشگاه رشد", "phone": "03136655443", "email": "admin@roshd.edu", "address": "اصفهان، خیابان سعادت"}, slug="roshd-edu")
     db.flush()
-    c1 = Contract(organization=o1, title="قرارداد خدمات روان‌شناسی کارکنان ۱۴۰۴", coverage_percent=70,
-                  valid_from=date(TODAY.year, 1, 1), status="active")
-    c2 = Contract(organization=o2, title="قرارداد بهره‌وری و سلامت روان ۱۴۰۴", coverage_percent=50,
-                  valid_from=date(TODAY.year, 1, 1), status="active")
-    c3 = Contract(organization=o3, title="قرارداد حمایت معلمان و کادر آموزشی", coverage_percent=60,
-                  valid_from=date(TODAY.year, 2, 1), status="active")
-    db.add_all([c1, c2, c3])
-    db.flush()
+    c1 = get_or_create(db, Contract, defaults={"coverage_percent": 70, "valid_from": date(TODAY.year, 1, 1), "status": "active"}, organization_id=o1.id, title="قرارداد خدمات روان‌شناسی کارکنان ۱۴۰۴")
+    c2 = get_or_create(db, Contract, defaults={"coverage_percent": 50, "valid_from": date(TODAY.year, 1, 1), "status": "active"}, organization_id=o2.id, title="قرارداد بهره‌وری و سلامت روان ۱۴۰۴")
+    c3 = get_or_create(db, Contract, defaults={"coverage_percent": 60, "valid_from": date(TODAY.year, 2, 1), "status": "active"}, organization_id=o3.id, title="قرارداد حمایت معلمان و کادر آموزشی")
     ref["orgs"] = [o1, o2, o3]
     ref["contracts"] = [c1, c2, c3]
 
     # دسته‌های موضوعی + تخصص‌ها + خدمات + تعرفه
     topic_names = ["استرس و اضطراب", "افسردگی و خلق", "روابط زناشویی", "فرزندپروری",
                    "بهره‌وری شغلی", "سوگ و فقدان"]
-    topics = [Topic(name=n, slug=f"t{i+1}-{['stress','mood','couples','parenting','work','grief'][i]}",
-                    sort_order=i, is_active=True) for i, n in enumerate(topic_names)]
-    db.add_all(topics)
+    topics = [get_or_create(db, Topic,
+                            defaults={"name": n, "sort_order": i, "is_active": True},
+                            slug=f"t{i+1}-{['stress','mood','couples','parenting','work','grief'][i]}")
+              for i, n in enumerate(topic_names)]
 
     sp_names = ["اضطراب و استرس", "افسردگی و اختلالات خلق", "زوج و خانواده درمانی",
                 "کودک و نوجوان", "روان‌شناسی شغلی و سازمانی", "آسیب‌شناسی و تروما"]
-    sps = [Specialty(name=n) for n in sp_names]
-    db.add_all(sps)
+    sps = [get_or_create(db, Specialty, name=n) for n in sp_names]
     db.flush()
 
     svc_data = [
@@ -267,26 +293,28 @@ def seed_base(db) -> dict:
     ]
     services = []
     for code, title, sp_i, dur, stype, amount in svc_data:
-        s = Service(specialty_id=sps[sp_i].id, code=code, title=title, duration_minutes=dur,
-                    session_type=stype, status="active", created_by=ref["admin"].id,
-                    description=f"خدمت {title} با مدت {dur} دقیقه توسط مشاوران دارای صلاحیت B05 ارائه می‌شود.")
+        s = get_or_create(db, Service,
+                          defaults={"title": title, "duration_minutes": dur, "session_type": stype,
+                                    "status": "active", "created_by": ref["admin"].id,
+                                    "description": f"خدمت {title} با مدت {dur} دقیقه توسط مشاوران دارای صلاحیت B05 ارائه می‌شود."},
+                          code=code, specialty_id=sps[sp_i].id)
         services.append(s)
-        db.add(s)
-    db.flush()
     for (code, title, sp_i, dur, stype, amount), s in zip(svc_data, services):
-        db.add(TariffVersion(service_id=s.id, amount=amount, currency="IRR",
-                             valid_from=date(2025, 6, 1), note="تعرفه مصوب ۱۴۰۴",
-                             created_by=ref["admin"].id))
+        get_or_create(db, TariffVersion,
+                      defaults={"amount": amount, "currency": "IRR", "note": "تعرفه مصوب ۱۴۰۴",
+                                "created_by": ref["admin"].id},
+                      service_id=s.id, valid_from=date(2025, 6, 1))
     # نسخه قدیمی بسته‌شده برای SRV-02 (نمایش نسخه‌داری تعرفه)
-    db.add(TariffVersion(service_id=services[1].id, amount=1200000, currency="IRR",
-                         valid_from=date(2024, 6, 1), valid_to=date(2025, 5, 31),
-                         note="تعرفه سال ۱۴۰۳ (بسته‌شده)", created_by=ref["admin"].id))
+    get_or_create(db, TariffVersion,
+                  defaults={"amount": 1200000, "currency": "IRR", "valid_to": date(2025, 5, 31),
+                            "note": "تعرفه سال ۱۴۰۳ (بسته‌شده)", "created_by": ref["admin"].id},
+                  service_id=services[1].id, valid_from=date(2024, 6, 1))
     for s, t in zip(services, [topics[0], topics[1], topics[2], topics[3], topics[0], topics[4], topics[0], topics[5]]):
-        db.add(ServiceTopic(service_id=s.id, topic_id=t.id))
+        get_or_create(db, ServiceTopic, service_id=s.id, topic_id=t.id)
     # خدمات تحت پوشش قرارداد سازمان‌ها
     for contract, idxs in ((c1, (0, 1, 4)), (c2, (0, 2, 6)), (c3, (3, 5))):
         for ix in idxs:
-            db.add(ContractService(contract_id=contract.id, service_id=services[ix].id))
+            get_or_create(db, ContractService, contract_id=contract.id, service_id=services[ix].id)
     db.flush()
     ref["services"] = services
     ref["topics"] = topics
@@ -309,23 +337,41 @@ def seed_base(db) -> dict:
     for i, (code, fn, ln, title, degree, sp_i, cap, loc_i) in enumerate(counselors_data):
         acc = make_user(db, f"counselor{i+1}", f"{fn} {ln}", "COUNSELOR",
                         email=f"counselor{i+1}@rosepsy.demo", mobile=f"0912000{i+1:05d}")
-        c = Counselor(counselor_code=code, first_name=fn, last_name=ln,
-                      professional_title=title, degree=degree,
-                      specialty=sp_names[sp_i], capacity=cap, status="active",
-                      service_location_id=ref["locations"][loc_i].id,
-                      license_number=f"LIC-{1000+i}", license_verified=True,
-                      work_mobile=f"0912000{i+1:05d}", email=f"counselor{i+1}@rosepsy.demo")
-        db.add(c)
-        db.flush()
+        c = db.scalar(select(Counselor).where(Counselor.counselor_code == code))
+        if c is None:
+            c = Counselor(counselor_code=code, first_name=fn, last_name=ln,
+                          professional_title=title, degree=degree,
+                          specialty=sp_names[sp_i], capacity=cap, status="active",
+                          service_location_id=ref["locations"][loc_i].id,
+                          license_number=f"LIC-{1000+i}", license_verified=True,
+                          work_mobile=f"0912000{i+1:05d}", email=f"counselor{i+1}@rosepsy.demo")
+            db.add(c)
+            db.flush()
         c.user_id = acc.id
-        db.add(CounselorCredential(counselor_id=c.id, kind="license", title="پروانه نظام روان‌شناسی",
-                                   license_number=f"LIC-{1000+i}", issued_at=date(2021, 4, 1),
-                                   expires_at=date(TODAY.year + 1, 4, 1),
-                                   verification_status="approved", reviewed_by=ref["supervisor"].id,
-                                   review_note="مدرک معتبر است"))
-        db.add(CounselorCredential(counselor_id=c.id, kind="degree", title=f"مدرک {degree}",
-                                   verification_status="approved" if i not in (3, 7) else "pending",
-                                   reviewed_by=ref["supervisor"].id if i not in (3, 7) else None))
+        # تکمیل فیلدهای خالی مشاور موجود (مثلاً از seed قدیمی) برای نمایش بهتر
+        if not c.license_number:
+            c.license_number = f"LIC-{1000+i}"
+            c.license_verified = True
+        if not c.email:
+            c.email = f"counselor{i+1}@rosepsy.demo"
+        if not c.work_mobile:
+            c.work_mobile = f"0912000{i+1:05d}"
+        if not c.service_location_id:
+            c.service_location_id = ref["locations"][loc_i].id
+        if db.scalar(select(CounselorCredential).where(
+                CounselorCredential.counselor_id == c.id,
+                CounselorCredential.kind == "license")) is None:
+            db.add(CounselorCredential(counselor_id=c.id, kind="license", title="پروانه نظام روان‌شناسی",
+                                       license_number=f"LIC-{1000+i}", issued_at=date(2021, 4, 1),
+                                       expires_at=date(TODAY.year + 1, 4, 1),
+                                       verification_status="approved", reviewed_by=ref["supervisor"].id,
+                                       review_note="مدرک معتبر است"))
+        if db.scalar(select(CounselorCredential).where(
+                CounselorCredential.counselor_id == c.id,
+                CounselorCredential.kind == "degree")) is None:
+            db.add(CounselorCredential(counselor_id=c.id, kind="degree", title=f"مدرک {degree}",
+                                       verification_status="approved" if i not in (3, 7) else "pending",
+                                       reviewed_by=ref["supervisor"].id if i not in (3, 7) else None))
         counselors.append(c)
     db.flush()
     ref["counselors"] = counselors
@@ -335,7 +381,10 @@ def seed_base(db) -> dict:
 def seed_applicants(db, ref) -> list[Applicant]:
     """۱۰۰ متقاضی با مشخصات متنوع + ۲۰ حساب پورتال."""
     used_mobile: set = set()
-    used_nid: set = set()
+    # کلیدهای یکتای موجود در دیتابیس (مثلاً از seed قدیمی یا ثبت پنل) در نمونه‌گیری لحاظ می‌شود
+    used_nid: set = set(db.scalars(select(Applicant.national_id).where(Applicant.national_id.is_not(None))))
+    used_ext: set = set(db.scalars(select(Applicant.external_id).where(Applicant.external_id.is_not(None))))
+    used_emp: set = set(db.scalars(select(Applicant.employee_code).where(Applicant.employee_code.is_not(None))))
     applicants: list[Applicant] = []
     for i in range(100):
         female = i % 2 == 0
@@ -350,9 +399,17 @@ def seed_applicants(db, ref) -> list[Applicant]:
         source = "excel" if i % 4 == 3 else "manual"
         org = ref["orgs"][i % 3] if i % 10 < 6 else None
         contract = ref["contracts"][i % 3] if org else None
+        ext = f"EXT-{2001+i}"
+        if ext in used_ext:
+            ext = unique_numbered(f"EXT-{3001+i}", used_ext)
+        else:
+            used_ext.add(ext)
+        emp = f"E-{1000+i}" if source == "excel" or org else None
+        if emp is not None:
+            emp = unique_numbered(emp, used_emp)
         a = Applicant(
-            external_id=f"EXT-{2001+i}",
-            employee_code=f"E-{1000+i}" if source == "excel" or org else None,
+            external_id=ext,
+            employee_code=emp,
             national_id=gen_national_id(used_nid),
             first_name=fn, last_name=ln,
             birth_date=date(1980 + (i % 26), 1 + (i % 12), 1 + (i % 27)),
@@ -441,6 +498,7 @@ def seed_requests(db, ref, applicants) -> list[tuple[ConsultationRequest, Applic
 
 def seed_cases(db, ref, applicants, reqs):
     """۴۲ پرونده + تخصیص مشاور + رضایت‌ها؛ ۲۷ درخواست تبدیل‌شده به پرونده متصل می‌شود."""
+    used_case_no: set = set(db.scalars(select(Case.case_number)))
     converted_requests = [r for r, _ in reqs if r.status == "converted"]
     status_plan = (["new"] * 3 + ["awaiting_assignment"] * 5 + ["active"] * 18 +
                    ["suspended"] * 4 + ["closed"] * 9 + ["archived"] * 3)
@@ -458,7 +516,7 @@ def seed_cases(db, ref, applicants, reqs):
         created = dt_days_ago(rng.randint(2, 58), 10 + (i % 7))
         accept = (created - timedelta(days=1)).date()
         c = Case(
-            case_number=f"RS-1404-{i + 1:04d}", applicant_id=a.id,
+            case_number=unique_numbered(f"RS-1404-{i + 1:04d}", used_case_no), applicant_id=a.id,
             acceptance_date=accept,
             service_location_id=ref["locations"][i % 3].id,
             service_type=ref["services"][i % len(ref["services"])].title,
@@ -741,6 +799,8 @@ def seed_finance(db, ref, appts):
     reception = ref["reception"]
     applicants_by_id = {a.id: a for a in db.scalars(select(Applicant))}
     org_contract = {o.id: c for o, c in zip(ref["orgs"], ref["contracts"])}
+    used_ord: set = set(db.scalars(select(Order.order_number)))
+    used_inv: set = set(db.scalars(select(Invoice.invoice_number)))
     orders: list[Order] = []
     num = 1
 
@@ -754,7 +814,7 @@ def seed_finance(db, ref, appts):
         org_share = round(amount * cov / 100) if cov else None
         payable = amount - org_share if org_share else amount
         owner = applicant.user_id or reception.id
-        o = Order(order_number=f"ORD-1404-{num:05d}", owner_user_id=owner, case_id=case.id,
+        o = Order(order_number=unique_numbered(f"ORD-1404-{num:05d}", used_ord), owner_user_id=owner, case_id=case.id,
                   appointment_id=a.id, service_id=a.service_id, tariff_version_id=a.tariff_version_id,
                   title=f"نوبت {db.get(Service, a.service_id).title} - {case.case_number}", amount=amount, currency="IRR",
                   payable_amount=payable, status=status, kind="service", refunded_amount=0,
@@ -811,7 +871,7 @@ def seed_finance(db, ref, appts):
 
     # فاکتور برای ۳۰ سفارش پرداخت‌شده
     for i, o in enumerate(paid_orders[:30]):
-        inv = Invoice(invoice_number=f"INV-1404-{i + 1:05d}", order_id=o.id, total_amount=int(o.payable_amount),
+        inv = Invoice(invoice_number=unique_numbered(f"INV-1404-{i + 1:05d}", used_inv), order_id=o.id, total_amount=int(o.payable_amount),
                       currency="IRR", buyer_name="بایر نمونه", status="issued",
                       issued_at=o.created_at + timedelta(days=1))
         db.add(inv)
@@ -821,13 +881,13 @@ def seed_finance(db, ref, appts):
                            unit_amount=int(o.payable_amount), line_total=int(o.payable_amount)))
 
     # تخفیف‌ها + بازخرید
-    d1 = Discount(code="WELCOME", kind="amount", value=200000, currency="IRR", is_active=True,
-                  min_order_amount=500000, note="هدیه خوش‌آمدگویی")
-    d2 = Discount(code="NOWRUZ15", kind="percent", value=15, currency="IRR", is_active=True,
-                  expires_at=datetime.combine(TODAY + timedelta(days=30), datetime.min.time(), TZ),
-                  note="تخفیف نوروزی")
-    db.add_all([d1, d2])
-    db.flush()
+    d1 = get_or_create(db, Discount, defaults={"kind": "amount", "value": 200000, "currency": "IRR",
+                                               "is_active": True, "min_order_amount": 500000,
+                                               "note": "هدیه خوش‌آمدگویی"}, code="WELCOME")
+    d2 = get_or_create(db, Discount, defaults={"kind": "percent", "value": 15, "currency": "IRR",
+                                               "is_active": True,
+                                               "expires_at": datetime.combine(TODAY + timedelta(days=30), datetime.min.time(), TZ),
+                                               "note": "تخفیف نوروزی"}, code="NOWRUZ15")
     for i, o in enumerate(paid_orders[:3]):
         disc = d1 if i < 2 else d2
         applied = min(200000, int(o.amount)) if disc.kind == "amount" else round(int(o.amount) * 0.15)
@@ -933,38 +993,36 @@ def seed_learning(db, ref):
     """محتوا، دوره، جلسات دوره، ثبت‌نام، آزمون، تلاش، گواهی."""
     admin = ref["admin"]
     topics = ref["topics"]
-    c1 = Content(slug="what-is-cbt", title="شناخت‌درمانی چیست و به چه کسانی کمک می‌کند؟",
-                 summary="معرفی ساده ساختار CBT و حوزه‌های اثربخشی آن",
-                 body="درمان شناختی-رفتاری یکی از پرشواهدترین رویکردهای روان‌درمانی است که رابطه افکار، احساسات و رفتار را هدف می‌گیرد...",
-                 topic_id=topics[1].id, status="published", author_id=admin.id,
-                 published_at=dt_days_ago(20, 10))
-    c2 = Content(slug="anxiety-signs", title="۱۰ نشانه شایع اضطراب و راهکارهای فوری کاهش آن",
-                 summary="نشانه‌های جسمانی و روانی اضطراب و تمرین‌های کوتاه خودتنظیمی",
-                 body="اضطراب پاسخی طبیعی بدن به تهدید است؛ اما زمانی که شدت و مدت آن زیاد شود...",
-                 topic_id=topics[0].id, status="published", author_id=admin.id,
-                 published_at=dt_days_ago(12, 10))
-    c3 = Content(slug="couple-communication", title="چهار خطای رایج گفت‌وگوی زوج‌ها",
-                 summary="الگوهای مخرب ارتباطی و جایگزین‌های سالم",
-                 body="در گفت‌وگوهای پرتنش، چهار الگوی انتقاد، تحقیر، حالت دفاعی و دیوار سنگی رایج است...",
-                 topic_id=topics[2].id, status="published", author_id=ref["counselors"][2].user_id,
-                 published_at=dt_days_ago(6, 10))
-    c4 = Content(slug="parenting-rules", title="قواعد طلایی فرزندپروری در سن مدرسه",
-                 summary="پیامدهای منطقی و تقویت مثبت در عمل",
-                 body="فرزندپروری مؤثر بر سه ستون قاعده‌گذاری شفاف، پیامد منطقی و رابطه گرم استوار است...",
-                 topic_id=topics[3].id, status="draft", author_id=ref["counselors"][3].user_id)
-    db.add_all([c1, c2, c3, c4])
+    c1 = get_or_create(db, Content, defaults={"title": "شناخت‌درمانی چیست و به چه کسانی کمک می‌کند؟",
+                 "summary": "معرفی ساده ساختار CBT و حوزه‌های اثربخشی آن",
+                 "body": "درمان شناختی-رفتاری یکی از پرشواهدترین رویکردهای روان‌درمانی است که رابطه افکار، احساسات و رفتار را هدف می‌گیرد...",
+                 "topic_id": topics[1].id, "status": "published", "author_id": admin.id,
+                 "published_at": dt_days_ago(20, 10)}, slug="what-is-cbt")
+    c2 = get_or_create(db, Content, defaults={"title": "۱۰ نشانه شایع اضطراب و راهکارهای فوری کاهش آن",
+                 "summary": "نشانه‌های جسمانی و روانی اضطراب و تمرین‌های کوتاه خودتنظیمی",
+                 "body": "اضطراب پاسخی طبیعی بدن به تهدید است؛ اما زمانی که شدت و مدت آن زیاد شود...",
+                 "topic_id": topics[0].id, "status": "published", "author_id": admin.id,
+                 "published_at": dt_days_ago(12, 10)}, slug="anxiety-signs")
+    c3 = get_or_create(db, Content, defaults={"title": "چهار خطای رایج گفت‌وگوی زوج‌ها",
+                 "summary": "الگوهای مخرب ارتباطی و جایگزین‌های سالم",
+                 "body": "در گفت‌وگوهای پرتنش، چهار الگوی انتقاد، تحقیر، حالت دفاعی و دیوار سنگی رایج است...",
+                 "topic_id": topics[2].id, "status": "published", "author_id": ref["counselors"][2].user_id,
+                 "published_at": dt_days_ago(6, 10)}, slug="couple-communication")
+    c4 = get_or_create(db, Content, defaults={"title": "قواعد طلایی فرزندپروری در سن مدرسه",
+                 "summary": "پیامدهای منطقی و تقویت مثبت در عمل",
+                 "body": "فرزندپروری مؤثر بر سه ستون قاعده‌گذاری شفاف، پیامد منطقی و رابطه گرم استوار است...",
+                 "topic_id": topics[3].id, "status": "draft", "author_id": ref["counselors"][3].user_id}, slug="parenting-rules")
 
-    course1 = Course(slug="cbt-essentials", title="دوره مقدماتی مهارت‌های CBT برای زندگی روزمره",
-                     summary="۸ جلسه کاربردی برای مدیریت افکار و هیجان‌ها",
-                     description="این دوره شامل ۸ جلسه ویدئویی و تمرین‌های هفتگی است.",
-                     topic_id=topics[0].id, status="published", price_amount=3500000,
-                     capacity=30, starts_at=NOW + timedelta(days=7), created_by=admin.id)
-    course2 = Course(slug="stress-free-work", title="کارگاه مدیریت استرس محیط کار",
-                     summary="۴ جلسه مهارت‌های مقابله با فرسودگی شغلی",
-                     description="کارگاه آنلاین با رویکرد ACT.",
-                     topic_id=topics[4].id, status="published", price_amount=0,
-                     capacity=50, starts_at=NOW + timedelta(days=3), created_by=admin.id)
-    db.add_all([course1, course2])
+    course1 = get_or_create(db, Course, defaults={"title": "دوره مقدماتی مهارت‌های CBT برای زندگی روزمره",
+                     "summary": "۸ جلسه کاربردی برای مدیریت افکار و هیجان‌ها",
+                     "description": "این دوره شامل ۸ جلسه ویدئویی و تمرین‌های هفتگی است.",
+                     "topic_id": topics[0].id, "status": "published", "price_amount": 3500000,
+                     "capacity": 30, "starts_at": NOW + timedelta(days=7), "created_by": admin.id}, slug="cbt-essentials")
+    course2 = get_or_create(db, Course, defaults={"title": "کارگاه مدیریت استرس محیط کار",
+                     "summary": "۴ جلسه مهارت‌های مقابله با فرسودگی شغلی",
+                     "description": "کارگاه آنلاین با رویکرد ACT.",
+                     "topic_id": topics[4].id, "status": "published", "price_amount": 0,
+                     "capacity": 50, "starts_at": NOW + timedelta(days=3), "created_by": admin.id}, slug="stress-free-work")
     db.flush()
     for i in range(4):
         db.add(CourseSession(course_id=course1.id,
@@ -980,11 +1038,10 @@ def seed_learning(db, ref):
                                 status="completed" if i < 2 else "active",
                                 activated_at=dt_days_ago(rng.randint(3, 20), 12)))
 
-    exam = Exam(slug="cbt-basics-exam", title="آزمون آشنایی با مفاهیم پایه CBT",
-                description="آزمون ۶ سؤالی مفاهیم مقدماتی؛ قبولی با ۶۰ درصد",
-                topic_id=topics[0].id, status="published", duration_minutes=20,
-                pass_percent=60, price_amount=0, max_attempts=2, created_by=admin.id)
-    db.add(exam)
+    exam = get_or_create(db, Exam, defaults={"title": "آزمون آشنایی با مفاهیم پایه CBT",
+                "description": "آزمون ۶ سؤالی مفاهیم مقدماتی؛ قبولی با ۶۰ درصد",
+                "topic_id": topics[0].id, "status": "published", "duration_minutes": 20,
+                "pass_percent": 60, "price_amount": 0, "max_attempts": 2, "created_by": admin.id}, slug="cbt-basics-exam")
     db.flush()
     q_bank = [
         ("در CBT، رابطه اصلی میان چه عناصری بررسی می‌شود؟", ["فکر، هیجان، رفتار", "گذشته و ناخودآگاه", "خواب و تغذیه", "خانواده و مدرسه"], 0),
@@ -1008,17 +1065,22 @@ def seed_learning(db, ref):
         db.add(att)
     db.flush()
     uname = {u.id: u.display_name for u in ref["applicant_users"]}
+    used_cert: set = set(db.scalars(select(Certificate.certificate_number)))
     passed_atts = list(db.scalars(select(ExamAttempt).where(ExamAttempt.status == "passed")))[:2]
     for i, att in enumerate(passed_atts):
-        db.add(Certificate(certificate_number=f"CERT-1404-{i + 1:04d}", user_id=att.user_id,
+        if db.scalar(select(Certificate).where(Certificate.attempt_id == att.id)) is not None:
+            continue
+        db.add(Certificate(certificate_number=unique_numbered(f"CERT-1404-{i + 1:04d}", used_cert), user_id=att.user_id,
                            exam_id=att.exam_id, attempt_id=att.id,
                            title="گواهی قبولی آزمون مفاهیم پایه CBT",
                            holder_name=uname.get(att.user_id), issued_by=admin.id))
     comp = list(db.scalars(select(CourseEnrollment).where(CourseEnrollment.status == "completed")))
     if comp:
-        db.add(Certificate(certificate_number=f"CERT-1404-{3:04d}", user_id=comp[0].user_id,
-                           course_id=comp[0].course_id, title="گواهی تکمیل دوره مهارت‌های CBT",
-                           holder_name=uname.get(comp[0].user_id), issued_by=admin.id))
+        if db.scalar(select(Certificate).where(Certificate.course_id == comp[0].course_id,
+                                               Certificate.user_id == comp[0].user_id)) is None:
+            db.add(Certificate(certificate_number=unique_numbered("CERT-1404-0003", used_cert), user_id=comp[0].user_id,
+                               course_id=comp[0].course_id, title="گواهی تکمیل دوره مهارت‌های CBT",
+                               holder_name=uname.get(comp[0].user_id), issued_by=admin.id))
     db.flush()
 
 
@@ -1148,15 +1210,22 @@ def wipe(db) -> None:
     order = [
         ImportRow, ImportJob, AuditEvent, SmsOutbox, EmailOutbox, Notification,
         TicketMessage, Ticket, Complaint, SessionSurvey, SessionNoteRevision, Session,
-        SlotClaim, Appointment, Certificate, ExamAttempt, ExamQuestion, Exam,
+        SlotClaim,
+        Refund, RefundRequest, Payment, InvoiceItem, Invoice,
+        # سفارش‌ها پیش از تخفیف/دوره/آزمون/تعرفه/قرارداد (FKهای RESTRICT)
+        Order,
+        DiscountRedemption, Discount,
+        Certificate, ExamAttempt, ExamQuestion, Exam,
         CourseEnrollment, CourseSession, Course, Content, PsychAttempt,
-        JournalLine, JournalEntry, Account, Refund, RefundRequest,
-        WalletEntry, Wallet, DiscountRedemption, Discount, InvoiceItem, Invoice, Payment, Order,
+        JournalLine, JournalEntry, Account,
+        WalletEntry, Wallet,
+        Appointment,
         ReviewAction, Assessment, FormVersion, Referral, Recommendation, TreatmentPlan, Diagnosis,
         Consent, CaseAssignment, Case, IntakeQuestionnaire, ConsultationRequest, Applicant,
         CounselorCredential, Counselor, UserScope, User,
-        TariffVersion, Service, ServiceTopic, Topic, Specialty,
-        ContractService, Contract, Organization, ServiceLocation, OrganizationUnit,
+        ServiceTopic, ContractService, BranchServiceOffering, Branch, Clinic,
+        TariffVersion, Service, Topic, Specialty,
+        Contract, Organization, ServiceLocation, OrganizationUnit,
     ]
     for model in order:
         db.execute(delete(model))
