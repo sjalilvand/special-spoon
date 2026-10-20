@@ -23,6 +23,7 @@ export interface PsychQuestion {
   test_id: string;
   prompt: string;
   options: { label: string; score: number }[];
+  subscale?: string | null;
   sort_order: number;
 }
 
@@ -43,8 +44,44 @@ export interface PsychAttempt {
   score: number;
   interpretation_label: string;
   interpretation_guidance: string | null;
+  subscale_scores?: Record<string, number> | null;
   test_title?: string | null;
   created_at: string | null;
+}
+
+// فاز ۴۷ - مرکز آزمون: کاتالوگ عمومی + برگه پرسش‌نامه + اجرا
+export interface PublicPsychTest {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  topic_name: string | null;
+  question_count: number;
+}
+
+export interface PublicPaper {
+  test: { id: string; slug: string; title: string; description: string | null };
+  questions: { id: string; prompt: string; subscale?: string | null; options: string[]; sort_order: number }[];
+}
+
+export interface AttemptResult {
+  attempt: PsychAttempt;
+  disclaimer: string;
+}
+
+export async function fetchPublicPsychTests(): Promise<PublicPsychTest[]> {
+  const r = await apiClient.get<{ items: PublicPsychTest[] }>("/public/psych-tests");
+  return r.data.items;
+}
+
+export async function fetchPublicPaper(slug: string): Promise<PublicPaper> {
+  const r = await apiClient.get<PublicPaper>(`/public/psych-tests/${slug}/paper`);
+  return r.data;
+}
+
+export async function submitPsychAttempt(slug: string, answers: number[]): Promise<AttemptResult> {
+  const r = await apiClient.post<AttemptResult>(`/public/psych-tests/${slug}/attempts`, { answers });
+  return r.data;
 }
 
 export async function fetchPsychTests(): Promise<PsychTest[]> {
@@ -82,7 +119,7 @@ export async function fetchPsychQuestions(testId: string): Promise<PsychQuestion
 
 export async function addPsychQuestion(
   testId: string,
-  payload: { prompt: string; options: { label: string; score: number }[] },
+  payload: { prompt: string; options: { label: string; score: number }[]; subscale?: string | null },
 ): Promise<PsychQuestion> {
   const r = await apiClient.post<PsychQuestion>(`/psych-tests/${testId}/questions`, payload);
   return r.data;

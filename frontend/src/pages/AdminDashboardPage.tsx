@@ -7,10 +7,15 @@ import { useState } from "react";
 import { errDetail } from "../api/client";
 import { CASE_STATUS_META } from "../api/cases";
 import { fetchAdminDashboard } from "../api/reports";
-import MiniBarChart from "../components/MiniBarChart";
+import { ChartCard, DonutChart, TrendChart } from "../components/charts";
 import { formatJalaliDateTime } from "../utils/jalali";
 
-// فاز ۲۶ - B24 سند جامع: داشبورد مدیر (KPI شفاف، روند، عملکرد مشاوران)
+// فاز ۲۶ + ۴۸ - B24 سند جامع: داشبورد مدیر (KPI شفاف، روند، عملکرد مشاوران، نمودارهای تحلیلی)
+
+const STATUS_HEX: Record<string, string> = {
+  success: "#2e7d32", error: "#c62828", warning: "#ed8c37", info: "#1565c0",
+  primary: "#b04a5a", secondary: "#7a5c8a", default: "#9e8f93",
+};
 
 const CONSULT_STATUS_META: Record<string, { label: string; color: "default" | "primary" | "success" | "warning" | "error" | "info" }> = {
   new: { label: "جدید", color: "info" },
@@ -102,13 +107,48 @@ export default function AdminDashboardPage() {
           </Grid>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <MiniBarChart title="روند پرونده‌های جدید" data={data.trends.cases} />
+            <Grid item xs={12} md={4}>
+              <ChartCard title="روند پرونده‌های جدید" accent="#b04a5a">
+                <TrendChart data={data.trends.cases} color="#b04a5a" />
+              </ChartCard>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <MiniBarChart title="روند درخواست‌های رزرو از سایت" data={data.trends.bookings} color="#2e7d32" />
+            <Grid item xs={12} md={4}>
+              <ChartCard title="روند درخواست‌های رزرو از سایت" accent="#2e7d32">
+                <TrendChart data={data.trends.bookings} color="#2e7d32" />
+              </ChartCard>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <ChartCard title="روند جلسات انجام‌شده" accent="#1565c0">
+                <TrendChart data={data.trends.sessions ?? []} color="#1565c0" />
+              </ChartCard>
             </Grid>
           </Grid>
+
+          <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={2}>
+            <ChartCard title="توزیع وضعیت پرونده‌ها" accent="#b04a5a">
+              <DonutChart
+                title="پرونده"
+                items={caseEntries.map(([status, n]) => ({
+                  label: CASE_STATUS_META[status]?.label ?? status,
+                  value: n,
+                  color: STATUS_HEX[CASE_STATUS_META[status]?.color as string] ?? "#9e8f93",
+                }))}
+              />
+              {caseEntries.length === 0 && (
+                <Typography variant="body2" color="text.secondary">پرونده‌ای وجود ندارد.</Typography>
+              )}
+            </ChartCard>
+            <ChartCard title="توزیع وضعیت درخواست‌های سایت (بازه)" accent="#7a5c8a">
+              <DonutChart
+                title="درخواست"
+                items={consultEntries.map(([status, n]) => ({
+                  label: CONSULT_STATUS_META[status]?.label ?? status,
+                  value: n,
+                  color: STATUS_HEX[CONSULT_STATUS_META[status]?.color as string] ?? "#9e8f93",
+                }))}
+              />
+            </ChartCard>
+          </Box>
 
           <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={2}>
             <Paper sx={{ p: 2 }} aria-label="وضعیت رزرو آنلاین">

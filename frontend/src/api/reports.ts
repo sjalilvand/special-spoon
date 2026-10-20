@@ -27,6 +27,9 @@ export interface ReportSummary {
   counselors_active: number;
   counselor_workload: CounselorWorkloadRow[];
   recent_imports: RecentImportRow[];
+  // فاز ۴۸ - روند کارها
+  trends: { cases: TrendPoint[]; sessions: TrendPoint[]; appointments: TrendPoint[] };
+  psych_attempts: number;
 }
 
 export async function fetchReportSummary(params: {
@@ -99,7 +102,7 @@ export interface AdminDashboardData {
     finance?: FinanceKpi;
     sessions_count: number;
   };
-  trends: { cases: TrendPoint[]; bookings: TrendPoint[]; sales?: SalesTrendPoint[] };
+  trends: { cases: TrendPoint[]; bookings: TrendPoint[]; sessions?: TrendPoint[]; sales?: SalesTrendPoint[] };
   counselor_workload: CounselorWorkloadRow[];
 }
 

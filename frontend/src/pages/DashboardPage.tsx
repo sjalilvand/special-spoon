@@ -11,6 +11,12 @@ import { CASE_STATUS_META } from "../api/cases";
 import { fetchCounselorOptions } from "../api/cases";
 import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import { fetchReportSummary } from "../api/reports";
+import { ChartCard, DonutChart, TrendChart } from "../components/charts";
+
+const STATUS_HEX: Record<string, string> = {
+  success: "#2e7d32", error: "#c62828", warning: "#ed8c37", info: "#1565c0",
+  primary: "#b04a5a", secondary: "#7a5c8a", default: "#9e8f93",
+};
 
 const WORKFLOW = [
   { step: "۱", title: "ثبت متقاضی", desc: "ثبت دستی یا ورود اکسل از صفحه «متقاضیان»", link: "/applicants", linkLabel: "متقاضیان" },
@@ -153,39 +159,50 @@ export default function DashboardPage() {
             </Grid>
             <Grid item xs={6} md={3}><StatCard label="جلسات انجام‌شده" value={data.sessions_count} /></Grid>
             <Grid item xs={6} md={3}><StatCard label="ارزیابی‌های منتظر بررسی" value={data.assessments_pending_review} color="warning.main" /></Grid>
+            {isStaff && (
+              <Grid item xs={6} md={3}>
+                <StatCard label="آزمون‌های روان‌شناسی (بازه)" value={data.psych_attempts} color="secondary.main" />
+              </Grid>
+            )}
           </Grid>
 
-          {/* وضعیت پرونده‌ها و نوبت‌ها */}
+          {/* فاز ۴۸ - روند کارها (نمودارهای تحلیلی) */}
           <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={2}>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="subtitle1" fontWeight={700} mb={1.5}>وضعیت پرونده‌ها</Typography>
-              {caseEntries.length === 0 && (
-                <Typography variant="body2" color="text.secondary">پرونده‌ای وجود ندارد.</Typography>
-              )}
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {caseEntries.map(([status, n]) => {
-                  const m = CASE_STATUS_META[status] ?? { label: status, color: "default" as const };
-                  return <Chip key={status} color={m.color} label={`${m.label}: ${n.toLocaleString("fa-IR")}`} />;
-                })}
-              </Stack>
-              <Typography variant="caption" color="text.secondary" display="block" mt={1.5}>
-                رضایت‌نامه‌ها: {Object.entries(data.appointments_by_status).length > 0 || isStaff
-                  ? "از جزئیات هر پرونده قابل مشاهده است"
-                  : "—"}
-              </Typography>
-            </Paper>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="subtitle1" fontWeight={700} mb={1.5}>وضعیت نوبت‌ها (بازه)</Typography>
+            <ChartCard title="روند جلسات انجام‌شده" desc="تعداد جلسات ثبت‌شده در هر روز بازه انتخابی" accent="#2e7d32">
+              <TrendChart data={data.trends.sessions} color="#2e7d32" />
+            </ChartCard>
+            <ChartCard title="روند پرونده‌های جدید" desc="پرونده‌های تشکیل‌شده در هر روز بازه انتخابی">
+              <TrendChart data={data.trends.cases} color="#b04a5a" />
+            </ChartCard>
+          </Box>
+
+          <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={2}>
+            <ChartCard title="توزیع وضعیت نوبت‌ها (بازه)" accent="#7a5c8a">
+              <DonutChart
+                title="نوبت"
+                items={apptEntries.map(([status, n]) => ({
+                  label: APPOINTMENT_STATUS_META[status]?.label ?? status,
+                  value: n,
+                  color: STATUS_HEX[APPOINTMENT_STATUS_META[status]?.color as string] ?? "#9e8f93",
+                }))}
+              />
               {apptEntries.length === 0 && (
                 <Typography variant="body2" color="text.secondary">نوبتی در این بازه ثبت نشده است.</Typography>
               )}
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {apptEntries.map(([status, n]) => {
-                  const m = APPOINTMENT_STATUS_META[status] ?? { label: status, color: "default" as const };
-                  return <Chip key={status} color={m.color} label={`${m.label}: ${n.toLocaleString("fa-IR")}`} />;
-                })}
-              </Stack>
-            </Paper>
+            </ChartCard>
+            <ChartCard title="توزیع وضعیت پرونده‌ها" accent="#1565c0">
+              <DonutChart
+                title="پرونده"
+                items={caseEntries.map(([status, n]) => ({
+                  label: CASE_STATUS_META[status]?.label ?? status,
+                  value: n,
+                  color: STATUS_HEX[CASE_STATUS_META[status]?.color as string] ?? "#9e8f93",
+                }))}
+              />
+              {caseEntries.length === 0 && (
+                <Typography variant="body2" color="text.secondary">پرونده‌ای وجود ندارد.</Typography>
+              )}
+            </ChartCard>
           </Box>
 
           {/* حجم کار مشاوران */}

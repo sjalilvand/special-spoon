@@ -86,6 +86,7 @@ def _question_out(q: PsychQuestion) -> dict:
         "test_id": str(q.test_id),
         "prompt": q.prompt,
         "options": q.options or [],
+        "subscale": q.subscale,
         "sort_order": q.sort_order,
     }
 
@@ -110,6 +111,7 @@ def _attempt_out(a: PsychAttempt) -> dict:
         "score": int(a.score or 0),
         "interpretation_label": a.interpretation_label,
         "interpretation_guidance": a.interpretation_guidance,
+        "subscale_scores": a.subscale_scores,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
 
@@ -136,6 +138,7 @@ class PsychReviewAction(BaseModel):
 class QuestionCreate(BaseModel):
     prompt: str = Field(min_length=3, max_length=1000)
     options: list[dict] = Field(min_length=2, max_length=10)  # [{"label","score"}]
+    subscale: str | None = Field(default=None, max_length=100)
     sort_order: int = Field(default=0, ge=0)
 
 
@@ -304,6 +307,7 @@ def add_question(
             raise HTTPException(status_code=422, detail=f"امتیاز گزینه {idx + 1} نمی‌تواند منفی باشد")
         clean.append({"label": label, "score": score})
     q = PsychQuestion(test_id=test_id, prompt=payload.prompt.strip(), options=clean,
+                      subscale=(payload.subscale or None) and payload.subscale.strip() or None,
                       sort_order=payload.sort_order)
     db.add(q)
     if t.status == PsychStatus.PUBLISHED:
@@ -473,6 +477,7 @@ def public_paper(slug: str, db: Session = Depends(get_db)) -> dict:
             {
                 "id": str(q.id),
                 "prompt": q.prompt,
+                "subscale": q.subscale,
                 "options": [o.get("label") for o in (q.options or [])],
                 "sort_order": q.sort_order,
             }
@@ -514,6 +519,17 @@ def take_test(
                 score += int(opts[answers[idx]].get("score", 0))
             except (IndexError, TypeError, ValueError):
                 pass
+    # فاز ۴۷ - ریزنمره زیرمقیاس‌ها (اختیاری): سؤال‌های با subscale جمع جداگانه می‌شوند
+    subscale_scores: dict[str, int] = {}
+    for idx, q in enumerate(questions):
+        if q.subscale and idx < len(answers):
+            opts = q.options or []
+            try:
+                subscale_scores[q.subscale] = subscale_scores.get(q.subscale, 0) + int(
+                    opts[answers[idx]].get("score", 0)
+                )
+            except (IndexError, TypeError, ValueError):
+                pass
     interp = db.scalars(
         select(PsychInterpretation)
         .where(
@@ -534,6 +550,7 @@ def take_test(
         interpretation_label=interp.label,
         interpretation_guidance=interp.guidance,
         answers=answers,
+        subscale_scores=subscale_scores or None,
     )
     db.add(a)
     db.commit()

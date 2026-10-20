@@ -76,7 +76,11 @@ class PsychTest(Base):
 
 
 class PsychQuestion(Base):
-    """B37 - سؤال ابزار؛ گزینه‌ها JSONB [{label, score}] — امتیاز هر گزینه ≥ ۰."""
+    """B37 - سؤال ابزار؛ گزینه‌ها JSONB [{label, score}] — امتیاز هر گزینه ≥ ۰.
+
+    فاز ۴۷: subscale اختیاری — نام زیرمقیاس (مثلاً «اضطراب» در DASS-21) برای
+    نمایش ریز‌نمره‌ها در نتیجه؛ نمره کل همچنان جمع همه سؤال‌هاست.
+    """
 
     __tablename__ = "psych_questions"
     __table_args__ = (
@@ -90,6 +94,7 @@ class PsychQuestion(Base):
     )
     prompt: Mapped[str] = mapped_column(String(1000))
     options: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": "...", "score": 0}]
+    subscale: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -136,4 +141,6 @@ class PsychAttempt(Base):
     interpretation_label: Mapped[str] = mapped_column(String(200))
     interpretation_guidance: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     answers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # فاز ۴۷ - ریزنمره زیرمقیاس‌ها snapshot می‌شود: {"اضطراب": 9, "فشار": 12}
+    subscale_scores: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

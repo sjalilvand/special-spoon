@@ -1,8 +1,10 @@
 import {
-  Alert, Box, Chip, CircularProgress, Paper, Stack, Table, TableBody, TableCell,
+  Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
 import { CASE_STATUS_META, CONSENT_META } from "../api/cases";
@@ -28,6 +30,7 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
 
 export default function MyPanelPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const { data: profile, isLoading, error } = useQuery({
     queryKey: ["me-profile"],
@@ -68,6 +71,22 @@ export default function MyPanelPage() {
   return (
     <Stack spacing={2}>
       <Typography variant="h6" fontWeight={700}>پنل شخصی — {user?.display_name}</Typography>
+
+      {/* فاز ۴۷ - دسترسی سریع به مرکز آزمون */}
+      <Paper
+        onClick={() => navigate("/psych-tests")}
+        sx={{ p: 2, cursor: "pointer", border: "1px solid #ede7f6", display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap",
+          background: "linear-gradient(135deg,#fdf3f4,#faf6fb)", transition: "box-shadow .2s", "&:hover": { boxShadow: 3 } }}
+      >
+        <PsychologyRoundedIcon color="primary" sx={{ fontSize: 34 }} />
+        <Box flexGrow={1} minWidth={200}>
+          <Typography variant="subtitle1" fontWeight={800}>مرکز آزمون روان‌شناسی</Typography>
+          <Typography variant="body2" color="text.secondary">
+            آزمون‌های استاندارد (افسردگی بک، اضطراب، استرس، هوش، عزت نفس و…) را انجام دهید و نتیجه و ریزنمره‌ها را ببینید.
+          </Typography>
+        </Box>
+        <Button variant="contained">شروع آزمون‌ها</Button>
+      </Paper>
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="subtitle1" fontWeight={700} mb={1}>اطلاعات پایه من</Typography>

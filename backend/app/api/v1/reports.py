@@ -58,6 +58,9 @@ def _empty_summary(days: int) -> dict:
         "sessions_count": 0, "assessments_pending_review": 0,
         "applicants_total": 0, "users_active": 0, "counselors_active": 0,
         "counselor_workload": [], "recent_imports": [],
+        # فاز ۴۸ - روند کارها برای نمودارهای داشبورد
+        "trends": {"cases": [], "sessions": [], "appointments": []},
+        "psych_attempts": 0,
     }
 
 
@@ -102,12 +105,64 @@ def report_summary(
         q = q.where(Assessment.case_id.in_(select(Case.id).where(Case.primary_counselor_id == counselor_filter)))
     pending = int(db.scalar(q) or 0)
 
+    # فاز ۴۸ - روند روزانه پرونده/جلسه/نوبت + تعداد اجرای آزمون‌های روان‌شناسی
+    from app.models.psych_test import PsychAttempt
+    day_start = datetime.now(timezone.utc) - timedelta(days=days)
+
+    case_trend_rows = select(func.date(Case.created_at), func.count()).where(Case.created_at >= day_start)
+    if counselor_filter is not None:
+        case_trend_rows = case_trend_rows.where(Case.primary_counselor_id == counselor_filter)
+    case_trend = {r[0]: int(r[1]) for r in db.execute(
+        case_trend_rows.group_by(func.date(Case.created_at))
+    ).all()}
+    session_trend = {r[0]: int(r[1]) for r in db.execute(
+        select(func.date(SessionModel.occurred_at), func.count())
+        .where(SessionModel.occurred_at >= day_start)
+        .group_by(func.date(SessionModel.occurred_at))
+    ).all()}
+    appt_trend = {r[0]: int(r[1]) for r in db.execute(
+        select(func.date(Appointment.scheduled_at), func.count())
+        .where(Appointment.scheduled_at >= day_start)
+        .group_by(func.date(Appointment.scheduled_at))
+    ).all()}
+    if counselor_filter is not None:
+        session_trend = {r[0]: int(r[1]) for r in db.execute(
+            select(func.date(SessionModel.occurred_at), func.count())
+            .where(SessionModel.occurred_at >= day_start, SessionModel.counselor_id == counselor_filter)
+            .group_by(func.date(SessionModel.occurred_at))
+        ).all()}
+        appt_trend = {r[0]: int(r[1]) for r in db.execute(
+            select(func.date(Appointment.scheduled_at), func.count())
+            .where(Appointment.scheduled_at >= day_start, Appointment.counselor_id == counselor_filter)
+            .group_by(func.date(Appointment.scheduled_at))
+        ).all()}
+
+    now = datetime.now(timezone.utc)
+
+    def _series(src: dict, key: str = "count") -> list[dict]:
+        out = []
+        for i in range(days):
+            d = (now - timedelta(days=days - 1 - i)).date()
+            k = d.isoformat()
+            out.append({"date": k, key: int(src.get(d, src.get(k, 0)))})
+        return out
+
+    psych_attempts_total = int(db.scalar(
+        select(func.count()).select_from(PsychAttempt).where(PsychAttempt.created_at >= day_start)
+    ) or 0)
+
     out = _empty_summary(days)
     out["view"] = "staff" if is_staff else "self"
     out["cases_by_status"] = cases_by_status
     out["appointments_by_status"] = appts_by_status
     out["sessions_count"] = sessions_count
     out["assessments_pending_review"] = pending
+    out["trends"] = {
+        "cases": _series(case_trend),
+        "sessions": _series(session_trend),
+        "appointments": _series(appt_trend),
+    }
+    out["psych_attempts"] = psych_attempts_total
 
     if is_staff:
         out["applicants_total"] = int(db.scalar(select(func.count()).select_from(Applicant)) or 0)
@@ -288,6 +343,12 @@ def admin_dashboard(
         .where(ConsultationRequest.created_at >= day_start)
         .group_by(func.date(ConsultationRequest.created_at))
     ).all()}
+    # فاز ۴۸ - روند جلسات انجام‌شده و اجرای آزمون‌ها برای داشبورد مدیر
+    session_trend = {r[0]: int(r[1]) for r in db.execute(
+        select(func.date(SessionModel.occurred_at), func.count())
+        .where(SessionModel.occurred_at >= day_start)
+        .group_by(func.date(SessionModel.occurred_at))
+    ).all()}
 
     def _series(src: dict) -> list[dict]:
         out = []
@@ -360,6 +421,7 @@ def admin_dashboard(
         "trends": {
             "cases": _series(case_trend),
             "bookings": _series(consult_trend),
+            "sessions": _series(session_trend),
             "sales": _amount_series(sales_trend),
         },
         "counselor_workload": workload,
