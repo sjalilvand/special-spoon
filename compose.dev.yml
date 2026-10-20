@@ -28,8 +28,11 @@ services:
 
   # فاز ۳۸ - گام ۱ طرح مهاجرت ADR-04: MinIO در توسعه با پورت باز (۹۰۰۰/۹۰۰۱)
   # کنسول: http://localhost:9001 — آداپتور backend فقط با STORAGE_BACKEND=s3 فعال می‌شود
+  # تصویر رسمی minio/minio از Docker Hub حذف شد → alpine/minio با همان تگ RELEASE؛
+  # user root + healthcheck wget (تصویر alpine/minio نه mc دارد و نه root است)
   minio:
-    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    user: "0:0"
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -41,14 +44,14 @@ services:
     volumes:
       - minio_dev_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/minio/health/ready >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: rancher/mirrored-minio-mc:RELEASE.2023-06-28T21-54-17Z
     restart: "no"
     depends_on:
       minio:

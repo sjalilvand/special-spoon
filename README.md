@@ -131,7 +131,7 @@
 - Migration: 0015_phase26_holds_otp — آزمون‌ها: test_booking_holds.py (۸)، test_otp.py (۱۲)، test_admin_dashboard.py (۵)، test_jalali_dates.py (۴)
 
 ## فاز ۲۷ — ClamAV واقعی، خروجی ایمیل اعلان‌ها و گزارش انطباق DPO (v0.27.0)
-- **B39-plus آنتی‌ویروس واقعی:** سرویس اسکن سه‌بستری — clamd از راه TCP با پروتکل INSTREAM (حالت استاندارد docker compose) → clamscan بومی (subprocess) → قواعد پایه داخلی شامل امضای استاندارد EICAR؛ سیاست fail-closed برای پاسخ ERROR و fail-soft برای قطعی clamd (توقف آپلود ممنوع). سرویس clamav/clamav:1.4.2 در compose با StreamMaxLength=100M و volume مستقل پایگاه امضا
+- **B39-plus آنتی‌ویروس واقعی:** سرویس اسکن سه‌بستری — clamd از راه TCP با پروتکل INSTREAM (حالت استاندارد docker compose) → clamscan بومی (subprocess) → قواعد پایه داخلی شامل امضای استاندارد EICAR؛ سیاست fail-closed برای پاسخ ERROR و fail-soft برای قطعی clamd (توقف آپلود ممنوع). سرویس clamav/clamav:1.4.6 در compose با StreamMaxLength=100M و volume مستقل پایگاه امضا (تگ 1.4.2 ساده هرگز در Docker Hub منتشر نشده بود)
 - **حذف متادیتای تصاویر:** EXIF/GPS/ICC تصاویر JPEG/PNG/WEBP پیش از ذخیره حذف می‌شود (Pillow)؛ جهت EXIF داخل پیکسل «پخته» می‌شود و تصاویر متحرک دست‌نخورده می‌مانند؛ ثبت «فراداده حذف شد» در جزئیات اسکن
 - endpoint وضعیت اسکنر: GET /files/scan-status (شفافیت عملیاتی) و rescan با اسکنر فعال؛ نام اسکنر در file_scans ثبت می‌شود (clamav-clamd / clamav-clamscan / builtin-rules)
 - **B12+ خروجی ایمیل اعلان‌ها:** جدول `email_outbox` (صف ADR-02) — هر اعلان برای گیرنده دارای ایمیل در صف می‌رود؛ ارسال SMTP با STARTTLS/SMTPS، سقف تلاش ۵ و ثبت خطا؛ بدون SMTP ردیف‌ها «disabled» می‌شوند (شفافیت، بدون نشت سیاه‌چاله)؛ سیاست «عدم افشای محتوای بالینی» در ایمیل برقرار است
@@ -212,6 +212,14 @@
 - پاسخ ۴۲۹ استاندارد با هدر `Retry-After` (و `X-RateLimit-Limit/Remaining`) — روی v2 با کد `rate_limited` پاکت‌بندی می‌شود؛ ثبت ۴۲۹ در audit با نرخ نمونه‌برداری (`RATE_LIMIT_AUDIT_SAMPLE_RATE`، پیش‌فرض ۰٫۲)
 - fail-open (بند ۶ ADR-05): نبود/محو Redis سرویس را نمی‌شکند — درخواست عبور می‌کند و هشدار ثبت می‌شود؛ سرویس Redis به compose اضافه شد (redis:7.4-alpine، AOF، بدون پورت عمومی؛ در توسعه پورت 6379)
 - مستندسازی ۴۲۹/Retry-After در OpenAPI روت‌های مالی (تکمیل گام ۴ طرح) — طرح ۴ گام ADR-05 بسته شد؛ آزمون‌ها: ۱۸ آزمون جدید با Redis فیک درون‌حافظه؛ کل ۳۵۴ passed، 1 skipped
+
+## فاز ۴۴ — تعمیر تصاویر Docker کامپوز برای استقرار (v0.43.1)
+
+- **رفع خطای pull در `docker compose up`:** سه تگ تصویر در Docker Hub ناموجود/حذف‌شده بودند — این تغییر فقط compose و مستندات است و هیچ کد/آزمونی را دست نمی‌زند:
+  - `clamav/clamav:1.4.2` → `clamav/clamav:1.4.6` (تگ سادهٔ ۱٫۴٫۲ هرگز در Docker Hub منتشر نشده بود — فقط تگ‌های بازنگری‌دار مثل `1.4.2-43`؛ ۱٫۴٫۶ جدیدترین پایدار خط ۱٫۴ است)
+  - `minio/minio:RELEASE.2025-10-15T17-29-55Z` → `alpine/minio:RELEASE.2025-10-15T17-29-55Z` — تصویر رسمی MinIO در ۲۰۲۵ از Docker Hub (و quay/GHCR ناشناس) حذف شد (issue 21647 مینایو)؛ `alpine/minio` ساخت خودکار از همان ریلیز رسمی گیت‌هاب است. چون این تصویر non-root است و `mc` ندارد: `user: "0:0"` برای نوشتن در volume نام‌دار و healthcheck با `wget` روی `/minio/health/ready`
+  - `minio/mc:RELEASE.2025-08-13T08-35-41Z` → `rancher/mirrored-minio-mc:RELEASE.2023-06-28T21-54-17Z` (آینه رسمی Rancher؛ دستورهای `alias set`/`mb`/`version enable` سازگارند)
+- پروفایل storage (`--profile storage`) و مسیر پیش‌فرض local تحت تأثیر نیستند؛ آداپتور S3 همچنان fail-soft است
 
 ## فاز ۴۱ — گام ۴ هر دو طرح: انقضای اعلام‌شده v1 (ADR-03) + ابزار تسویه volume محلی (ADR-04) (v0.41.0)
 - **انقضای v1 با هدرهای استاندارد (گام ۴ طرح ADR-03 — مرحله «اعلام»):** میان‌افزار `app/core/deprecation.py` روی همه پاسخ‌های `/api/v1` (موفق و خطا): `Deprecation: version="v1"` + `Sunset: <HTTP-date>` (RFC 8594 — پیش‌فرض 2027-04-20 از `V1_SUNSET_DATE`) + `Warning: 299`؛ v2 و ریشه سامانه پاک می‌مانند

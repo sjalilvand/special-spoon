@@ -18,8 +18,9 @@ services:
     # بند ۱۳.۲: PostgreSQL در عملیات پورت عمومی ندارد
 
   # فاز ۲۷ - B39-plus: آنتی‌ویروس واقعی ClamAV (فقط شبکه داخلی؛ پورت عمومی ندارد)
+  # تگ 1.4.2 ساده در Docker Hub هرگز منتشر نشده بود (فقط 1.4.2-XX)؛ 1.4.6 = جدیدترین پایدار خط 1.4
   clamav:
-    image: clamav/clamav:1.4.2
+    image: clamav/clamav:1.4.6
     restart: unless-stopped
     environment:
       # سقف INSTREAM بالاتر از سقف آپلود (MAX_UPLOAD_MB)
@@ -44,6 +45,10 @@ services:
       retries: 10
 
   # فاز ۳۸ - گام ۱ طرح مهاجرت ADR-04: Object Storage سازگار S3 (MinIO)
+  # تصویر رسمی minio/minio در ۲۰۲۵ از Docker Hub حذف شد (issue 21647 مینایو)؛
+  # جایگزین: alpine/minio با همان تگ RELEASE (ساخت خودکار از ریلیز رسمی گیت‌هاب).
+  # user: "0:0" = تصویر alpine/minio به‌طور پیش‌فرض non-root است و volume نام‌دار root-owned
+  # نمی‌نوشت؛ healthcheck هم به‌جای mc (که در این تصویر نیست) از wget روی /minio/health/ready استفاده می‌کند.
   # پروفایل storage: فقط با «docker compose --profile storage up -d» بالا می‌آید
   # تا در استقرار پیش‌فرض local سربار اضافه نباشد؛ آداپتور fail-soft است و
   # نبود این سرویس هیچ مسیر API را نمی‌شکند (fallback به local).
@@ -51,7 +56,8 @@ services:
   # کلیدها از .env (MINIO_ROOT_USER / MINIO_ROOT_PASSWORD) می‌آیند و هرگز
   # به کلاینت/لاگ/پاسخ API نمی‌روند (قرارداد ADR-04).
   minio:
-    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    user: "0:0"
     profiles: ["storage"]
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -61,7 +67,7 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/minio/health/ready >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -69,8 +75,9 @@ services:
 
   # ساخت bucket یک‌باره (idempotent) — پس از سالم‌شدن MinIO اجرا می‌شود؛
   # نسخه‌گذاری bucket فعال می‌شود (پیش‌نیاز lifecycle/بازیابی ADR-04).
+  # تصویر رسمی minio/mc هم از Docker Hub حذف شد؛ جایگزین: آینه رسمی Rancher.
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: rancher/mirrored-minio-mc:RELEASE.2023-06-28T21-54-17Z
     profiles: ["storage"]
     restart: "no"
     depends_on:
