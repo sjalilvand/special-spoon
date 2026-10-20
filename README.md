@@ -221,6 +221,14 @@
   - `minio/mc:RELEASE.2025-08-13T08-35-41Z` → `rancher/mirrored-minio-mc:RELEASE.2023-06-28T21-54-17Z` (آینه رسمی Rancher؛ دستورهای `alias set`/`mb`/`version enable` سازگارند)
 - پروفایل storage (`--profile storage`) و مسیر پیش‌فرض local تحت تأثیر نیستند؛ آداپتور S3 همچنان fail-soft است
 
+## فاز ۴۵ — تعمیر تعارض وابستگی npm در بیلد ایمیج web (v0.43.1)
+
+- **رفع خطای `ERESOLVE` در گام `npm install` بیلد Docker:** `@mui/icons-material@^5.18.0` با peer `@mui/material@^5.0.0` در کنار `@mui/material@^6.2.0` ناسازگار بود؛ فایل `frontend/.npmrc` با `legacy-peer-deps=true` این تعارض را فقط در نصب محلی می‌پوشاند، اما Dockerfile فایل `.npmrc` را کپی نمی‌کند و npm سخت‌گیر داخل بیلد منفجر می‌شد (lock file هم حاصل نصب با همین کلید بود و tree ناسازگار ثبت شده بود)
+- اصلاح دو-وجهی:
+  - `@mui/icons-material` → `^6.2.0` هم‌ردیف `@mui/material` (فقط ۴ ایمپورت ساده در کد: Refresh/DoneAll/Print/Notifications — بدون تغییر API بین v5→v6) + تولید دوبارهٔ `package-lock.json` در حالت سخت‌گیر npm (بدون هیچ ERESOLVE؛ هر دو بسته ۶٫۵٫۰)
+  - حذف `frontend/.npmrc` (عصای زیر بغل `legacy-peer-deps`) — از این پس رفتار نصب محلی = رفتار بیلد Docker و تعارض واقعی آینده در هر دو محیط بلند و آشکار ظاهر می‌شود
+- راستی‌آزمایی: نصب تمیز + `tsc --noEmit` + `vite build --base=/panel/` برای پنل و نصب تمیز + بیلد برای site — هر دو موفق؛ هیچ تغییری در کد اپ، بک‌اند یا compose
+
 ## فاز ۴۱ — گام ۴ هر دو طرح: انقضای اعلام‌شده v1 (ADR-03) + ابزار تسویه volume محلی (ADR-04) (v0.41.0)
 - **انقضای v1 با هدرهای استاندارد (گام ۴ طرح ADR-03 — مرحله «اعلام»):** میان‌افزار `app/core/deprecation.py` روی همه پاسخ‌های `/api/v1` (موفق و خطا): `Deprecation: version="v1"` + `Sunset: <HTTP-date>` (RFC 8594 — پیش‌فرض 2027-04-20 از `V1_SUNSET_DATE`) + `Warning: 299`؛ v2 و ریشه سامانه پاک می‌مانند
 - **دو حالت عملیاتی (`V1_DEPRECATION_MODE`):** `warn` (پیش‌فرض — فقط هدر؛ سازگاری کامل، هیچ رفتاری عوض نمی‌شود) و `readonly` (کلید اضطراری چرخه حذف — متدهای نوشتاری v1 با 410 Gone و بدنه قرارداد v1 رد می‌شوند، خواندن برقرار)؛ به‌کارگیری readonly فقط پس از یک چرخه انتشار کامل با warn — حذف کامل v1 در چرخه بعد (فاصله الزامی سند ADR-03)

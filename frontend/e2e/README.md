@@ -25,7 +25,7 @@ Running 4 tests using 1 worker
 
 ```bash
 cd frontend
-npm i -D @playwright/test          # با legacy-peer-deps موجود در .npmrc سازگار است
+npm i -D @playwright/test          # درخت وابستگی‌ها بدون نیاز به legacy-peer-deps تمیز است
 npx playwright install chromium    # اگر مرورگر نصب نباشد
 ```
 
