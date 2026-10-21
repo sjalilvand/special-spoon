@@ -94,7 +94,8 @@ export default function IntakeDialog({ row, onClose, onError }: {
 }) {
   const { user } = useAuth();
   const roles = user?.roles ?? [];
-  const canWrite = roles.some((r) => ["ORG_MANAGER", "RECEPTION", "COUNSELOR"].includes(r));
+  // فاز ۴۹: مدیر سامانه هم می‌تواند پرسشنامه را پر/ویرایش کند (رفع «فقط خواندنی»)
+  const canWrite = roles.some((r) => ["ORG_MANAGER", "RECEPTION", "COUNSELOR", "SYSTEM_ADMIN"].includes(r));
 
   const [data, setData] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);

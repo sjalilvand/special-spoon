@@ -1,7 +1,7 @@
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
-  TableContainer, TableHead, TablePagination, TableRow, TextField, Typography,
+  Alert, Avatar, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
@@ -10,13 +10,30 @@ import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselo
 import type { Counselor } from "../api/people";
 import { addCredential, fetchCredentials } from "../api/catalog";
 import type { CounselorCredential } from "../api/catalog";
+import { uploadCounselorPhoto } from "../api/siteops";
 import JalaliDateField from "../components/JalaliDateField";
+import { formatJalali } from "../utils/jalali";
 
 const STATUS: Record<string, { label: string; color: "success" | "default" | "warning" }> = {
   active: { label: "فعال", color: "success" },
   inactive: { label: "غیرفعال", color: "default" },
   suspended: { label: "تعلیق", color: "warning" },
 };
+
+// فاز ۴۹: گرید واکنش‌گرای یکسان برای همه فرم‌های دیالوگ — در عرض کم،
+// فیلدها تک‌ستونه می‌شوند و هیچ فیلدی (از جمله تاریخ) از کادر بیرون نمی‌زند.
+export function FormGrid({ children, cols = 2 }: { children: React.ReactNode; cols?: 1 | 2 }) {
+  return (
+    <Box
+      display="grid"
+      gap={2}
+      gridTemplateColumns={cols === 1 ? { xs: "1fr" } : { xs: "1fr", sm: "1fr 1fr" }}
+      sx={{ "& > .full": { gridColumn: "1 / -1" } }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 export default function CounselorsPage() {
   const queryClient = useQueryClient();
@@ -25,6 +42,7 @@ export default function CounselorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [credentialsFor, setCredentialsFor] = useState<Counselor | null>(null);
+  const [photoFor, setPhotoFor] = useState<Counselor | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["counselors", page, search],
@@ -53,6 +71,7 @@ export default function CounselorsPage() {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell>عکس</TableCell>
               <TableCell>کد</TableCell>
               <TableCell>نام</TableCell>
               <TableCell>تخصص</TableCell>
@@ -62,17 +81,26 @@ export default function CounselorsPage() {
               <TableCell>وضعیت</TableCell>
               <TableCell>صلاحیت رزرو (B05)</TableCell>
               <TableCell>حساب</TableCell>
-              <TableCell>عملیات</TableCell>
+              <TableCell align="left">عملیات</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={10} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} align="center"><CircularProgress size={24} /></TableCell></TableRow>
             )}
             {data?.items.map((row) => {
               const st = STATUS[row.status] ?? { label: row.status, color: "default" as const };
               return (
                 <TableRow key={row.id}>
+                  <TableCell>
+                    <Avatar
+                      src={`/api/v1/public/counselors/${row.id}/photo`}
+                      alt={`${row.first_name} ${row.last_name}`}
+                      sx={{ width: 34, height: 34, fontSize: 14, bgcolor: "secondary.main" }}
+                    >
+                      {row.first_name?.charAt(0) ?? "؟"}
+                    </Avatar>
+                  </TableCell>
                   <TableCell>{row.counselor_code}</TableCell>
                   <TableCell>{row.first_name} {row.last_name}</TableCell>
                   <TableCell>{row.specialty ?? "—"}</TableCell>
@@ -96,6 +124,7 @@ export default function CounselorsPage() {
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
                       <Button size="small" onClick={() => setCredentialsFor(row)}>مدارک</Button>
+                      <Button size="small" onClick={() => setPhotoFor(row)}>عکس</Button>
                       <Button size="small" onClick={() => {
                         if (window.confirm("تغییر وضعیت این مشاور؟")) toggleStatus.mutate(row);
                       }}>
@@ -116,6 +145,9 @@ export default function CounselorsPage() {
       <CreateDialog open={open} onClose={() => setOpen(false)} onError={setError} />
       {credentialsFor && (
         <CredentialsDialog counselor={credentialsFor} onClose={() => setCredentialsFor(null)} />
+      )}
+      {photoFor && (
+        <PhotoDialog counselor={photoFor} onClose={() => setPhotoFor(null)} onError={setError} />
       )}
     </Stack>
   );
@@ -169,39 +201,36 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <form onSubmit={submit}>
         <DialogTitle>مشاور جدید</DialogTitle>
         <DialogContent>
           {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
           <Stack spacing={2} mt={1}>
-            <TextField label="کد مشاور *" value={form.counselor_code ?? ""} onChange={set("counselor_code")} required />
-            <Stack direction="row" spacing={2}>
-              <TextField label="نام *" fullWidth value={form.first_name ?? ""} onChange={set("first_name")} required />
-              <TextField label="نام خانوادگی *" fullWidth value={form.last_name ?? ""} onChange={set("last_name")} required />
-            </Stack>
-            <TextField label="کد ملی (متن، ۱۰ رقم)" value={form.national_id ?? ""} onChange={set("national_id")} />
-            <Stack direction="row" spacing={2}>
-              <TextField label="عنوان حرفه‌ای" fullWidth value={form.professional_title ?? ""} onChange={set("professional_title")} />
-              <TextField label="تخصص" fullWidth value={form.specialty ?? ""} onChange={set("specialty")} />
-            </Stack>
-            <Stack direction="row" spacing={2}>
-              <TextField label="شماره مجوز" fullWidth value={form.license_number ?? ""} onChange={set("license_number")} />
-              <TextField label="ظرفیت" type="number" fullWidth value={form.capacity ?? ""} onChange={set("capacity")} />
-            </Stack>
-            <JalaliDateField
-              label="تاریخ اعتبار مجوز"
-              value={undefined}
-              onChange={(iso) => setLicenseExpiry(iso)}
-            />
-            <TextField label="تماس کاری (متن)" value={form.work_mobile ?? ""} onChange={set("work_mobile")} />
-            <FormControl fullWidth size="small">
-              <InputLabel>محل خدمت</InputLabel>
-              <Select value={form.service_location_id ?? ""} onChange={set("service_location_id")} label="محل خدمت">
-                <MenuItem value="">—</MenuItem>
-                {locations?.map((l) => <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>)}
-              </Select>
-            </FormControl>
+            <FormGrid>
+              <TextField label="کد مشاور *" value={form.counselor_code ?? ""} onChange={set("counselor_code")} required />
+              <TextField label="کد ملی (متن، ۱۰ رقم)" value={form.national_id ?? ""} onChange={set("national_id")} />
+              <TextField label="نام *" value={form.first_name ?? ""} onChange={set("first_name")} required />
+              <TextField label="نام خانوادگی *" value={form.last_name ?? ""} onChange={set("last_name")} required />
+              <TextField label="عنوان حرفه‌ای" value={form.professional_title ?? ""} onChange={set("professional_title")} />
+              <TextField label="تخصص" value={form.specialty ?? ""} onChange={set("specialty")} />
+              <TextField label="شماره مجوز" value={form.license_number ?? ""} onChange={set("license_number")} />
+              <TextField label="ظرفیت" type="number" value={form.capacity ?? ""} onChange={set("capacity")} />
+              <JalaliDateField
+                label="تاریخ اعتبار مجوز"
+                value={undefined}
+                onChange={(iso) => setLicenseExpiry(iso)}
+              />
+              <TextField label="تماس کاری (متن)" value={form.work_mobile ?? ""} onChange={set("work_mobile")} />
+              <TextField label="ایمیل" value={form.email ?? ""} onChange={set("email")} slotProps={{ htmlInput: { dir: "ltr" } }} />
+              <FormControl fullWidth size="small">
+                <InputLabel>محل خدمت</InputLabel>
+                <Select value={form.service_location_id ?? ""} onChange={set("service_location_id")} label="محل خدمت">
+                  <MenuItem value="">—</MenuItem>
+                  {locations?.map((l) => <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>)}
+                </Select>
+              </FormControl>
+            </FormGrid>
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} />
               ایجاد حساب ورود (نقش ثابت مشاور — حساب «در انتظار فعال‌سازی» ساخته می‌شود)
@@ -220,7 +249,7 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
   );
 }
 
-/* فاز ۲۸ - B05: مدیریت مدارک و صلاحیت مشاور */
+/* فاز ۲۸ - B05: مدیریت مدارک و صلاحیت مشاور — فاز ۴۹: فرم بازطراحی‌شده (گرید واکنش‌گرا) */
 function CredentialsDialog({ counselor, onClose }: {
   counselor: Counselor; onClose: () => void;
 }) {
@@ -284,18 +313,23 @@ function CredentialsDialog({ counselor, onClose }: {
         <Stack spacing={2} sx={{ mt: 1 }}>
           {formError && <Alert severity="error">{formError}</Alert>}
           <form onSubmit={submit}>
-            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="flex-start">
-              <Select size="small" defaultValue="license" value={form.kind ?? "license"} onChange={set("kind")} sx={{ minWidth: 130 }}>
-                <MenuItem value="license">مجوز حرفه‌ای</MenuItem>
-                <MenuItem value="degree">مدرک تحصیلی</MenuItem>
-                <MenuItem value="certificate">گواهی‌نامه</MenuItem>
-              </Select>
-              <TextField size="small" required label="عنوان مدرک" value={form.title ?? ""} onChange={set("title")} sx={{ minWidth: 200 }} />
-              <TextField size="small" label="شماره" value={form.license_number ?? ""} onChange={set("license_number")} sx={{ minWidth: 120 }} />
+            <FormGrid>
+              <FormControl size="small" fullWidth>
+                <InputLabel>نوع مدرک</InputLabel>
+                <Select value={form.kind ?? "license"} onChange={set("kind")} label="نوع مدرک">
+                  <MenuItem value="license">مجوز حرفه‌ای</MenuItem>
+                  <MenuItem value="degree">مدرک تحصیلی</MenuItem>
+                  <MenuItem value="certificate">گواهی‌نامه</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField size="small" required label="عنوان مدرک" value={form.title ?? ""} onChange={set("title")} />
+              <TextField size="small" label="شماره مدرک" value={form.license_number ?? ""} onChange={set("license_number")} />
               <JalaliDateField label="تاریخ صدور" value={issuedAt} onChange={setIssuedAt} />
               <JalaliDateField label="تاریخ انقضا" value={expiresAt} onChange={setExpiresAt} />
-              <Button type="submit" variant="contained" disabled={busy}>افزودن مدرک</Button>
-            </Stack>
+              <Box sx={{ gridColumn: "1 / -1" }} display="flex" justifyContent="flex-end">
+                <Button type="submit" variant="contained" disabled={busy}>افزودن مدرک</Button>
+              </Box>
+            </FormGrid>
           </form>
           <Table size="small">
             <TableHead>
@@ -318,7 +352,7 @@ function CredentialsDialog({ counselor, onClose }: {
                     <TableCell>{KIND[c.kind] ?? c.kind}</TableCell>
                     <TableCell>{c.title}</TableCell>
                     <TableCell>{c.license_number ?? "—"}</TableCell>
-                    <TableCell>{c.expires_at ?? "—"}</TableCell>
+                    <TableCell>{c.expires_at ? formatJalali(c.expires_at) : "—"}</TableCell>
                     <TableCell>
                       <Chip size="small" label={st.label} color={st.color} />
                       {c.review_note && (
@@ -337,6 +371,67 @@ function CredentialsDialog({ counselor, onClose }: {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>بستن</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/* فاز ۴۹ - عکس مشاور: آپلود با پیش‌نمایش؛ خانم‌ها می‌توانند عکس با حجاب داشته باشند */
+function PhotoDialog({ counselor, onClose, onError }: {
+  counselor: Counselor; onClose: () => void; onError: (m: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const pick = (f: File | null) => {
+    setFile(f);
+    setPreview(f ? URL.createObjectURL(f) : null);
+  };
+
+  const submit = async () => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await uploadCounselorPhoto(counselor.id, file);
+      await queryClient.invalidateQueries({ queryKey: ["counselors"] });
+      onClose();
+    } catch (e) {
+      onError(errDetail(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>عکس مشاور — {counselor.first_name} {counselor.last_name}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }} alignItems="center">
+          <Avatar
+            src={preview ?? `/api/v1/public/counselors/${counselor.id}/photo`}
+            sx={{ width: 140, height: 140, fontSize: 48, bgcolor: "secondary.main" }}
+          >
+            {counselor.first_name?.charAt(0) ?? "؟"}
+          </Avatar>
+          <Button variant="outlined" component="label">
+            انتخاب تصویر (JPEG/PNG/WebP — حداکثر ۲MB)
+            <input
+              type="file" accept="image/jpeg,image/png,image/webp" hidden
+              onChange={(e) => pick(e.target.files?.[0] ?? null)}
+            />
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            در سایت عمومی و پروفایل مشاور نمایش داده می‌شود. برای مشاوران خانم می‌توانید عکس با حجاب انتخاب کنید.
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>انصراف</Button>
+        <Button variant="contained" disabled={!file || busy} onClick={submit}>
+          {busy ? "در حال بارگذاری…" : "بارگذاری"}
+        </Button>
       </DialogActions>
     </Dialog>
   );

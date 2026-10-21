@@ -21,9 +21,9 @@ import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
 import PersonPanelRoundedIcon from "@mui/icons-material/PersonRounded";
 import {
   Badge, Dashboard as DashboardIcon, Description, Diversity3, EventNote,
-  Folder, Forum, Gavel, GroupAdd, HealthAndSafety, HistoryEdu,
+  Folder, Forum, Gavel, GroupAdd, HealthAndSafety, HelpOutline, HistoryEdu,
   Inbox, Insights, Map, MenuBook, Paid, PersonSearch, Psychology, QueryStats,
-  Receipt, RequestQuote, Rule, SupportAgent, UploadFile, Warning,
+  Receipt, RequestQuote, Rule, SupportAgent, TrackChanges, UploadFile, Warning,
   Wallet, Web, VerifiedUser,
 } from "@mui/icons-material";
 
@@ -118,11 +118,14 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: <SettingsSuggestRoundedIcon />,
     items: [
       { label: "فرایندها (BPMN)", path: "/processes", roles: ALL_STAFF, icon: <Insights /> },
+      { label: "مانیتورینگ فرایندها", code: "B42", path: "/process-monitoring", roles: ALL_STAFF, icon: <TrackChanges /> },
       { label: "پشتیبانی", code: "B23", path: "/support", roles: [...ALL_STAFF, "APPLICANT"], icon: <SupportAgent /> },
       { label: "دستیار هوشمند", path: "/assistant", roles: [...ALL_STAFF, "APPLICANT"], icon: <Forum /> },
       { label: "یکپارچه‌سازی‌ها", code: "B28", path: "/integrations", roles: ["SYSTEM_ADMIN", "ORG_MANAGER"], icon: <Web /> },
       { label: "کاربران", path: "/users", roles: ["SYSTEM_ADMIN"], icon: <GroupAdd /> },
       { label: "رخدادهای امنیتی", path: "/audit-events", roles: ["SYSTEM_ADMIN"], icon: <Description /> },
+      { label: "راهنمای سامانه", path: `${import.meta.env.BASE_URL}user-guide.html`, roles: ["*"], icon: <HelpOutline /> },
+      { label: "گزارش پیشرفت پروژه", path: `${import.meta.env.BASE_URL}project-status.html`, roles: ["*"], icon: <MenuBook /> },
     ],
   },
 ];
@@ -157,6 +160,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   };
   const go = (path: string) => {
     closeMenu();
+    // فاز ۴۹: فایل‌های HTML ایستا (راهنما/گزارش پیشرفت) با تب جدید باز می‌شوند
+    if (path.endsWith(".html")) {
+      window.open(path, "_blank", "noopener");
+      return;
+    }
     navigate(path);
   };
 

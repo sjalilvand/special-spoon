@@ -1,7 +1,12 @@
 html { scroll-behavior: smooth; }
 body { font-family: "Vazirmatn", Tahoma, sans-serif; background: #fffafb; }
+
+/* فاز ۴۹: جلوگیری از سرریز فیلد تاریخ (و هر input) در فرم‌ها و دیالوگ‌های باریک */
 .rdp-input {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 14px;
   border: 1px solid #d8c3ca;
   border-radius: 8px;
@@ -12,4 +17,13 @@ body { font-family: "Vazirmatn", Tahoma, sans-serif; background: #fffafb; }
 .rdp-input:focus {
   outline: 2px solid rgba(176,74,90,.2);
   border-color: #b04a5a;
+}
+.rdp-container {
+  max-width: 100%;
+}
+/* هر Stack افقی داخل دیالوگ اجازه جمع‌شدن دارد تا فیلدها بیرون نزنند */
+.MuiDialogContent-root .MuiStack-root > .MuiBox-root,
+.MuiDialogContent-root .MuiStack-root > .MuiTextField-root,
+.MuiDialogContent-root .MuiStack-root > .MuiFormControl-root {
+  min-width: 0;
 }

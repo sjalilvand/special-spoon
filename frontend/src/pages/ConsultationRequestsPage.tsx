@@ -18,6 +18,7 @@ import { fetchCounselorOptions } from "../api/cases";
 import type { OptionRow } from "../api/cases";
 import { fetchServiceLocations } from "../api/people";
 import IntakeDialog from "../components/IntakeDialog";
+import { useNavigate } from "react-router-dom";
 import JalaliDateField from "../components/JalaliDateField";
 import { formatJalaliDateTime } from "../utils/jalali";
 
@@ -26,6 +27,7 @@ const SLOTS = ["صبح", "عصر", "هر زمان"];
 
 export default function ConsultationRequestsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const roles = user?.roles ?? [];
   const canCreate =
@@ -134,6 +136,17 @@ export default function ConsultationRequestsPage() {
                       <Button size="small" onClick={() => setFollowRow(row)}>پیگیری</Button>
                       <Button size="small" variant="outlined" onClick={() => setIntakeRow(row)}>
                         پرسشنامه پذیرش
+                      </Button>
+                      {/* فاز ۴۹ - B42: مانیتورینگ وضعیت این درخواست در فرایندها */}
+                      <Button
+                        size="small" title="مانیتورینگ فرایندهای این درخواست (B42)"
+                        onClick={() =>
+                          navigate(
+                            `/process-monitoring?subject_type=consultation_request&subject_id=${row.id}&label=${encodeURIComponent(row.full_name ?? "")}`,
+                          )
+                        }
+                      >
+                        فرایند
                       </Button>
                     </Stack>
                   </TableCell>

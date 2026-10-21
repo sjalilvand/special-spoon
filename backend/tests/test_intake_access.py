@@ -21,7 +21,7 @@ def test_intake_read_write_matrix(env, client):
         f"/api/v1/consultation-requests/{cr_id}/intake", headers=bearer(tok_rec)
     ).status_code == 200
 
-    # مدیر سیستم: خواندن بله، نوشتن خیر
+    # مدیر سیستم: خواندن بله، نوشتن بله (فاز ۴۹: دسترسی کامل ستاد)
     tok_admin = login(client, "t_admin")
     assert client.get(
         f"/api/v1/consultation-requests/{cr_id}/intake", headers=bearer(tok_admin)
@@ -29,7 +29,7 @@ def test_intake_read_write_matrix(env, client):
     assert client.post(
         f"/api/v1/consultation-requests/{cr_id}/intake",
         headers=bearer(tok_admin), json={"data": {}},
-    ).status_code == 403
+    ).status_code == 200
 
     # سرپرست فنی: خواندن بله، نوشتن خیر
     tok_sup = login(client, "t_super")

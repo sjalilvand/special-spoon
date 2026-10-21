@@ -17,6 +17,8 @@ COPY alembic ./alembic
 COPY app ./app
 COPY *.py ./
 COPY psych_seed ./psych_seed
+COPY process_seed ./process_seed
+COPY avatar_seed ./avatar_seed
 
 RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
 USER appuser

@@ -19,6 +19,8 @@ export function safeJalaliToIso(d: any): string | undefined {
   }
 }
 
+// فاز ۴۹: فیلد تاریخ تمام‌عرض با minWidth صفر — در گرید/فرم باریک دیگر
+// از کادر بیرون نمی‌زند (رفع سرریز تاریخ انقضا در مدارک مشاور و ...)
 export default function JalaliDateField({
   label, value, onChange, required = false,
 }: {
@@ -29,8 +31,8 @@ export default function JalaliDateField({
   required?: boolean;
 }) {
   return (
-    <Box>
-      <Typography variant="caption" color="text.secondary">
+    <Box sx={{ width: "100%", minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" component="div">
         {label}
         {required ? " *" : ""}
       </Typography>
@@ -39,7 +41,8 @@ export default function JalaliDateField({
         onChange={(d) => onChange(safeJalaliToIso(d))}
         calendar={persian}
         locale={persian_fa}
-        containerStyle={{ width: "100%" }}
+        containerStyle={{ width: "100%", maxWidth: "100%", minWidth: 0 }}
+        style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}
         placeholder="انتخاب تاریخ (کلیک = تقویم شمسی)"
         inputClass="rdp-input"
       />

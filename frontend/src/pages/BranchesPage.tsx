@@ -5,15 +5,19 @@ import {
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { errDetail } from "../api/client";
 import {
   Branch, createBranch, createClinic, fetchAllServices, fetchBranches, fetchClinics,
   setBranchOfferings, updateBranch,
 } from "../api/branches";
+import { IRAN_PROVINCES, findProvince } from "../constants/provinces";
+import BranchMapPicker from "../components/BranchMapPicker";
 import { formatJalaliDateTime } from "../utils/jalali";
 
 // فاز ۲۹ - B31 سند جامع: مراکز مشاوره و شعب — slug یکتا، مختصات معتبر،
 // شعبه منتشرنشده عمومی نیست، «خدمت ناموجود برای شعبه نشان داده نشود»
+// فاز ۴۹: انتخاب استان ۳۱گانه + نقشه انتخاب موقعیت + ویرایش کامل شعبه
 
 const fa = (n: number | string | null | undefined) =>
   n === null || n === undefined ? "—" : typeof n === "number" ? n.toLocaleString("fa-IR") : n;
@@ -23,8 +27,15 @@ const STATUS: Record<string, { label: string; color: "success" | "warning" }> = 
   draft: { label: "پیش‌نویس", color: "warning" },
 };
 
+const FormGrid = ({ children }: { children: React.ReactNode }) => (
+  <Box display="grid" gap={2} gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr" }}>
+    {children}
+  </Box>
+);
+
 export default function BranchesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [selectedClinic, setSelectedClinic] = useState<string | null>(null);
   const [newClinicOpen, setNewClinicOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +78,7 @@ export default function BranchesPage() {
       <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
         <Typography variant="h6" fontWeight={800}>شعب و مراکز (B31)</Typography>
         <Box flexGrow={1} />
+        <Button variant="outlined" onClick={() => navigate("/branch-map")}>نمایش روی نقشه (B40)</Button>
         <FormControl size="small" sx={{ minWidth: 240 }}>
           <InputLabel>مرکز</InputLabel>
           <Select
@@ -132,12 +144,12 @@ function BranchTable(props: {
   onError: (msg: string) => void;
 }) {
   const [offeringsFor, setOfferingsFor] = useState<Branch | null>(null);
-  const [newBranchOpen, setNewBranchOpen] = useState(false);
+  const [formTarget, setFormTarget] = useState<{ branch: Branch | null } | null>(null);
   return (
     <>
       {props.clinicId && (
         <Box display="flex" justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => setNewBranchOpen(true)}>+ شعبه جدید</Button>
+          <Button variant="outlined" onClick={() => setFormTarget({ branch: null })}>+ شعبه جدید</Button>
         </Box>
       )}
       <TableContainer component={Paper}>
@@ -187,6 +199,7 @@ function BranchTable(props: {
                 <TableCell>{formatJalaliDateTime(b.created_at)}</TableCell>
                 <TableCell align="left">
                   <Stack direction="row" spacing={0.5}>
+                    <Button size="small" onClick={() => setFormTarget({ branch: b })}>ویرایش</Button>
                     <Button size="small" onClick={() => setOfferingsFor(b)}>خدمات</Button>
                     <Button
                       size="small"
@@ -209,122 +222,175 @@ function BranchTable(props: {
         onSaved={props.onSaved}
         onError={props.onError}
       />
-      <NewBranchDialog
-        open={newBranchOpen}
-        clinicId={props.clinicId}
-        services={props.services}
-        onClose={() => setNewBranchOpen(false)}
-        onSaved={props.onSaved}
-        onError={props.onError}
-      />
+      {/* فاز ۴۹: فرم واحد ایجاد/ویرایش با نقشه و انتخاب استان */}
+      {formTarget && props.clinicId && (
+        <BranchFormDialog
+          clinicId={props.clinicId}
+          branch={formTarget.branch}
+          services={props.services}
+          onClose={() => setFormTarget(null)}
+          onSaved={props.onSaved}
+          onError={props.onError}
+        />
+      )}
     </>
   );
 }
 
-/* ------------------------------ دیالوگ شعبه جدید ------------------------------ */
+/* --------------------- دیالوگ ایجاد/ویرایش شعبه (با نقشه) --------------------- */
 
-function NewBranchDialog(props: {
-  open: boolean;
-  clinicId: string | null;
+function BranchFormDialog(props: {
+  clinicId: string;
+  branch: Branch | null;
   services: { id: string; title: string }[];
   onClose: () => void;
   onSaved: () => void;
   onError: (msg: string) => void;
 }) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [province, setProvince] = useState("");
-  const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [phone, setPhone] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const editing = props.branch !== null;
+  const [name, setName] = useState(props.branch?.name ?? "");
+  const [province, setProvince] = useState(props.branch?.province ?? "");
+  const [city, setCity] = useState(props.branch?.city ?? "");
+  const [address, setAddress] = useState(props.branch?.address ?? "");
+  const [postalCode, setPostalCode] = useState(props.branch?.postal_code ?? "");
+  const [phone, setPhone] = useState(props.branch?.phone ?? "");
+  const [latitude, setLatitude] = useState<number | null>(
+    props.branch?.latitude != null ? Number(props.branch.latitude) : null);
+  const [longitude, setLongitude] = useState<number | null>(
+    props.branch?.longitude != null ? Number(props.branch.longitude) : null);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
-  const [publish, setPublish] = useState(false);
+  const [publish, setPublish] = useState(props.branch?.status === "published");
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const reset = () => {
-    setName(""); setProvince(""); setCity(""); setAddress(""); setPostalCode("");
-    setPhone(""); setLatitude(""); setLongitude(""); setServiceIds([]); setPublish(false);
+  const onProvinceChange = (p: string) => {
+    setProvince(p);
+    const info = findProvince(p);
+    if (info) {
+      if (!city.trim()) setCity(info.capital);
+      setLatitude(info.lat);
+      setLongitude(info.lng);
+    }
   };
 
-  const submit = async () => {
-    if (!props.clinicId || !name.trim()) return;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
     setBusy(true);
     try {
-      await createBranch(props.clinicId, {
-        name: name.trim(),
-        province: province || undefined,
-        city: city || undefined,
-        address: address || undefined,
-        postal_code: postalCode || undefined,
-        phone: phone || undefined,
-        latitude: latitude === "" ? undefined : Number(latitude),
-        longitude: longitude === "" ? undefined : Number(longitude),
-        status: publish ? "published" : "draft",
-        service_ids: serviceIds,
-      });
+      if (editing) {
+        await updateBranch(props.branch!.id, {
+          name: name.trim(),
+          province: province || undefined,
+          city: city || undefined,
+          address: address || undefined,
+          postal_code: postalCode || undefined,
+          phone: phone || undefined,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
+          status: publish ? "published" : "draft",
+        });
+      } else {
+        await createBranch(props.clinicId, {
+          name: name.trim(),
+          province: province || undefined,
+          city: city || undefined,
+          address: address || undefined,
+          postal_code: postalCode || undefined,
+          phone: phone || undefined,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
+          status: publish ? "published" : "draft",
+          service_ids: serviceIds,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["branches"] });
       props.onSaved();
-      reset();
       props.onClose();
     } catch (e) {
-      props.onError(errDetail(e));
+      setFormError(errDetail(e));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={props.open && !!props.clinicId} onClose={props.onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>شعبه جدید</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField required label="نام شعبه" value={name} onChange={(e) => setName(e.target.value)} />
-          <Stack direction="row" spacing={2}>
-            <TextField label="استان" fullWidth value={province} onChange={(e) => setProvince(e.target.value)} />
-            <TextField label="شهر" fullWidth value={city} onChange={(e) => setCity(e.target.value)} />
+    <Dialog open onClose={props.onClose} maxWidth="md" fullWidth>
+      <form onSubmit={submit}>
+        <DialogTitle>{editing ? `ویرایش شعبه — ${props.branch!.name}` : "شعبه جدید"}</DialogTitle>
+        <DialogContent>
+          {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormGrid>
+              <TextField required label="نام شعبه *" value={name} onChange={(e) => setName(e.target.value)} />
+              <TextField
+                select label="استان" value={province}
+                onChange={(e) => onProvinceChange(e.target.value)}
+                helperText="انتخاب استان، شهر و مختصات پیش‌فرض (مرکز استان) را پر می‌کند"
+              >
+                <MenuItem value="">—</MenuItem>
+                {IRAN_PROVINCES.map((p) => (
+                  <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField label="شهر" value={city} onChange={(e) => setCity(e.target.value)} />
+              <TextField label="کدپستی" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+              <TextField label="تلفن" value={phone} onChange={(e) => setPhone(e.target.value)} slotProps={{ htmlInput: { dir: "ltr" } }} />
+              <TextField
+                label="وضعیت انتشار" select value={publish ? "published" : "draft"}
+                onChange={(e) => setPublish(e.target.value === "published")}
+              >
+                <MenuItem value="draft">پیش‌نویس (عمومی نمی‌شود)</MenuItem>
+                <MenuItem value="published">منتشرشده (در سایت/نقشه)</MenuItem>
+              </TextField>
+              <Box sx={{ gridColumn: "1 / -1" }}>
+                <TextField
+                  label="نشانی" multiline minRows={2} fullWidth
+                  value={address} onChange={(e) => setAddress(e.target.value)}
+                />
+              </Box>
+              <TextField
+                label="عرض جغرافیایی (−۹۰ تا ۹۰)" type="number"
+                value={latitude ?? ""} onChange={(e) => setLatitude(e.target.value === "" ? null : Number(e.target.value))}
+                slotProps={{ htmlInput: { step: "any", min: -90, max: 90, dir: "ltr" } }}
+              />
+              <TextField
+                label="طول جغرافیایی (−۱۸۰ تا ۱۸۰)" type="number"
+                value={longitude ?? ""} onChange={(e) => setLongitude(e.target.value === "" ? null : Number(e.target.value))}
+                slotProps={{ htmlInput: { step: "any", min: -180, max: 180, dir: "ltr" } }}
+              />
+            </FormGrid>
+
+            <BranchMapPicker lat={latitude} lng={longitude} onChange={(la, lo) => { setLatitude(la); setLongitude(lo); }} />
+
+            {!editing && (
+              <FormControl fullWidth size="small">
+                <InputLabel>خدمات ارائه‌شده</InputLabel>
+                <Select
+                  multiple
+                  value={serviceIds}
+                  onChange={(e) => setServiceIds(e.target.value as string[])}
+                  input={<OutlinedInput label="خدمات ارائه‌شده" />}
+                  renderValue={(picked) =>
+                    props.services.filter((s) => (picked as string[]).includes(s.id)).map((s) => s.title).join("، ")
+                  }
+                >
+                  {props.services.map((s) => (
+                    <MenuItem key={s.id} value={s.id}><ListItemText primary={s.title} /></MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Stack>
-          <TextField label="نشانی" multiline minRows={2} value={address} onChange={(e) => setAddress(e.target.value)} />
-          <Stack direction="row" spacing={2}>
-            <TextField label="کدپستی" fullWidth value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-            <TextField label="تلفن" fullWidth value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </Stack>
-          <Stack direction="row" spacing={2}>
-            <TextField
-              label="عرض جغرافیایی (−۹۰ تا ۹۰)" fullWidth type="number"
-              value={latitude} onChange={(e) => setLatitude(e.target.value)}
-              slotProps={{ htmlInput: { step: "any", min: -90, max: 90, dir: "ltr" } }}
-            />
-            <TextField
-              label="طول جغرافیایی (−۱۸۰ تا ۱۸۰)" fullWidth type="number"
-              value={longitude} onChange={(e) => setLongitude(e.target.value)}
-              slotProps={{ htmlInput: { step: "any", min: -180, max: 180, dir: "ltr" } }}
-            />
-          </Stack>
-          <FormControl fullWidth size="small">
-            <InputLabel>خدمات ارائه‌شده</InputLabel>
-            <Select
-              multiple
-              value={serviceIds}
-              onChange={(e) => setServiceIds(e.target.value as string[])}
-              input={<OutlinedInput label="خدمات ارائه‌شده" />}
-              renderValue={(picked) =>
-                props.services.filter((s) => (picked as string[]).includes(s.id)).map((s) => s.title).join("، ")
-              }
-            >
-              {props.services.map((s) => (
-                <MenuItem key={s.id} value={s.id}><ListItemText primary={s.title} /></MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={props.onClose}>انصراف</Button>
-        <Button variant="contained" disabled={busy || !name.trim()} onClick={submit}>ایجاد شعبه</Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={props.onClose}>انصراف</Button>
+          <Button type="submit" variant="contained" disabled={busy || !name.trim()}>
+            {busy ? "در حال ذخیره…" : editing ? "ذخیره تغییرات" : "ایجاد شعبه"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }

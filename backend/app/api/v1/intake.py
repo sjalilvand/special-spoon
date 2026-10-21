@@ -18,7 +18,7 @@ router = APIRouter(tags=["intake"])
 
 # خواندن: همه نقش‌های داخلی مرتبط؛ نوشتن/نهایی‌سازی: پذیرش، مدیر سازمان، مشاور
 READ_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN")
-WRITE_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR")
+WRITE_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR", "SYSTEM_ADMIN")
 
 
 def _roles(actor) -> set[str]:

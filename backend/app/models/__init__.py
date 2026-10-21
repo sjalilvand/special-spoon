@@ -87,6 +87,12 @@ from app.models.support import (
     TicketStatus,
 )
 from app.models.topics import ServiceTopic, Topic
+from app.models.process import (
+    ProcessDefinition,
+    ProcessInstance,
+    ProcessInstanceEvent,
+    ProcessVersion,
+)
 from app.models.wallet import (
     Wallet,
     WalletEntry,
@@ -112,6 +118,7 @@ __all__ = [
     "Recommendation", "Referral", "Refund", "RefundRequest", "RefundRequestStatus",
     "ReviewAction", "Role",
     "OtpChallenge", "OtpPurpose",
+    "ProcessDefinition", "ProcessInstance", "ProcessInstanceEvent", "ProcessVersion",
     "Service", "ServiceLocation", "ServiceSessionType", "ServiceStatus",
     "Session", "SessionNoteRevision", "SessionNoteStatus", "Specialty",
     "Settlement", "SettlementItem", "SettlementStatus",

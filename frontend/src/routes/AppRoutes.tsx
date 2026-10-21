@@ -34,6 +34,7 @@ import MyAssessmentsPage from "../pages/MyAssessmentsPage";
 import MyPanelPage from "../pages/MyPanelPage";
 import OrdersPage from "../pages/OrdersPage";
 import ProcessesPage from "../pages/ProcessesPage";
+import ProcessMonitoringPage from "../pages/ProcessMonitoringPage";
 import ReviewsPage from "../pages/ReviewsPage";
 import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
@@ -216,6 +217,10 @@ export default function AppRoutes() {
       } />
       <Route path="/processes" element={
         <ProtectedRoute roles={STAFF_ROLES}><Layout><ProcessesPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۴۹ - B42: مانیتورینگ وضعیت درخواست در فرایند */}
+      <Route path="/process-monitoring" element={
+        <ProtectedRoute roles={STAFF_ROLES}><Layout><ProcessMonitoringPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

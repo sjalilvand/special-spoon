@@ -27,6 +27,7 @@ from app.api.v1.idempotency import router as idempotency_router
 from app.api.v1.intake import router as intake_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.integrations import router as integrations_router
+from app.api.v1.processes import router as processes_router
 from app.api.v1.learning import router as learning_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
@@ -103,6 +104,7 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (psych_tests_router, None),
     (ai_router, None),
     (integrations_router, None),
+    (processes_router, None),
 ]
 
 for _router, _tags in _ROUTERS:

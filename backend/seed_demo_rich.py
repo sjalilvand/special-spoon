@@ -20,9 +20,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import random
+import shutil
 import sys
 import uuid as uuid_mod
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from sqlalchemy import delete, func, select
 
@@ -62,6 +64,9 @@ from app.models.email_outbox import EmailOutbox
 from app.models.integration import SmsOutbox
 from app.models.audit import AuditEvent
 from app.models.import_job import ImportJob, ImportRow
+from app.models.process import (
+    ProcessDefinition, ProcessInstance, ProcessInstanceEvent, ProcessVersion,
+)
 
 TZ = timezone(timedelta(hours=3, minutes=30))
 TODAY = date.today()
@@ -375,7 +380,243 @@ def seed_base(db) -> dict:
         counselors.append(c)
     db.flush()
     ref["counselors"] = counselors
+    seed_counselor_photos(counselors)
     return ref
+
+
+# عکس‌های پیش‌فرض مشاوران (فاز ۴۹) — خانم‌ها با حجاب اسلامی؛ فایل‌ها از
+# backend/avatar_seed به uploads/counselor_photos کپی می‌شوند تا هم سایت
+# عمومی و هم پنل، بدون آپلود دستی، عکس واقعی نشان دهند.
+FEMALE_FIRST = {"سارا", "مریم", "نگار", "الهام", "زهرا", "فاطمه", "نازنین", "شیرین",
+                "پریسا", "لیلا", "سمانه", "رویا", "مهسا", "آیدا", "نیلوفر", "ترانه",
+                "بهاره", "شیما", "عسل", "کیمیا"}
+AVATAR_DIR = Path("avatar_seed")
+AVATAR_UPLOAD_DIR = Path("uploads") / "counselor_photos"
+FEMALE_AVATARS = ["f1.jpg", "f2.jpg", "f3.jpg"]
+MALE_AVATARS = ["m1.jpg", "m2.jpg", "m3.jpg"]
+
+
+def seed_counselor_photos(counselors: list[Counselor]) -> None:
+    if not AVATAR_DIR.exists():
+        return
+    AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    f_i = m_i = 0
+    for c in counselors:
+        if c.photo_path and (Path("uploads") / c.photo_path).is_file():
+            continue  # عکس قبلی معتبر است (مثلاً آپلود دستی) — دست نمی‌زنیم
+        if c.first_name in FEMALE_FIRST:
+            fname = FEMALE_AVATARS[f_i % len(FEMALE_AVATARS)]
+            f_i += 1
+        else:
+            fname = MALE_AVATARS[m_i % len(MALE_AVATARS)]
+            m_i += 1
+        src = AVATAR_DIR / fname
+        if not src.is_file():
+            continue
+        dst = AVATAR_UPLOAD_DIR / f"{c.counselor_code}.jpg"
+        shutil.copyfile(src, dst)
+        c.photo_path = f"counselor_photos/{dst.name}"
+
+
+# ---------------------------------------------------------------- شعب ۳۱ استان
+# فاز ۴۹: برای هر استان یک شعبه با موقعیت پیش‌فرض (مرکز استان) ثبت می‌شود؛
+# همه فیلدها از پنل «شعب» قابل ویرایش و در نقشه B40 نمایش داده می‌شوند.
+IRAN_PROVINCES: list[tuple[str, str, float, float, str]] = [
+    # (استان، مرکز، عرض، طول، کد تلفن)
+    ("تهران", "تهران", 35.6892, 51.3890, "021"),
+    ("البرز", "کرج", 35.8355, 50.9915, "026"),
+    ("اصفهان", "اصفهان", 32.6539, 51.6660, "031"),
+    ("فارس", "شیراز", 29.5918, 52.5837, "071"),
+    ("خراسان رضوی", "مشهد", 36.2605, 59.6168, "051"),
+    ("آذربایجان شرقی", "تبریز", 38.0962, 46.2738, "041"),
+    ("آذربایجان غربی", "ارومیه", 37.5527, 45.0759, "044"),
+    ("اردبیل", "اردبیل", 38.2498, 48.2933, "045"),
+    ("ایلام", "ایلام", 33.6374, 46.4227, "084"),
+    ("بوشهر", "بوشهر", 28.9234, 50.8203, "077"),
+    ("چهارمحال و بختیاری", "شهرکرد", 32.3256, 50.8644, "038"),
+    ("خراسان جنوبی", "بیرجند", 32.8663, 59.2211, "056"),
+    ("خراسان شمالی", "بجنورد", 37.4747, 57.3290, "058"),
+    ("خوزستان", "اهواز", 31.3183, 48.6706, "061"),
+    ("زنجان", "زنجان", 36.6736, 48.4787, "024"),
+    ("سمنان", "سمنان", 35.5729, 53.3970, "023"),
+    ("سیستان و بلوچستان", "زاهدان", 29.4963, 60.8629, "054"),
+    ("قزوین", "قزوین", 36.2797, 50.0049, "028"),
+    ("قم", "قم", 34.6416, 50.8746, "025"),
+    ("کردستان", "سنندج", 35.3219, 46.9862, "087"),
+    ("کرمان", "کرمان", 30.2839, 57.0834, "034"),
+    ("کرمانشاه", "کرمانشاه", 34.3142, 47.0650, "083"),
+    ("کهگیلویه و بویراحمد", "یاسوج", 30.6684, 51.5879, "074"),
+    ("گلستان", "گرگان", 36.8456, 54.4393, "017"),
+    ("گیلان", "رشت", 37.2808, 49.5832, "013"),
+    ("لرستان", "خرم‌آباد", 33.4878, 48.3558, "066"),
+    ("مازندران", "ساری", 36.5633, 53.0601, "011"),
+    ("مرکزی", "اراک", 34.0917, 49.6892, "086"),
+    ("هرمزگان", "بندرعباس", 27.1865, 56.2808, "076"),
+    ("همدان", "همدان", 34.7983, 48.5148, "081"),
+    ("یزد", "یزد", 31.8974, 54.3569, "035"),
+]
+
+
+def seed_provinces(db, ref) -> None:
+    """یک مرکز + ۳۱ شعبه استانی با موقعیت پیش‌فرض (قابل ویرایش از پنل)."""
+    clinic = db.scalar(select(Clinic).where(Clinic.slug == "rosepsy-main"))
+    if clinic is None:
+        clinic = Clinic(
+            name="کلینیک رزپسی — مرکز", slug="rosepsy-main",
+            description="شبکه ملی مراکز مشاوره رزپسی — پوشش ۳۱ استان کشور",
+            phone="02191008000", website="https://rosepsy.ir",
+            created_by=ref["admin"].id,
+        )
+        db.add(clinic)
+        db.flush()
+    services = ref["services"]
+    for prov, city, lat, lng, area in IRAN_PROVINCES:
+        b = db.scalar(select(Branch).where(
+            Branch.clinic_id == clinic.id, Branch.province == prov))
+        if b is None:
+            b = Branch(
+                clinic_id=clinic.id, name=f"شعبه {prov}", province=prov, city=city,
+                address=f"{prov}، {city}، خیابان اصلی، ساختمان رزپسی",
+                phone=f"{area}91000000",
+                latitude=lat, longitude=lng, status="published",
+                created_by=ref["admin"].id,
+            )
+            db.add(b)
+            db.flush()
+        else:
+            # تکمیل مختصات/وضعیت شعبه موجود (سازگاری با داده قبلی)
+            if b.latitude is None:
+                b.latitude = lat
+            if b.longitude is None:
+                b.longitude = lng
+        for s in services[:3]:
+            off = db.scalar(select(BranchServiceOffering).where(
+                BranchServiceOffering.branch_id == b.id,
+                BranchServiceOffering.service_id == s.id))
+            if off is None:
+                db.add(BranchServiceOffering(branch_id=b.id, service_id=s.id, is_active=True))
+    db.flush()
+
+
+# ---------------------------------------------------------------- فرایندها
+PROCESS_SEEDS = [
+    # (کد، عنوان، شرح، فایل XML)
+    ("RS-PR-00", "گردش کلی خدمات مشاوره",
+     "نقشه کلان: از تماس/درخواست تا پذیرش تلفنی، تشکیل پرونده، ارزیابی تخصصی، جلسات درمانی و بستن پرونده — و انشعاب فرایند مورد حاد در صورت شناسایی خطر.",
+     "process-00-overall.bpmn"),
+    ("RS-PS-01-01", "پذیرش اولیه مراجعان تلفنی",
+     "ثبت اطلاعات فردی مراجع تلفنی، ارزیابی اولیه موضوع مراجعه، تشخیص مورد حاد و تعیین مسیر (پذیرش حضوری، اطلاع‌رسانی یا تماس مجدد) با بازبینی نظارت حرفه‌ای.",
+     "process-01-telephone-intake.bpmn"),
+    ("RS-PS-04-01", "پذیرش و تشکیل پرونده",
+     "تشکیل پرونده، رضایت‌نامه آگاهانه، تخصیص مشاور، ارزیابی تخصصی و MSE، چرخه نهایی‌سازی/تأیید مسئول فنی (با برگشت برای اصلاح)، طرح درمان و جلسات تا بستن پرونده.",
+     "process-04-case-intake.bpmn"),
+    ("RS-PS-08-01", "ارزیابی و مدیریت مورد حاد / پر خطر",
+     "ثبت فرم مورد حاد و تعیین سطح فوریت؛ مسیر سطح ۱ (پایش دوره‌ای)، سطح ۲ (ارجاع برنامه‌ریزی‌شده) و سطح ۳ (اقدام فوری و ارجاع اورژانسی)؛ ثبت نتیجه پذیرش مقصد، پیگیری و مختومه‌سازی.",
+     "process-08-acute-case.bpmn"),
+]
+PROCESS_SEED_DIR = Path("process_seed")
+
+
+def seed_processes(db, ref, reqs, cases) -> None:
+    """تعریف ۴ فرایند مستندشده (نسخه ۱ منتشرشده) + نمونه‌های اجرای دمو."""
+    from xml.etree import ElementTree as ET
+
+    ref.setdefault("process_defs", {})
+    for code, title, desc, fname in PROCESS_SEEDS:
+        d = db.scalar(select(ProcessDefinition).where(ProcessDefinition.code == code))
+        if d is None:
+            d = ProcessDefinition(code=code, title=title, description=desc,
+                                  created_by=ref["admin"].id)
+            db.add(d)
+            db.flush()
+        else:
+            d.title, d.description = title, desc
+        ref["process_defs"][code] = d
+        has_v = db.scalar(select(ProcessVersion).where(ProcessVersion.definition_id == d.id))
+        if has_v is None and (PROCESS_SEED_DIR / fname).is_file():
+            xml = (PROCESS_SEED_DIR / fname).read_text(encoding="utf-8")
+            try:
+                ET.fromstring(xml)
+            except ET.ParseError:
+                continue
+            db.add(ProcessVersion(definition_id=d.id, version_number=1, bpmn_xml=xml,
+                                  changelog="نسخه اولیه مستندسازی‌شده (BPMN 2.0)",
+                                  status="published"))
+    db.flush()
+
+    # نمونه‌های اجرای دمو برای مانیتورینگ وضعیت درخواست در فرایند
+    tel = ref["process_defs"].get("RS-PS-01-01")
+    intake = ref["process_defs"].get("RS-PS-04-01")
+
+    def instance_for(defn, version, subject, label, meta, events):
+        if defn is None or version is None:
+            return
+        exists = db.scalar(select(ProcessInstance).where(
+            ProcessInstance.definition_id == defn.id,
+            ProcessInstance.subject_type == meta["subject_type"],
+            ProcessInstance.subject_id == str(subject.id)))
+        if exists is not None:
+            return
+        inst = ProcessInstance(
+            definition_id=defn.id, version_id=version.id,
+            subject_type=meta["subject_type"], subject_id=str(subject.id),
+            subject_label=label, subject_meta={k: v for k, v in meta.items() if k != "subject_type"},
+            status=meta["status"], started_by=ref["reception"].id,
+        )
+        db.add(inst)
+        db.flush()
+        for name, etype, status in events:
+            db.add(ProcessInstanceEvent(instance_id=inst.id, element_name=name,
+                                        element_type=etype, status=status,
+                                        actor_id=ref["reception"].id))
+        if meta["status"] == "completed":
+            inst.finished_at = NOW
+
+    v_tel = db.scalar(select(ProcessVersion).where(
+        ProcessVersion.definition_id == tel.id, ProcessVersion.status == "published")) if tel else None
+    v_int = db.scalar(select(ProcessVersion).where(
+        ProcessVersion.definition_id == intake.id, ProcessVersion.status == "published")) if intake else None
+
+    # نمونه‌های اجرای دمو — فقط برای فرایندی که هنوز هیچ نمونه‌ای ندارد
+    # (اجرای مجدد seed روی دیتابیس پرشده، نمونه تکراری نمی‌سازد)
+    has_inst = set(db.scalars(select(ProcessInstance.definition_id).distinct()).all())
+
+    demo_events_done = [
+        ("ثبت تماس ورودی", "task", "done"),
+        ("ثبت اطلاعات فردی مراجع", "task", "done"),
+        ("ارزیابی اولیه موضوع مراجعه", "task", "done"),
+        ("تشخیص مورد حاد", "gateway", "done"),
+        ("تعیین مسیر: پذیرش حضوری", "task", "done"),
+    ]
+    demo_events_running = [
+        ("ثبت تماس ورودی", "task", "done"),
+        ("ثبت اطلاعات فردی مراجع", "task", "done"),
+        ("ارزیابی اولیه موضوع مراجعه", "task", "active"),
+    ]
+    if tel is not None and tel.id not in has_inst:
+        for idx, (req, applicant) in enumerate(reqs[:3]):
+            if req is None:
+                continue
+            label = req.full_name or (applicant.full_name if applicant else "مراجع تلفنی")
+            inst_status = "completed" if idx == 2 else "running"
+            meta = {
+                "subject_type": "consultation_request",
+                "topic": req.topic, "mobile": req.mobile, "status": inst_status,
+            }
+            events = demo_events_done if idx == 2 else demo_events_running
+            instance_for(tel, v_tel, req, label, meta, events)
+
+    case_ref = cases[0] if cases else None
+    if case_ref is not None and intake is not None and intake.id not in has_inst:
+        instance_for(intake, v_int, case_ref, case_ref.case_number, {
+            "subject_type": "case", "status": "running",
+        }, [
+            ("تشکیل پرونده", "task", "done"),
+            ("ثبت رضایت‌نامه آگاهانه", "task", "done"),
+            ("تخصیص مشاور", "task", "done"),
+            ("ارزیابی تخصصی", "task", "active"),
+        ])
+    db.flush()
 
 
 def seed_applicants(db, ref) -> list[Applicant]:
@@ -1208,6 +1449,7 @@ def seed_comms(db, ref, cases):
 def wipe(db) -> None:
     """پاک‌سازی کامل داده‌های دمو (به‌ترتیب وابستگی فرزند → والد)."""
     order = [
+        ProcessInstanceEvent, ProcessInstance, ProcessVersion, ProcessDefinition,
         ImportRow, ImportJob, AuditEvent, SmsOutbox, EmailOutbox, Notification,
         TicketMessage, Ticket, Complaint, SessionSurvey, SessionNoteRevision, Session,
         SlotClaim,
@@ -1245,33 +1487,61 @@ def main() -> int:
             return 0
         existing = db.scalar(select(func.count(Applicant.id))) or 0
         if existing >= 90:
-            print(f"داده نمونه قبلاً بارگذاری شده است ({existing} متقاضی). برای بارگذاری مجدد: --reset")
+            # حالت تکمیلی (فاز ۴۹): دیتابیس پرشدهٔ seed قبلی را دست نمی‌زنیم؛
+            # فقط بخش‌های جدید (فرایندها، شعب ۳۱ استان، عکس مشاوران) اضافه می‌شود.
+            print("داده نمونه قبلی یافت شد؛ اجرای حالت تکمیلی فاز ۴۹ (بدون دست‌زدن به داده موجود)...")
+            ref = seed_base(db)
+            _reqs = db.scalars(select(ConsultationRequest).order_by(
+                ConsultationRequest.created_at.desc()).limit(3)).all()
+            reqs = [(r, None) for r in _reqs]
+            cases = list(db.scalars(select(Case).order_by(Case.created_at).limit(1)).all())
+            print("  فرایندهای سازمانی (BPMN نسخه‌دار) + نمونه‌های مانیتورینگ...")
+            seed_processes(db, ref, reqs, cases)
+            print("  شعب ۳۱ استان با موقعیت پیش‌فرض...")
+            seed_provinces(db, ref)
+            print("  عکس پیش‌فرض مشاوران...")
+            seed_counselor_photos(list(db.scalars(select(Counselor)).all()))
+            db.commit()
+            counts = {}
+            for label, model in [
+                ("فرایند تعریف‌شده", ProcessDefinition), ("نسخه فرایند", ProcessVersion),
+                ("نمونه فرایند", ProcessInstance), ("شعب", Branch),
+            ]:
+                counts[label] = db.scalar(select(func.count(model.id)))
+            print("\n✅ تکمیل فاز ۴۹ انجام شد:")
+            for k, v in counts.items():
+                print(f"   {k}: {v}")
+            print("برای بازسازی کامل داده از صفر: --reset")
             return 0
 
-        print("۱/۱۱ ساختار سازمانی، خدمات، مشاوران و کاربران ستاد...")
+        print("۱/۱۳ ساختار سازمانی، خدمات، مشاوران و کاربران ستاد...")
         ref = seed_base(db)
-        print("۲/۱۱ ۱۰۰ متقاضی + ۲۰ حساب پورتال...")
+        print("۲/۱۳ ۱۰۰ متقاضی + ۲۰ حساب پورتال...")
         applicants = seed_applicants(db, ref)
-        print("۳/۱۱ درخواست‌های مشاوره سایت...")
+        print("۳/۱۳ درخواست‌های مشاوره سایت...")
         reqs = seed_requests(db, ref, applicants)
-        print("۴/۱۱ پرونده‌ها، تخصیص‌ها و رضایت‌ها...")
+        print("۴/۱۳ پرونده‌ها، تخصیص‌ها و رضایت‌ها...")
         cases = seed_cases(db, ref, applicants, reqs)
-        print("۵/۱۱ تقویم نوبت‌ها (پر و خالی)...")
+        print("۵/۱۳ تقویم نوبت‌ها (پر و خالی)...")
         appts = seed_appointments(db, ref, cases)
-        print("۶/۱۱ جلسات، یادداشت‌ها و نظرسنجی...")
+        print("۶/۱۳ جلسات، یادداشت‌ها و نظرسنجی...")
         seed_sessions(db, ref, appts)
-        print("۷/۱۱ تشخیص، طرح درمان، توصیه و ارجاع...")
+        print("۷/۱۳ تشخیص، طرح درمان، توصیه و ارجاع...")
         seed_clinical(db, ref, cases)
-        print("۸/۱۱ فرم‌های بالینی و چرخه بازبینی...")
+        print("۸/۱۳ فرم‌های بالینی و چرخه بازبینی...")
         seed_forms(db, ref, cases)
-        print("۹/۱۱ مالی: سفارش، پرداخت، فاکتور، کیف پول، استرداد، حسابداری...")
+        print("۹/۱۳ مالی: سفارش، پرداخت، فاکتور، کیف پول، استرداد، حسابداری...")
         seed_finance(db, ref, appts)
-        print("۱۰/۱۱ بانک آزمون‌های روان‌شناسی + اجراهای نمونه...")
+        print("۱۰/۱۳ بانک آزمون‌های روان‌شناسی + اجراهای نمونه...")
         seed_psych(db, ref)
-        print("۱۱/۱۱ آموزش، پشتیبانی، اعلان‌ها و حسابرسی...")
+        print("۱۱/۱۳ آموزش، پشتیبانی، اعلان‌ها و حسابرسی...")
         seed_learning(db, ref)
         seed_support(db, ref)
         seed_comms(db, ref, cases)
+        print("۱۲/۱۳ فرایندهای سازمانی (BPMN نسخه‌دار) + نمونه‌های مانیتورینگ...")
+        seed_processes(db, ref, reqs, cases)
+        print("۱۳/۱۳ شعب ۳۱ استان با موقعیت پیش‌فرض...")
+        seed_provinces(db, ref)
         db.commit()
 
         from app.models.people import Applicant as A
@@ -1281,6 +1551,8 @@ def main() -> int:
             ("نوبت", Appointment), ("جلسه", Session), ("ارزیابی", Assessment),
             ("سفارش", Order), ("پرداخت", Payment), ("اجرای آزمون", PsychAttempt),
             ("اعلان", Notification), ("کاربر", User),
+            ("فرایند تعریف‌شده", ProcessDefinition), ("نسخه فرایند", ProcessVersion),
+            ("نمونه فرایند", ProcessInstance), ("شعب", Branch),
         ]:
             counts[label] = db.scalar(select(func.count(model.id)))
         print("\n✅ داده نمونه جامع ایجاد شد:")
