@@ -8,6 +8,12 @@ export interface PsychTest {
   description: string | null;
   topic_id: string | null;
   topic_name: string | null;
+  // فاز ۵۰ - متادیتای کاتالوگ مرجع
+  code?: string | null;
+  age_range?: string | null;
+  estimated_minutes?: number | null;
+  accent_color?: string | null;
+  sort_order?: number;
   status: "draft" | "pending_review" | "published" | "rejected";
   review_note: string | null;
   reviewed_by: string | null;
@@ -24,6 +30,7 @@ export interface PsychQuestion {
   prompt: string;
   options: { label: string; score: number }[];
   subscale?: string | null;
+  image_url?: string | null;
   sort_order: number;
 }
 
@@ -45,8 +52,17 @@ export interface PsychAttempt {
   interpretation_label: string;
   interpretation_guidance: string | null;
   subscale_scores?: Record<string, number> | null;
+  demographics?: Record<string, string> | null;
   test_title?: string | null;
   created_at: string | null;
+}
+
+// فاز ۵۰ - مشخصات اولیه برگزارکننده (فرم مرجع)
+export interface TestDemographics {
+  gender?: string;
+  age?: string;
+  education?: string;
+  marital?: string;
 }
 
 // فاز ۴۷ - مرکز آزمون: کاتالوگ عمومی + برگه پرسش‌نامه + اجرا
@@ -56,12 +72,23 @@ export interface PublicPsychTest {
   title: string;
   description: string | null;
   topic_name: string | null;
+  code?: string | null;
+  age_range?: string | null;
+  estimated_minutes?: number | null;
+  accent_color?: string | null;
+  sort_order?: number;
   question_count: number;
 }
 
 export interface PublicPaper {
-  test: { id: string; slug: string; title: string; description: string | null };
-  questions: { id: string; prompt: string; subscale?: string | null; options: string[]; sort_order: number }[];
+  test: {
+    id: string; slug: string; title: string; description: string | null;
+    code?: string | null; age_range?: string | null; estimated_minutes?: number | null; accent_color?: string | null;
+  };
+  questions: {
+    id: string; prompt: string; subscale?: string | null; options: string[];
+    image_url?: string | null; sort_order: number;
+  }[];
 }
 
 export interface AttemptResult {
@@ -79,8 +106,15 @@ export async function fetchPublicPaper(slug: string): Promise<PublicPaper> {
   return r.data;
 }
 
-export async function submitPsychAttempt(slug: string, answers: number[]): Promise<AttemptResult> {
-  const r = await apiClient.post<AttemptResult>(`/public/psych-tests/${slug}/attempts`, { answers });
+export async function submitPsychAttempt(
+  slug: string,
+  answers: number[],
+  demographics?: TestDemographics | null,
+): Promise<AttemptResult> {
+  const r = await apiClient.post<AttemptResult>(`/public/psych-tests/${slug}/attempts`, {
+    answers,
+    demographics: demographics && Object.keys(demographics).length ? demographics : null,
+  });
   return r.data;
 }
 

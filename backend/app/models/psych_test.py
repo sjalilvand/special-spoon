@@ -41,7 +41,11 @@ class PsychStatus:
 
 
 class PsychTest(Base):
-    """B37 - ابزار تست روان‌شناسی؛ انتشار فقط با تأیید ناظر علمی (D08)."""
+    """B37 - ابزار تست روان‌شناسی؛ انتشار فقط با تأیید ناظر علمی (D08).
+
+    فاز ۵۰: code/age_range/estimated_minutes/accent_color/sort_order — متادیتای
+    کاتالوگ مطابق مرجع ۲۲ آزمون (کد، محدوده سنی، مدت تخمینی، رنگ کارت، ترتیب).
+    """
 
     __tablename__ = "psych_tests"
     __table_args__ = (
@@ -60,6 +64,12 @@ class PsychTest(Base):
     topic_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("topics.id", ondelete="SET NULL"), nullable=True
     )
+    # فاز ۵۰ - متادیتای کاتالوگ
+    code: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    age_range: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    estimated_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    accent_color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[str] = mapped_column(String(20), default=PsychStatus.DRAFT)
     review_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -80,6 +90,8 @@ class PsychQuestion(Base):
 
     فاز ۴۷: subscale اختیاری — نام زیرمقیاس (مثلاً «اضطراب» در DASS-21) برای
     نمایش ریز‌نمره‌ها در نتیجه؛ نمره کل همچنان جمع همه سؤال‌هاست.
+    فاز ۵۰: image_path اختیاری — عکس پیوست سؤال (مثلاً ماتریس ریون) که از
+    uploads/psych_images سرو می‌شود؛ سؤال تصویری برای ابزارهای هوش.
     """
 
     __tablename__ = "psych_questions"
@@ -95,6 +107,7 @@ class PsychQuestion(Base):
     prompt: Mapped[str] = mapped_column(String(1000))
     options: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": "...", "score": 0}]
     subscale: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    image_path: Mapped[str | None] = mapped_column(String(300), nullable=True)  # فاز ۵۰
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -143,4 +156,7 @@ class PsychAttempt(Base):
     answers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # فاز ۴۷ - ریزنمره زیرمقیاس‌ها snapshot می‌شود: {"اضطراب": 9, "فشار": 12}
     subscale_scores: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # فاز ۵۰ - مشخصات اولیه برگزارکننده (فرم مرجع): {"gender": "...", "age": "...",
+    # "education": "...", "marital": "..."}
+    demographics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

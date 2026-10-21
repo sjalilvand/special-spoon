@@ -1,0 +1,79 @@
+{
+ "bdi-ii": {
+  "code": "BDI-II-21",
+  "age_range": "بزرگسالان - نوجوانان",
+  "estimated_minutes": 10,
+  "accent_color": "#facc15",
+  "sort_order": 9
+ },
+ "bai": {
+  "code": "BAI-21",
+  "age_range": "بزرگسالان - نوجوانان",
+  "estimated_minutes": 10,
+  "accent_color": "#4ade80",
+  "sort_order": 10
+ },
+ "dass-21": {
+  "code": "DASS-21",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 10,
+  "accent_color": "#b04a5a",
+  "sort_order": 24
+ },
+ "phq-9": {
+  "code": "PHQ-9",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 5,
+  "accent_color": "#b04a5a",
+  "sort_order": 25
+ },
+ "gad-7": {
+  "code": "GAD-7",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 5,
+  "accent_color": "#b04a5a",
+  "sort_order": 26
+ },
+ "pss-10": {
+  "code": "PSS-10",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 5,
+  "accent_color": "#b04a5a",
+  "sort_order": 27
+ },
+ "ghq-12": {
+  "code": "GHQ-12",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 5,
+  "accent_color": "#facc15",
+  "sort_order": 28
+ },
+ "rosenberg": {
+  "code": "RSE-10",
+  "age_range": "بالای ۱۵ سال",
+  "estimated_minutes": 5,
+  "accent_color": "#7a5c8a",
+  "sort_order": 29
+ },
+ "mes-20": {
+  "code": "MES-20",
+  "age_range": "بزرگسالان",
+  "estimated_minutes": 10,
+  "accent_color": "#ec4899",
+  "sort_order": 30
+ },
+ "eq-24": {
+  "code": "EQ-24",
+  "age_range": "بالای ۱۵ سال",
+  "estimated_minutes": 10,
+  "accent_color": "#9333ea",
+  "sort_order": 31
+ },
+ "gardner-mit": {
+  "code": "MIT-40",
+  "age_range": "نوجوان، بزرگسال",
+  "estimated_minutes": 12,
+  "accent_color": "#9333ea",
+  "sort_order": 15
+ }
+}

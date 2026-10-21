@@ -1198,22 +1198,36 @@ def orders_on(db):
     return list(db.scalars(select(Order)))
 
 
-def seed_psych(db, ref):
-    """بارگذاری بانک آزمون + ۲۲ اجرای نمونه با نمره و ریزنمره."""
+def seed_psych(db, ref, only_missing: bool = False):
+    """بارگذاری بانک آزمون + اجراهای نمونه با نمره و ریزنمره.
+
+    فاز ۵۰: بانک کامل ۲۲ آزمون مرجع + سقف ۴۰ اجرا؛ در حالت only_missing
+    (حالت تکمیلی) فقط ابزارهای بدون اجرا نمونه می‌گیرند تا idempotent بماند.
+    """
     import seed_psych_tests as spt
     spt.main()
 
-    users = ref["applicant_users"] + [ref["admin"], ref["reception"]]
+    from app.models.user import User as _User
+    users = ref.get("applicant_users") or []
+    if not users:
+        # حالت تکمیلی: ref بدون متقاضی است — نمونه کاربران فعال از دیتابیس
+        users = list(db.scalars(select(_User).where(_User.status == "active").limit(30)))
+    users = users + [ref["admin"], ref["reception"]]
     tests = list(db.scalars(select(PsychTest).where(PsychTest.status == "published")))
     n = 0
     for t in tests:
-        if n >= 22:
+        if n >= 40:
             break
+        if only_missing:
+            existing = db.scalar(select(func.count(PsychAttempt.id)).where(PsychAttempt.test_id == t.id)) or 0
+            if existing:
+                continue
         qs = list(db.scalars(select(PsychQuestion).where(PsychQuestion.test_id == t.id)))
         interps = list(db.scalars(select(PsychInterpretation).where(PsychInterpretation.test_id == t.id)))
         if not qs or not interps:
             continue
-        for rep in range(2):
+        reps = 1 if only_missing else 2
+        for rep in range(reps):
             u = users[(n + rep) % len(users)]
             band = interps[rng.randrange(len(interps))]
             score = rng.randint(int(band.score_min), int(band.score_max))
@@ -1225,6 +1239,10 @@ def seed_psych(db, ref):
             db.add(PsychAttempt(test_id=t.id, user_id=u.id, score=score,
                                 interpretation_label=band.label, interpretation_guidance=band.guidance,
                                 answers=answers, subscale_scores=sub or None,
+                                demographics={"gender": rng.choice(["زن", "مرد"]),
+                                             "age": str(rng.randint(16, 55)),
+                                             "education": rng.choice(["دیپلم", "کارشناسی", "کارشناسی ارشد"]),
+                                             "marital": rng.choice(["مجرد", "متاهل"])},
                                 created_at=dt_days_ago(rng.randint(0, 30), rng.randint(9, 20))))
             n += 1
     db.flush()
@@ -1487,10 +1505,12 @@ def main() -> int:
             return 0
         existing = db.scalar(select(func.count(Applicant.id))) or 0
         if existing >= 90:
-            # حالت تکمیلی (فاز ۴۹): دیتابیس پرشدهٔ seed قبلی را دست نمی‌زنیم؛
-            # فقط بخش‌های جدید (فرایندها، شعب ۳۱ استان، عکس مشاوران) اضافه می‌شود.
-            print("داده نمونه قبلی یافت شد؛ اجرای حالت تکمیلی فاز ۴۹ (بدون دست‌زدن به داده موجود)...")
+            # حالت تکمیلی (فاز ۵۰): دیتابیس پرشدهٔ seed قبلی را دست نمی‌زنیم؛
+            # فقط بخش‌های جدید (بانک آزمون، فرایندها، شعب ۳۱ استان، عکس مشاوران) اضافه می‌شود.
+            print("داده نمونه قبلی یافت شد؛ اجرای حالت تکمیلی فاز ۵۰ (بدون دست‌زدن به داده موجود)...")
             ref = seed_base(db)
+            print("  بانک آزمون کامل ۲۲ آزمون مرجع + اجراهای نمونه ابزارهای بدون اجرا...")
+            seed_psych(db, ref, only_missing=True)
             _reqs = db.scalars(select(ConsultationRequest).order_by(
                 ConsultationRequest.created_at.desc()).limit(3)).all()
             reqs = [(r, None) for r in _reqs]
@@ -1506,9 +1526,10 @@ def main() -> int:
             for label, model in [
                 ("فرایند تعریف‌شده", ProcessDefinition), ("نسخه فرایند", ProcessVersion),
                 ("نمونه فرایند", ProcessInstance), ("شعب", Branch),
+                ("ابزار آزمون", PsychTest), ("اجرای آزمون", PsychAttempt),
             ]:
                 counts[label] = db.scalar(select(func.count(model.id)))
-            print("\n✅ تکمیل فاز ۴۹ انجام شد:")
+            print("\n✅ تکمیل فاز ۵۰ انجام شد (بانک آزمون ۲۲ آزمون مرجع + فاز ۴۹):")
             for k, v in counts.items():
                 print(f"   {k}: {v}")
             print("برای بازسازی کامل داده از صفر: --reset")

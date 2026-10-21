@@ -16,8 +16,10 @@
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -61,6 +63,12 @@ def _test_out(db: Session, t: PsychTest, *, with_counts: bool = True) -> dict:
         "description": t.description,
         "topic_id": str(t.topic_id) if t.topic_id else None,
         "topic_name": topic.name if topic else None,
+        # فاز ۵۰ - متادیتای کاتالوگ
+        "code": t.code,
+        "age_range": t.age_range,
+        "estimated_minutes": t.estimated_minutes,
+        "accent_color": t.accent_color,
+        "sort_order": t.sort_order,
         "status": t.status,
         "review_note": t.review_note,
         "reviewed_by": reviewer.display_name if reviewer else None,
@@ -87,6 +95,8 @@ def _question_out(q: PsychQuestion) -> dict:
         "prompt": q.prompt,
         "options": q.options or [],
         "subscale": q.subscale,
+        # فاز ۵۰ - عکس پیوست سؤال (URL آماده)
+        "image_url": f"/api/v1/public/psych-images/{q.image_path}" if q.image_path else None,
         "sort_order": q.sort_order,
     }
 
@@ -112,6 +122,7 @@ def _attempt_out(a: PsychAttempt) -> dict:
         "interpretation_label": a.interpretation_label,
         "interpretation_guidance": a.interpretation_guidance,
         "subscale_scores": a.subscale_scores,
+        "demographics": a.demographics,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
 
@@ -152,6 +163,8 @@ class InterpretationCreate(BaseModel):
 
 class AttemptCreate(BaseModel):
     answers: list[int] = Field(min_length=1)
+    # فاز ۵۰ - مشخصات اولیه (فرم مرجع): کلیدهای gender/age/education/marital
+    demographics: dict | None = None
 
 
 # ---------------------------------------------------------------- admin
@@ -439,7 +452,7 @@ def public_tests(db: Session = Depends(get_db)) -> dict:
     rows = db.scalars(
         select(PsychTest)
         .where(PsychTest.status == PsychStatus.PUBLISHED)
-        .order_by(PsychTest.created_at.desc())
+        .order_by(PsychTest.sort_order, PsychTest.created_at.desc())
     ).all()
     out = []
     for t in rows:
@@ -454,10 +467,29 @@ def public_tests(db: Session = Depends(get_db)) -> dict:
                 "title": t.title,
                 "description": t.description,
                 "topic_name": topic.name if topic else None,
+                # فاز ۵۰ - متادیتای کاتالوگ مرجع
+                "code": t.code,
+                "age_range": t.age_range,
+                "estimated_minutes": t.estimated_minutes,
+                "accent_color": t.accent_color,
+                "sort_order": t.sort_order,
                 "question_count": int(qc),
             }
         )
     return {"items": out}
+
+
+@router.get("/public/psych-images/{file_path:path}")
+def public_psych_image(file_path: str) -> FileResponse:
+    """فاز ۵۰ - سرو عکس پیوست سؤال از uploads/psych_images (فقط-خواندنی، ضد Traversal)."""
+    base = Path("uploads/psych_images").resolve()
+    target = (base / file_path).resolve()
+    if base not in target.parents and target != base:
+        raise HTTPException(status_code=404, detail="تصویر یافت نشد")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="تصویر یافت نشد")
+    mime = "image/png" if target.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(target, media_type=mime)
 
 
 @router.get("/public/psych-tests/{slug}/paper")
@@ -472,13 +504,23 @@ def public_paper(slug: str, db: Session = Depends(get_db)) -> dict:
         select(PsychQuestion).where(PsychQuestion.test_id == t.id).order_by(PsychQuestion.sort_order)
     ).all()
     return {
-        "test": {"id": str(t.id), "slug": t.slug, "title": t.title, "description": t.description},
+        "test": {
+            "id": str(t.id),
+            "slug": t.slug,
+            "title": t.title,
+            "description": t.description,
+            "code": t.code,
+            "age_range": t.age_range,
+            "estimated_minutes": t.estimated_minutes,
+            "accent_color": t.accent_color,
+        },
         "questions": [
             {
                 "id": str(q.id),
                 "prompt": q.prompt,
                 "subscale": q.subscale,
                 "options": [o.get("label") for o in (q.options or [])],
+                "image_url": f"/api/v1/public/psych-images/{q.image_path}" if q.image_path else None,
                 "sort_order": q.sort_order,
             }
             for q in questions
@@ -551,6 +593,7 @@ def take_test(
         interpretation_guidance=interp.guidance,
         answers=answers,
         subscale_scores=subscale_scores or None,
+        demographics=payload.demographics or None,
     )
     db.add(a)
     db.commit()

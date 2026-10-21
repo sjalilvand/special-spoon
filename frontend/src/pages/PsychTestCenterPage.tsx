@@ -131,8 +131,9 @@ export default function PsychTestCenterPage() {
           )}
 
           <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={2}>
-            {filtered.map((t, idx) => (
-              <TestCard key={t.id} test={t} color={topicColor(t.topic_name)} code={String(idx + 1).padStart(2, "0")}
+            {filtered.map((t) => (
+              <TestCard key={t.id} test={t} color={t.accent_color || topicColor(t.topic_name)}
+                code={t.code || ""}
                 onRun={() => navigate(`/psych-tests/${t.slug}/run`)} />
             ))}
           </Box>
@@ -153,16 +154,19 @@ export default function PsychTestCenterPage() {
 }
 
 function TestCard({ test, color, code, onRun }: {
-  test: { title: string; description: string | null; topic_name: string | null; question_count: number };
+  test: {
+    title: string; description: string | null; topic_name: string | null; question_count: number;
+    age_range?: string | null; estimated_minutes?: number | null;
+  };
   color: string; code: string; onRun: () => void;
 }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 3, height: "100%", display: "flex", flexDirection: "column" }}>
       <CardActionArea onClick={onRun} sx={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-        {/* زبانه رنگی سمت راست مانند کارت‌های آزمون */}
+        {/* زبانه رنگی سمت راست مانند کارت‌های آزمون مرجع (کد ابزار عمودی) */}
         <Box sx={{ width: 42, bgcolor: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "0 14px 14px 0" }}>
           <Typography sx={{ transform: "rotate(90deg)", whiteSpace: "nowrap", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-            {code}
+            {code || test.title.slice(0, 12)}
           </Typography>
         </Box>
         <Stack sx={{ p: 2, flexGrow: 1 }} spacing={0.75}>
@@ -185,8 +189,15 @@ function TestCard({ test, color, code, onRun }: {
             </Stack>
             <Stack direction="row" spacing={0.4} alignItems="center">
               <TimerRoundedIcon sx={{ fontSize: 15, color: "text.secondary" }} />
-              <Typography variant="caption" color="text.secondary">~{estMinutes(test.question_count).toLocaleString("fa-IR")} دقیقه</Typography>
+              <Typography variant="caption" color="text.secondary">
+                ~{(test.estimated_minutes ?? estMinutes(test.question_count)).toLocaleString("fa-IR")} دقیقه
+              </Typography>
             </Stack>
+            {test.age_range && (
+              <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+                {test.age_range}
+              </Typography>
+            )}
           </Stack>
         </Stack>
       </CardActionArea>

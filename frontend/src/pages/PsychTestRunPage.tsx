@@ -1,15 +1,17 @@
 // فاز ۴۷ - اجرای آزمون روان‌شناسی: سؤال‌به‌سؤال با نوار پیشرفت، پالت سؤال‌ها،
 // صفحه نتیجه با گیج نمره و نمودار ریزنمره زیرمقیاس‌ها
+// فاز ۵۰ - مرحله «مشخصات اولیه» مطابق فرم مرجع (جنسیت/سن/تحصیلات/تأهل)
+// و نمایش عکس پیوست سؤال‌های تصویری (ریون)
 import {
-  Alert, Box, Button, Chip, CircularProgress, LinearProgress, Paper, Stack,
-  Typography,
+  Alert, Box, Button, Chip, CircularProgress, FormControl, LinearProgress, MenuItem,
+  Paper, Stack, TextField, Typography,
 } from "@mui/material";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { errDetail } from "../api/client";
 import {
-  AttemptResult, fetchPublicPaper, submitPsychAttempt,
+  AttemptResult, TestDemographics, fetchPublicPaper, submitPsychAttempt,
 } from "../api/psych";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -53,6 +55,8 @@ export default function PsychTestRunPage() {
   const paper = useQuery({ queryKey: ["psych-paper", slug], queryFn: () => fetchPublicPaper(slug) });
 
   const [started, setStarted] = useState(false);
+  const [demographicsStep, setDemographicsStep] = useState(false);
+  const [demographics, setDemographics] = useState<TestDemographics>({});
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [current, setCurrent] = useState(0);
   const [showPalette, setShowPalette] = useState(false);
@@ -67,7 +71,7 @@ export default function PsychTestRunPage() {
   );
 
   const submitMut = useMutation({
-    mutationFn: () => submitPsychAttempt(slug, questions.map((_, i) => answers[i])),
+    mutationFn: () => submitPsychAttempt(slug, questions.map((_, i) => answers[i]), demographics),
     onSuccess: (res) => setResult(res),
   });
 
@@ -149,6 +153,65 @@ export default function PsychTestRunPage() {
     );
   }
 
+  // -------------------------------------------------- مرحله مشخصات اولیه (فاز ۵۰)
+  if (!started && demographicsStep) {
+    const set = (k: keyof TestDemographics) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setDemographics((p) => ({ ...p, [k]: e.target.value }));
+    return (
+      <Stack sx={{ maxWidth: 620, mx: "auto", py: 4 }}>
+        <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 4 }}>
+          <Typography variant="h5" fontWeight={800} textAlign="center" mb={0.5}>
+            مشخصات اولیه
+          </Typography>
+          <Typography variant="body2" color="text.secondary" textAlign="center" mb={3}>
+            {paper.data?.test.title} — این اطلاعات صرفاً برای پرونده آزمون ثبت می‌شود
+          </Typography>
+          <Stack spacing={2.5}>
+            <FormControl fullWidth>
+              <Typography variant="caption" fontWeight={700} mb={0.5}>جنسیت</Typography>
+              <TextField select value={demographics.gender ?? ""} onChange={set("gender")}
+                placeholder="انتخاب کنید">
+                <MenuItem value="زن">زن</MenuItem>
+                <MenuItem value="مرد">مرد</MenuItem>
+              </TextField>
+            </FormControl>
+            <TextField label="سن" type="number" inputProps={{ min: 3, max: 99 }}
+              value={demographics.age ?? ""} onChange={set("age")} />
+            <FormControl fullWidth>
+              <Typography variant="caption" fontWeight={700} mb={0.5}>تحصیلات</Typography>
+              <TextField select value={demographics.education ?? ""} onChange={set("education")}>
+                {"زیر دیپلم|دیپلم|کاردانی|کارشناسی|کارشناسی ارشد|دکتری".split("|").map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </TextField>
+            </FormControl>
+            <FormControl fullWidth>
+              <Typography variant="caption" fontWeight={700} mb={0.5}>وضعیت تاهل</Typography>
+              <TextField select value={demographics.marital ?? ""} onChange={set("marital")}>
+                {"مجرد|متاهل|مطلقه|همسر فوت شده".split("|").map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </TextField>
+            </FormControl>
+            <Button variant="contained" size="large"
+              sx={{
+                mt: 1.5, py: 1.6, borderRadius: 3, fontSize: 17, fontWeight: 800,
+                background: "linear-gradient(135deg, #14b8a6, #0d9488)",
+                boxShadow: "0 8px 20px rgba(20,184,166,.35)",
+                "&:hover": { background: "linear-gradient(135deg, #0d9488, #0f766e)" },
+              }}
+              onClick={() => setStarted(true)}>
+              شروع
+            </Button>
+            <Button size="small" onClick={() => setDemographicsStep(false)} sx={{ alignSelf: "center" }}>
+              بازگشت
+            </Button>
+          </Stack>
+        </Paper>
+      </Stack>
+    );
+  }
+
   // -------------------------------------------------- صفحه معرفی
   if (!started) {
     return (
@@ -169,7 +232,15 @@ export default function PsychTestRunPage() {
                 {paper.data.test.description}
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={2}>
+                {paper.data.test.code && (
+                  <Chip variant="filled" label={paper.data.test.code}
+                    sx={{ bgcolor: paper.data.test.accent_color || "#8a3342", color: "#fff", fontWeight: 700 }} />
+                )}
                 <Chip variant="outlined" label={`${questions.length.toLocaleString("fa-IR")} سؤال`} />
+                {paper.data.test.estimated_minutes != null && (
+                  <Chip variant="outlined" label={`~${paper.data.test.estimated_minutes.toLocaleString("fa-IR")} دقیقه`} />
+                )}
+                {paper.data.test.age_range && <Chip variant="outlined" label={paper.data.test.age_range} />}
                 <Chip variant="outlined" label="نتیجه فوری پس از پاسخ به همه سؤال‌ها" />
                 <Chip variant="outlined" label="پاسخ‌ها محرمانه است" />
               </Stack>
@@ -179,7 +250,7 @@ export default function PsychTestRunPage() {
               ثبت نهایی، بین سؤال‌ها جابه‌جا شوید و پاسخ‌ها را تغییر دهید.
             </Alert>
             <Button variant="contained" size="large" sx={{ alignSelf: "center", px: 6, py: 1.5 }}
-              onClick={() => setStarted(true)}>
+              onClick={() => setDemographicsStep(true)}>
               شروع آزمون
             </Button>
           </Stack>
@@ -240,6 +311,18 @@ export default function PsychTestRunPage() {
             <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.9, mb: 2.5 }}>
               {q.prompt}
             </Typography>
+            {q.image_url && (
+              <Box
+                component="img"
+                src={q.image_url}
+                alt={q.prompt}
+                sx={{
+                  display: "block", mx: "auto", mb: 2.5, maxWidth: "100%",
+                  maxHeight: 520, borderRadius: 2, border: "1px solid #ece2e4",
+                  bgcolor: "#fff",
+                }}
+              />
+            )}
             <Stack spacing={1.25}>
               {q.options.map((label, oi) => {
                 const selected = answers[current] === oi;
