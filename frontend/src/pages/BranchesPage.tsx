@@ -38,6 +38,9 @@ export default function BranchesPage() {
   const navigate = useNavigate();
   const [selectedClinic, setSelectedClinic] = useState<string | null>(null);
   const [newClinicOpen, setNewClinicOpen] = useState(false);
+  // فاز ۵۱: فرم شعبه در سطح صفحه — دکمهٔ «+ شعبه جدید» همیشه دیده می‌شود؛
+  // اگر مرکزی انتخاب نشده باشد، راهنمای شفاف نشان داده می‌شود (رفع «امکان ثبت شعب نیست»)
+  const [formTarget, setFormTarget] = useState<{ branch: Branch | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
@@ -55,11 +58,21 @@ export default function BranchesPage() {
       qc.invalidateQueries({ queryKey: ["clinics"] });
       setNewClinicOpen(false);
       setSelectedClinic(c.id);
-      setOkMsg(`مرکز «${c.name}» ایجاد شد`);
+      setOkMsg(`مرکز «${c.name}» ایجاد شد و انتخاب شد — اکنون با دکمهٔ «+ شعبه جدید» شعب این مرکز را ثبت کنید`);
       setError(null);
     },
     onError: (e) => setError(errDetail(e)),
   });
+
+  const openBranchForm = () => {
+    if (!selectedClinic) {
+      setError("برای ثبت شعبه، ابتدا یک مرکز را از فهرست «مرکز» انتخاب کنید — یا با دکمهٔ «+ مرکز جدید» مرکز بسازید؛ پس از انتخاب مرکز، ثبت شعبه فعال می‌شود.");
+      setOkMsg(null);
+      return;
+    }
+    setError(null);
+    setFormTarget({ branch: null });
+  };
 
   const publishMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "draft" | "published" }) =>
@@ -100,11 +113,16 @@ export default function BranchesPage() {
 
       {clinic && (
         <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle1" fontWeight={700}>{clinic.name}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            slug: <code>{clinic.slug}</code> · تلفن: {clinic.phone ?? "—"} · وب‌سایت: {clinic.website ?? "—"} ·
-            {" "}وضعیت: {clinic.is_active ? "فعال" : "غیرفعال"} · تعداد شعب: {fa(clinic.branch_count)}
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+            <Box flexGrow={1} minWidth={220}>
+              <Typography variant="subtitle1" fontWeight={700}>{clinic.name}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                slug: <code>{clinic.slug}</code> · تلفن: {clinic.phone ?? "—"} · وب‌سایت: {clinic.website ?? "—"} ·
+                {" "}وضعیت: {clinic.is_active ? "فعال" : "غیرفعال"} · تعداد شعب: {fa(clinic.branch_count)}
+              </Typography>
+            </Box>
+            <Button variant="contained" onClick={openBranchForm}>+ ثبت شعبه برای این مرکز</Button>
+          </Stack>
         </Paper>
       )}
 
@@ -112,6 +130,9 @@ export default function BranchesPage() {
         branches={branches.data ?? []}
         loading={branches.isLoading}
         services={(services.data ?? []).map((s) => ({ id: s.id, title: s.title }))}
+        clinicId={selectedClinic}
+        onAddBranch={openBranchForm}
+        onEditBranch={(b) => { setError(null); setFormTarget({ branch: b }); }}
         onPublish={(b, status) => publishMut.mutate({ id: b.id, status })}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["branches", selectedClinic] });
@@ -119,8 +140,22 @@ export default function BranchesPage() {
           setError(null);
         }}
         onError={(m) => setError(m)}
-        clinicId={selectedClinic}
       />
+
+      {formTarget && selectedClinic && (
+        <BranchFormDialog
+          clinicId={selectedClinic}
+          branch={formTarget.branch}
+          services={(services.data ?? []).map((s) => ({ id: s.id, title: s.title }))}
+          onClose={() => setFormTarget(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["branches", selectedClinic] });
+            setOkMsg("شعبه ذخیره شد");
+            setError(null);
+          }}
+          onError={(m) => setError(m)}
+        />
+      )}
 
       <NewClinicDialog
         open={newClinicOpen}
@@ -139,19 +174,19 @@ function BranchTable(props: {
   loading: boolean;
   services: { id: string; title: string }[];
   clinicId: string | null;
+  onAddBranch: () => void;
+  onEditBranch: (b: Branch) => void;
   onPublish: (b: Branch, status: "draft" | "published") => void;
   onSaved: () => void;
   onError: (msg: string) => void;
 }) {
   const [offeringsFor, setOfferingsFor] = useState<Branch | null>(null);
-  const [formTarget, setFormTarget] = useState<{ branch: Branch | null } | null>(null);
   return (
     <>
-      {props.clinicId && (
-        <Box display="flex" justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => setFormTarget({ branch: null })}>+ شعبه جدید</Button>
-        </Box>
-      )}
+      {/* فاز ۵۱: دکمهٔ ثبت شعبه همیشه دیده می‌شود؛ بدون انتخاب مرکز، راهنما نشان داده می‌شود */}
+      <Box display="flex" justifyContent="flex-end">
+        <Button variant="contained" onClick={props.onAddBranch}>+ شعبه جدید</Button>
+      </Box>
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -172,8 +207,19 @@ function BranchTable(props: {
             )}
             {!props.loading && props.branches.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8}>
-                  {props.clinicId ? "شعبه‌ای ثبت نشده است" : "برای مشاهده شعب، یک مرکز انتخاب کنید"}
+                <TableCell colSpan={8} align="center">
+                  <Stack spacing={0.5} alignItems="center" sx={{ py: 2 }}>
+                    <Typography variant="body2">
+                      {props.clinicId
+                        ? "برای این مرکز هنوز شعبه‌ای ثبت نشده است — با دکمهٔ «+ شعبه جدید» اولین شعبه را اضافه کنید"
+                        : "برای مشاهده و ثبت شعب، ابتدا یک مرکز را از فهرست «مرکز» در بالای صفحه انتخاب کنید"}
+                    </Typography>
+                    {!props.clinicId && (
+                      <Typography variant="caption" color="text.secondary">
+                        اگر مرکزی ندارید، با دکمهٔ «+ مرکز جدید» بسازید؛ پس از ایجاد، مرکز به‌طور خودکار انتخاب می‌شود.
+                      </Typography>
+                    )}
+                  </Stack>
                 </TableCell>
               </TableRow>
             )}
@@ -199,7 +245,7 @@ function BranchTable(props: {
                 <TableCell>{formatJalaliDateTime(b.created_at)}</TableCell>
                 <TableCell align="left">
                   <Stack direction="row" spacing={0.5}>
-                    <Button size="small" onClick={() => setFormTarget({ branch: b })}>ویرایش</Button>
+                    <Button size="small" onClick={() => props.onEditBranch(b)}>ویرایش</Button>
                     <Button size="small" onClick={() => setOfferingsFor(b)}>خدمات</Button>
                     <Button
                       size="small"
@@ -222,17 +268,6 @@ function BranchTable(props: {
         onSaved={props.onSaved}
         onError={props.onError}
       />
-      {/* فاز ۴۹: فرم واحد ایجاد/ویرایش با نقشه و انتخاب استان */}
-      {formTarget && props.clinicId && (
-        <BranchFormDialog
-          clinicId={props.clinicId}
-          branch={formTarget.branch}
-          services={props.services}
-          onClose={() => setFormTarget(null)}
-          onSaved={props.onSaved}
-          onError={props.onError}
-        />
-      )}
     </>
   );
 }

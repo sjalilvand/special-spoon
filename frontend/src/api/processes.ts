@@ -56,8 +56,13 @@ export interface ProcessInstanceInfo {
 }
 
 export async function fetchProcesses(): Promise<ProcessDefinitionInfo[]> {
-  const r = await apiClient.get<{ items: ProcessDefinitionInfo[] }>("/processes");
-  return r.data.items;
+  const r = await apiClient.get("/processes");
+  // فاز ۵۱: دفاعی — هم آرایهٔ خام و هم {items} پشتیبانی می‌شود
+  const d = r.data as unknown;
+  if (Array.isArray(d)) return d as ProcessDefinitionInfo[];
+  return Array.isArray((d as { items?: ProcessDefinitionInfo[] } | null)?.items)
+    ? (d as { items: ProcessDefinitionInfo[] }).items
+    : [];
 }
 
 export async function createProcess(payload: {
@@ -100,7 +105,16 @@ export async function fetchProcessInstances(params: {
   page_size?: number;
 }): Promise<{ items: ProcessInstanceInfo[]; total: number }> {
   const r = await apiClient.get("/process-instances", { params });
-  return { items: r.data, total: Number(paginationOf(r).total ?? 0) };
+  // فاز ۵۱: دفاع دوطرفه — بک‌اند شکل قراردادی {items,total,page,page_size} دارد
+  // (data = آرایه)؛ ولی اگر شیء {items} برگردد هم آرایه استخراج می‌شود تا
+  // «items.find is not a function» و صفحهٔ سفید هرگز رخ ندهد.
+  const d = r.data as unknown;
+  const items: ProcessInstanceInfo[] = Array.isArray(d)
+    ? d
+    : Array.isArray((d as { items?: ProcessInstanceInfo[] } | null)?.items)
+      ? (d as { items: ProcessInstanceInfo[] }).items
+      : [];
+  return { items, total: Number(paginationOf(r).total ?? items.length) };
 }
 
 export async function fetchProcessInstance(id: string): Promise<ProcessInstanceInfo> {

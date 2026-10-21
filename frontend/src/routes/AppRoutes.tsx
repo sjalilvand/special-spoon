@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
 import Layout from "../components/Layout";
+import GlobalErrorBoundary from "../components/GlobalErrorBoundary";
 import { useAuth } from "../auth/AuthContext";
 import AccountingPage from "../pages/AccountingPage";
 import ActivatePage from "../pages/ActivatePage";
@@ -58,6 +59,8 @@ function RoleRedirect() {
 
 export default function AppRoutes() {
   return (
+    /* فاز ۵۱: مرز خطای سراسری — کرش رندر هر مسیر به‌جای صفحهٔ سفید، پیام فارسی دارد */
+    <GlobalErrorBoundary>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivatePage />} />
@@ -224,5 +227,6 @@ export default function AppRoutes() {
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </GlobalErrorBoundary>
   );
 }

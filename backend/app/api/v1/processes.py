@@ -410,9 +410,15 @@ def list_instances(
         q.order_by(ProcessInstance.started_at.desc())
         .offset((page - 1) * page_size).limit(page_size)
     ).all()
+    # فاز ۵۱: شکل قراردادی فهرست صفحه‌بندی‌شده v2 — {items, total, page, page_size}
+    # (پاکت ADR-03 در این حالت items را به data و بقیه را به meta.pagination
+    #  می‌برد؛ خروجی قبلی {"items", "meta"} نشانهٔ صفحه‌بندی سطح‌بالا نداشت،
+    #  پاکت آن را نمی‌شکست و فرانت‌اند به‌جای آرایه یک شیء می‌گرفت — صفحهٔ سفید)
     return {
         "items": [_instance_out(db, i) for i in rows],
-        "meta": {"pagination": {"page": page, "page_size": page_size, "total": total}},
+        "total": total,
+        "page": page,
+        "page_size": page_size,
     }
 
 
