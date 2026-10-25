@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۰ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -673,6 +673,8 @@ function Get-AppRepo {
     $ErrorActionPreference = 'Continue'
     try {
         if (Test-Path "$AppDir\.git") {
+            # قفل کهنهٔ git از اجرای نیمه‌کارهٔ قبلی ممکن است checkout/reset را بترکاند
+            Remove-Item "$AppDir\.git\index.lock" -Force -ErrorAction SilentlyContinue
             & $gitExe -C $AppDir fetch origin --tags
             if ($LASTEXITCODE -ne 0) { Write-Warn2 'fetch ناموفق (شبکه؟) - با نسخهٔ فعلی مخزن ادامه می‌دهیم' }
             & $gitExe -C $AppDir checkout $RepoBranch
@@ -761,6 +763,7 @@ Get-ChildItem 'C:\rosepsy\backups\rosepsy-*.dump' | Where-Object { `$_.LastWrite
 "@
     [System.IO.File]::WriteAllText("$BaseDir\scripts\pg-backup.ps1", $bk, (New-Object System.Text.UTF8Encoding($false)))
     schtasks /Create /TN 'Rosepsy Backup' /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\rosepsy\scripts\pg-backup.ps1" /SC DAILY /ST 02:30 /RU SYSTEM /F | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw ("ثبت schtasks ناموفق بود (کد {0})" -f $LASTEXITCODE) }
     Write-Ok 'وظیفهٔ زمان‌بندی‌شدهٔ «Rosepsy Backup» ثبت شد'
 }
 
@@ -809,7 +812,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.1 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.2 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
