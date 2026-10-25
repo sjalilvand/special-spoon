@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۴ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -326,6 +326,12 @@ function Install-PostgreSQL([string]$superPass) {
         Write-Ok 'PostgreSQL با نصب‌کنندهٔ EDB نصب شد'
     } catch {
         Write-Warn2 ("نصب‌کنندهٔ EDB ناموفق: {0}" -f $_.Exception.Message)
+        # لاگ نصب‌کنندهٔ EDB (BitRock) برای عیب‌یابی
+        $edblog = Join-Path $env:TEMP 'install-postgresql.log'
+        if (Test-Path $edblog) {
+            Write-Warn2 'آخرین خطوط لاگ نصب‌کنندهٔ EDB:'
+            Get-Content $edblog -Tail 12 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
+        }
         Write-Host '  مسیر جایگزین: باینری Zip رسمی EDB + initdb دستی...'
         $zip = Invoke-Download $VER.pgZip "$DlDir\pg-bin.zip" 600
         Expand-Pkg $zip "$BaseDir\runtime\pgz"
@@ -466,7 +472,7 @@ function Install-ClamAV {
         }
         # به‌روزرسانی امضاها (بار اول ممکن است چند دقیقه طول بکشد)
         Write-Host '  به‌روزرسانی پایگاه امضاها (freshclam) - صبور باشید...'
-        $fp = Start-Process "$clamDir\freshclam.exe" -ArgumentList '--quiet' -Wait -PassThru -NoNewWindow
+        $fp = Start-Process "$clamDir\freshclam.exe" -ArgumentList '--show-progress' -Wait -PassThru -NoNewWindow
         if ($fp.ExitCode -ne 0) { Write-Warn2 'freshclam ناموفق بود (شبکه؟) - clamd ممکن است تا امضاکنندهٔ بعدی بالا نیاید' }
         else { Write-Ok 'امضاها به‌روز شدند' }
         New-WinSvc -Name 'rosepsy-clamd' -DisplayName 'Rosepsy ClamAV Daemon' `
@@ -504,7 +510,7 @@ function Install-NodeAndBuildFrontend {
     if ($NpmRegistry) {
         $regs = @($NpmRegistry)
     } else {
-        foreach ($c in @('https://archive.ito.gov.ir/npm/','https://archive.ito.gov.ir/mirror2/npm/','https://registry.npmjs.org/')) {
+        foreach ($c in @('https://archive.ito.gov.ir/mirror2/npm/','https://archive.ito.gov.ir/npm/','https://registry.npmjs.org/')) {
             Write-Host ("  بررسی رجیستری npm: {0}" -f $c)
             if (Test-HttpOk $c) { $regs += $c } else { Write-Warn2 "بی‌پاسخ: $c" }
         }
@@ -744,7 +750,7 @@ function Install-PythonAndVenv {
     if ($PipIndexUrl) {
         $indexes = @($PipIndexUrl)
     } else {
-        foreach ($c in @('https://archive.ito.gov.ir/python/simple/','https://archive.ito.gov.ir/mirror2/python/simple/','https://pypi.org/simple/')) {
+        foreach ($c in @('https://archive.ito.gov.ir/mirror2/python/simple/','https://archive.ito.gov.ir/python/simple/','https://pypi.org/simple/')) {
             Write-Host ("  بررسی مخزن pip: {0}" -f $c)
             if (Test-HttpOk ($c + 'pip/')) { $indexes += $c } else { Write-Warn2 "بی‌پاسخ: $c" }
         }
@@ -857,7 +863,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.3 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.4 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
