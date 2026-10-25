@@ -666,15 +666,34 @@ function Install-GitIfNeeded {
 function Get-AppRepo {
     Write-Step 'گام ۲: کد پروژه (clone/pull)'
     $gitExe = (Get-Command git).Source
-    if (Test-Path "$AppDir\.git") {
-        & $gitExe -C $AppDir fetch origin --tags 2>&1 | Out-Null
-        & $gitExe -C $AppDir checkout $RepoBranch 2>&1 | Out-Null
-        & $gitExe -C $AppDir reset --hard "origin/$RepoBranch" 2>&1 | Out-Null
-        Write-Ok ("مخزن به origin/{0} همگام شد (فایل‌های untracked مانند .env دست‌نخورده‌اند)" -f $RepoBranch)
-    } else {
-        & $gitExe clone --branch $RepoBranch $RepoUrl $AppDir 2>&1 | ForEach-Object { Write-Host "  $_" }
-        if ($LASTEXITCODE -ne 0) { throw 'clone ناموفق بود' }
-        Write-Ok "مخزن در $AppDir کلون شد"
+    # نکته: در PS 5.1 با ErrorActionPreference=Stop، هر خروجی stderr فرایند بومی
+    # (از جمله پیام‌های عادی پیشرفت git) با 2>&1 به خطای مرگبار تبدیل می‌شود؛
+    # پس ریدایرکت 2>&1 روی git ممنوع و کد خروجی دستی بررسی می‌شود.
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if (Test-Path "$AppDir\.git") {
+            & $gitExe -C $AppDir fetch origin --tags
+            if ($LASTEXITCODE -ne 0) { Write-Warn2 'fetch ناموفق (شبکه؟) - با نسخهٔ فعلی مخزن ادامه می‌دهیم' }
+            & $gitExe -C $AppDir checkout $RepoBranch
+            & $gitExe -C $AppDir reset --hard "origin/$RepoBranch"
+            if ($LASTEXITCODE -ne 0) { throw ("همگام‌سازی مخزن ناموفق بود (کد {0})" -f $LASTEXITCODE) }
+            Write-Ok ("مخزن به origin/{0} همگام شد (فایل‌های untracked مانند .env دست‌نخورده‌اند)" -f $RepoBranch)
+        } else {
+            # پاک‌سازی کلون ناقصِ اجرای قبلی (بدون .git)
+            if (Test-Path $AppDir) {
+                $items = @(Get-ChildItem $AppDir -Force -ErrorAction SilentlyContinue)
+                if ($items.Count -gt 0) {
+                    Write-Warn2 "پوشهٔ ناقص کلون قبلی حذف می‌شود: $AppDir"
+                    Remove-Item $AppDir -Recurse -Force
+                }
+            }
+            & $gitExe clone --branch $RepoBranch $RepoUrl $AppDir
+            if ($LASTEXITCODE -ne 0) { throw ("clone ناموفق بود (کد {0}) - اتصال به GitHub را بررسی کنید" -f $LASTEXITCODE) }
+            Write-Ok "مخزن در $AppDir کلون شد"
+        }
+    } finally {
+        $ErrorActionPreference = $oldEap
     }
 }
 function Install-PythonAndVenv {
@@ -790,7 +809,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.0 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.1 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
