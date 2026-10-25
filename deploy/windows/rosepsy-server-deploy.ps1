@@ -344,28 +344,36 @@ function Install-Git {
 function Install-DockerDesktop {
     $dockerExe = "$env:ProgramFiles\Docker\Docker\resources\bin\docker.exe"
     if (Test-Path $dockerExe) { Write-Ok 'Docker Desktop نصب است'; return }
-    Write-Step 'دانلود Docker Desktop (حدود ۵۰۰ تا ۷۰۰ مگابایت — بسته به اینترنت ممکن است طولانی شود)'
-    $pre = Get-ChildItem -Path (Join-Path $InstallDir 'installers') -Filter 'DockerDesktop*.exe' -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $instDir = Join-Path $InstallDir 'installers'
+    Ensure-Directory $instDir
+    $pre = Get-ChildItem -Path $instDir -Filter 'DockerDesktop*.exe' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -gt 1048576 } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($pre) {
         Write-Ok "نصاب آمادهٔ محلی: $($pre.FullName)"
         $installer = $pre.FullName
     } else {
-        $installer = Join-Path $env:TEMP 'DockerDesktopInstaller.exe'
+        Write-Step 'دانلود Docker Desktop (حدود ۵۰۰ تا ۷۰۰ مگابایت — بسته به اینترنت ممکن است طولانی شود)'
+        # مستقیم در installers ذخیره می‌شود تا اگر نصب شکست خورد، در اجرای بعدی دوباره دانلود نشود
+        $installer = Join-Path $instDir 'DockerDesktopInstaller.exe'
         Invoke-ResilientDownload -Url 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe' -OutFile $installer
+        if (-not (Test-Path $installer) -or (Get-Item $installer).Length -lt 1048576) { throw 'نصاب Docker Desktop سالم دانلود نشد' }
     }
     Write-Step 'نصب بی‌صدای Docker Desktop با بک‌اند WSL2 (چند دقیقه طول می‌کشد)'
     # --always-run-service: سرویس com.docker.service برای کارکرد درست روی Windows Server
     $p = Start-Process -FilePath $installer -ArgumentList 'install', '--quiet', '--accept-license', '--backend=wsl-2', '--always-run-service' -Wait -PassThru
-    if ($installer -like "$env:TEMP*") { Remove-Item $installer -ErrorAction SilentlyContinue }
     if ($p.ExitCode -eq 3010) {
         Write-Warn2 'نصب Docker Desktop به ری‌استارت نیاز دارد (کد 3010)'
         $script:NeedRestart = $true
         return
     }
     if ($p.ExitCode -ne 0) {
-        throw "نصب Docker Desktop ناموفق بود (کد خروج $($p.ExitCode)) — در صورت تکرار، نصب دستی را امتحان کنید"
+        if ($p.ExitCode -eq 3) {
+            Write-Warn2 "نصاب دانلودشده حفظ شد: $installer (در اجرای بعدی دوباره دانلود نمی‌شود)"
+            throw 'نصب Docker Desktop ناموفق بود (کد ۳) — این کد تقریباً همیشه یعنی WSL2/قابلیت‌های مجازی‌سازی هنوز با یک بار ری‌استارت کامل نشده‌اند. سرور را RESTART کنید و دوباره همان دستور بوت را اجرا کنید'
+        }
+        throw "نصب Docker Desktop ناموفق بود (کد خروج $($p.ExitCode)) — در صورت تکرار، نصب دستی را امتحان کنید (نصاب در $installer حفظ شده)"
     }
+    Remove-Item $installer -ErrorAction SilentlyContinue
     Write-Ok 'Docker Desktop نصب شد'
 }
 
@@ -439,15 +447,24 @@ function Invoke-Setup {
     # ۳) Git
     Install-Git
 
+    # ۳-ب) چک ری‌استارت پیش از Docker: وقتی فعال‌سازی WSL2 هنوز با ری‌استارت کامل نشده،
+    # نصب Docker Desktop با کد ۳ شکست می‌خورد — پس قبل از دانلود/نصب ۶۰۰ مگابایتی همان‌جا متوقف شو
+    $rebootPending = $script:NeedRestart -or
+        (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+        (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
+    if ($rebootPending) {
+        try {
+            $st = (& wsl.exe --status 2>&1 | Out-String).Trim()
+            if ($st) { Write-Host "    wsl --status: $st" -ForegroundColor DarkGray }
+        } catch { }
+        Write-Warn2 'یک ری‌استارت روی ویندوز در صف است (فعال‌سازی WSL2/به‌روزرسانی‌ها هنوز کامل نشده)'
+        Write-Err2 'لطفاً سرور را RESTART کنید، سپس دوباره همان دستور بوت را اجرا کنید تا نصب Docker Desktop و استقرار ادامه یابد'
+        Write-Host '    (Git نصب شد و پس از ری‌استارت تکرار نمی‌شود؛ مراحل انجام‌شده به‌صورت خودکار رد می‌شوند)' -ForegroundColor DarkGray
+        return
+    }
+
     # ۴) Docker Desktop
     Install-DockerDesktop
-
-    # ۴-ب) اگر ری‌استارتی روی ویندوز در صف است (مثلاً فعال‌سازی WSL2 هنوز با ری‌استارت کامل نشده)،
-    # موتور Docker تا ری‌استارت بعدی بالا نمی‌آید — پس همان‌جا متوقف شو تا کاربر یک‌بار restart کند
-    if (-not $script:NeedRestart -and (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')) {
-        Write-Warn2 'یک ری‌استارت روی ویندوز در صف است (فعال‌سازی WSL2/به‌روزرسانی‌ها باید با یک بار ری‌استارت کامل شود)'
-        $script:NeedRestart = $true
-    }
 
     if ($script:NeedRestart) {
         Write-Host ''
