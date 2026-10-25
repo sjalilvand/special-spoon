@@ -155,8 +155,12 @@ function Invoke-ResilientDownload {
     Ensure-Directory (Split-Path $OutFile -Parent)
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($curl) {
+        # نکتهٔ مهم: $curl یک آبجکت ApplicationInfo است؛ $curl.exe یعنی پراپرتی «exe» که $null برمی‌گرداند
+        # و باعث خطای «The expression after '&' ... not valid» می‌شود. باید از مسیر واقعی فایل استفاده کنیم.
+        $curlExe = $curl.Source
+        if (-not $curlExe) { $curlExe = 'curl.exe' }
         for ($i = 1; $i -le $Attempts; $i++) {
-            & $curl.exe -L --fail --progress-bar --connect-timeout 30 --retry 8 --retry-all-errors --retry-delay 3 -C - --output "$OutFile" "$Url"
+            & $curlExe -L --fail --progress-bar --connect-timeout 30 --retry 8 --retry-all-errors --retry-delay 3 -C - --output "$OutFile" "$Url"
             if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0)) { return }
             Write-Warn2 "curl تلاش $i/$Attempts ناتمام ماند (کد $LASTEXITCODE) — ادامهٔ دانلود از محل قبلی..."
             Start-Sleep -Seconds 3
@@ -173,6 +177,7 @@ function Invoke-ResilientDownload {
             Start-Sleep -Seconds 5
         }
     }
+    throw "دانلود پس از چند تلاش ناموفق ماند: $Url"
 }
 
 # ---------------------- گام setup: پیش‌نیازها ----------------------
@@ -241,11 +246,21 @@ function Enable-Wsl2 {
     try { & wsl.exe --status *> $null; if ($LASTEXITCODE -eq 0) { $wslOk = $true } } catch { }
     if (-not $wslOk) {
         Write-Step 'نصب هستهٔ WSL2 (wsl_update_x64.msi)'
-        $msi = Join-Path $env:TEMP 'wsl_update_x64.msi'
-        Invoke-ResilientDownload -Url 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi
-        Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn" -Wait
-        try { & wsl.exe --set-default-version 2 *> $null } catch { }
-        Write-Ok 'هستهٔ WSL2 نصب شد'
+        try {
+            $msi = Join-Path $env:TEMP 'wsl_update_x64.msi'
+            Invoke-ResilientDownload -Url 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi
+            if (-not (Test-Path $msi) -or (Get-Item $msi).Length -lt 1048576) { throw 'فایل MSI هستهٔ WSL2 سالم دانلود نشد' }
+            $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn" -Wait -PassThru
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+                Write-Warn2 "نصب هستهٔ WSL2 با کد $($p.ExitCode) ناتمام ماند — معمولاً پس از یک بار ری‌استارت حل می‌شود"
+            }
+            try { & wsl.exe --set-default-version 2 *> $null } catch { }
+            Write-Ok 'هستهٔ WSL2 نصب شد'
+        } catch {
+            # این گام نباید ادامهٔ setup را متوقف کند؛ روی Server 2025 اغلب پس از ری‌استارت، WSL2 بدون این MSI هم کار می‌کند
+            Write-Warn2 "نصب هستهٔ WSL2 انجام نشد: $($_.Exception.Message)"
+            Write-Warn2 'ادامهٔ setup از گام بعدی (Git) — در صورت مشکل WSL2، پس از ری‌استارت همین دستور را دوباره اجرا کنید'
+        }
     } else {
         Write-Ok 'WSL در دسترس است'
     }
@@ -271,7 +286,7 @@ function Install-Git {
         $url = $null
         # ۱) مسیر اصلی: API گیت‌هاب — برداشتن browser_download_url از ریلیز آخر
         try {
-            $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/git-for-windows/git/releases/latest' -TimeoutSec 60
+            $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/git-for-windows/git/releases/latest' -Headers @{ 'User-Agent' = 'rosepsy-deploy' } -TimeoutSec 60
             $asset = $rel.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1
             if ($asset) { $url = $asset.browser_download_url }
         } catch {
@@ -296,12 +311,24 @@ function Install-Git {
                 Write-Warn2 "یافتن نصاب از صفحهٔ ریلیزها ناموفق بود: $($_.Exception.Message)"
             }
         }
+        # ۳) آخرین جایگزین: نشانی ثابتِ نسخهٔ پایدار آزموده‌شده (اگر API و صفحهٔ ریلیز هر دو در دسترس نبودند)
+        if (-not $url) {
+            $url = 'https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.3/Git-2.56.0.3-64-bit.exe'
+            Write-Warn2 'استفاده از نشانی ثابت نسخهٔ پشتیبان Git 2.56.0.3'
+        }
         if (-not $url) {
             throw "نشانی نصاب Git پیدا نشد — فایل Git-*-64-bit.exe را از https://github.com/git-for-windows/git/releases/latest دستی دانلود و در پوشهٔ $InstallDir\installers بگذارید و دوباره اجرا کنید"
         }
         Write-Host "    نصاب: $((Split-Path $url -Leaf))" -ForegroundColor DarkGray
         $setup = Join-Path $env:TEMP 'Git-installer.exe'
-        Invoke-ResilientDownload -Url $url -OutFile $setup
+        try {
+            Invoke-ResilientDownload -Url $url -OutFile $setup
+        } catch {
+            throw "دانلود نصاب Git ناموفق بود: $($_.Exception.Message) — جایگزین: فایل Git-*-64-bit.exe را از https://github.com/git-for-windows/git/releases/latest دستی دانلود و در پوشهٔ $InstallDir\installers بگذارید و دوباره اجرا کنید"
+        }
+        if (-not (Test-Path $setup) -or (Get-Item $setup).Length -lt 1048576) {
+            throw "نصاب Git سالم دانلود نشد (حجم کمتر از انتظار) — فایل Git-*-64-bit.exe را دستی در پوشهٔ $InstallDir\installers بگذارید و دوباره اجرا کنید"
+        }
     }
 
     Write-Step 'نصب بی‌صدای Git'
