@@ -324,7 +324,9 @@ function Show-NestedVirtVerdict {
     if ($Events) {
         Write-Host '  رویدادهای بوت هایپروایزر:' -ForegroundColor White
         foreach ($e in $Events) { Write-Host ("    {0}" -f $e) -ForegroundColor DarkGray }
-        if ($Events | Where-Object { $_ -match 'did not launch|not enabled|disabled|VT-x|AMD-V' }) { $blocked = $true }
+        # فقط عبارت دقیقِ شکستِ راه‌اندازی هایپروایزر (ID 41) سند است؛ رویدادهای VBS/Kernel-Boot
+        # حتی بعد از فعال‌شدن Nested هم ممکن است ادامه یابند و نباید منجر به بلاک شوند
+        if ($Events | Where-Object { $_ -match 'hypervisor launch failed|did not launch because|VMX not present' }) { $blocked = $true }
     } else {
         Write-Host '  رویداد صریحی دربارهٔ بوت هایپروایزر پیدا نشد (تشخیص قطعی نیازمند آزمون اجرای واقعی VM است)' -ForegroundColor DarkGray
     }
@@ -728,10 +730,11 @@ function Invoke-Setup {
     }
 
     # ۳-ج) سد مجازی‌سازی: اگر رویدادهای بوت ثابت کند هایپروایزر ویندوز بالا نمی‌آید (Nested Virtualization
-    # خاموش در پنل هاست)، نصب Docker بی‌فایده است — راهنما چاپ و setup همین‌جا تمام می‌شود
+    # خاموش در پنل هاست)، نصب Docker بی‌فایده است — راهنما چاپ و setup همین‌جا تمام می‌شود.
+    # فقط عبارت دقیقِ ID 41 سند است؛ رویدادهای VBS حتی پس از فعال‌سازی Nested ممکن است ادامه یابند
     $hypEvents = Get-HypervisorLaunchEvidence
     $virtBlocked = $false
-    if ($hypEvents) { $virtBlocked = [bool]($hypEvents | Where-Object { $_ -match 'did not launch|not enabled|disabled|VT-x|AMD-V' }) }
+    if ($hypEvents) { $virtBlocked = [bool]($hypEvents | Where-Object { $_ -match 'hypervisor launch failed|did not launch because|VMX not present' }) }
     if ($virtBlocked) {
         Show-NestedVirtVerdict -Events $hypEvents
         Write-Err2 'تا وقتی ارائه‌دهندهٔ VPS مجازی‌سازی تودرتو (Nested Virtualization) را فعال نکند، Docker اجرا نمی‌شود — نصب Docker رد شد'
