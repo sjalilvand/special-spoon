@@ -71,7 +71,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'deploy', 'update', 'seed', 'seed-reset', 'status', 'logs', 'backup', 'help')]
+    [ValidateSet('setup', 'deploy', 'update', 'seed', 'seed-reset', 'status', 'logs', 'backup', 'doctor', 'help')]
     [string]$Mode = 'help',
 
     [string]$RepoUrl = 'https://github.com/sjalilvand/special-spoon.git',
@@ -251,15 +251,30 @@ function Enable-Wsl2 {
             Invoke-ResilientDownload -Url 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi
             if (-not (Test-Path $msi) -or (Get-Item $msi).Length -lt 1048576) { throw 'فایل MSI هستهٔ WSL2 سالم دانلود نشد' }
             $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn" -Wait -PassThru
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
-                Write-Warn2 "نصب هستهٔ WSL2 با کد $($p.ExitCode) ناتمام ماند — معمولاً پس از یک بار ری‌استارت حل می‌شود"
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                try { & wsl.exe --set-default-version 2 *> $null } catch { }
+                Write-Ok 'هستهٔ WSL2 نصب شد'
+            } else {
+                Write-Warn2 "نصب هستهٔ WSL2 با کد $($p.ExitCode) ناتمام ماند — روش جایگزین (بستهٔ مدرن WSL) امتحان می‌شود"
             }
-            try { & wsl.exe --set-default-version 2 *> $null } catch { }
-            Write-Ok 'هستهٔ WSL2 نصب شد'
         } catch {
-            # این گام نباید ادامهٔ setup را متوقف کند؛ روی Server 2025 اغلب پس از ری‌استارت، WSL2 بدون این MSI هم کار می‌کند
-            Write-Warn2 "نصب هستهٔ WSL2 انجام نشد: $($_.Exception.Message)"
-            Write-Warn2 'ادامهٔ setup از گام بعدی (Git) — در صورت مشکل WSL2، پس از ری‌استارت همین دستور را دوباره اجرا کنید'
+            # این گام نباید ادامهٔ setup را متوقف کند
+            Write-Warn2 "نصب هستهٔ WSL2 انجام نشد: $($_.Exception.Message) — روش جایگزین امتحان می‌شود"
+        }
+        # تلاش دوم: بستهٔ مدرن WSL (روش رسمی Windows Server 2025) — چون MSI قدیمی روی Server 2025 ممکن است 1603 بدهد
+        try { & wsl.exe --status *> $null; $wslOk2 = ($LASTEXITCODE -eq 0) } catch { $wslOk2 = $false }
+        if (-not $wslOk2) {
+            Write-Step 'نصب بستهٔ مدرن WSL از گیت‌هاب (wsl --install --no-distribution)'
+            try {
+                & wsl.exe --install --no-distribution --web-download 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warn2 "wsl --install --web-download کد $LASTEXITCODE داد — تلاش بدون --web-download"
+                    & wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+                }
+                Write-Warn2 'اگر این دستور پیام ری‌استارت داد، سرور را RESTART و همان دستور بوت را دوباره اجرا کنید'
+            } catch {
+                Write-Warn2 "نصب بستهٔ مدرن WSL ناموفق بود: $($_.Exception.Message) — خروجی «doctor» را برای پشتیبانی بفرستید"
+            }
         }
     } else {
         Write-Ok 'WSL در دسترس است'
@@ -426,6 +441,77 @@ function Register-DockerAutoStart {
         Write-Warn2 "ثبت وظیفهٔ شروع خودکار ناموفق بود: $($_.Exception.Message)"
         Write-Warn2 'پس از هر ری‌استارت، Docker Desktop را دستی باز کنید یا گزینهٔ Start when I sign in را در تنظیمات آن فعال کنید'
     }
+}
+
+function Invoke-Doctor {
+    # تشخیص ریشهٔ مشکلات WSL2/مجازی‌سازی/Docker — خروجی برای پشتیبانی فرستاده می‌شود
+    Write-Host ''
+    Write-Host '================ ROSEPSY doctor — تشخیص WSL2 / مجازی‌سازی / Docker ================' -ForegroundColor DarkCyan
+    $os = Get-CimInstance Win32_OperatingSystem
+    Write-Host ("Windows            : {0} (build {1})" -f $os.Caption, $os.BuildNumber)
+
+    Write-Step 'مجازی‌سازی (مهم‌ترین بخش)'
+    $cs = Get-CimInstance Win32_ComputerSystem
+    $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+    Write-Host ("  HypervisorPresent             : {0}   <-- برای کارکرد Docker/WSL2 باید True باشد" -f $cs.HypervisorPresent) -ForegroundColor White
+    Write-Host ("  VirtualizationFirmwareEnabled : {0}   <-- اگر False باشد یعنی Nested Virtualization روی VPS خاموش است (در پنل هاست فعال کنید)" -f $cpu.VirtualizationFirmwareEnabled) -ForegroundColor White
+    Write-Host ("  SLAT (VT-x/AMD-V)             : {0}" -f $cpu.SecondLevelAddressTranslationExtensions) -ForegroundColor White
+    try {
+        $bcd = (bcdedit /enum '{current}' | Out-String)
+        $m = [regex]::Match($bcd, 'hypervisorlaunchtype\s+(\S+)')
+        Write-Host ("  hypervisorlaunchtype          : {0}" -f $m.Groups[1].Value) -ForegroundColor White
+    } catch { }
+
+    Write-Step 'قابلیت‌های ویندوز'
+    foreach ($feat in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform', 'Containers', 'Microsoft-Hyper-V-All')) {
+        try {
+            $s = (Get-WindowsOptionalFeature -Online -FeatureName $feat -ErrorAction Stop).State
+            Write-Host ("  {0}: {1}" -f $feat, $s)
+        } catch { Write-Host ("  {0}: ناموجود/خطا" -f $feat) }
+    }
+
+    Write-Step 'خروجی wsl.exe'
+    foreach ($a in @(@('--status'), @('--version'))) {
+        Write-Host ("  --- wsl.exe $($a -join ' ')")
+        try {
+            $out = (& wsl.exe @a 2>&1 | Out-String)
+            Write-Host ("  exit code: $LASTEXITCODE")
+            if ($out.Trim()) { Write-Host ($out.Trim() -split "`n" | ForEach-Object { "    $_" }) }
+        } catch { Write-Host "    خطا: $($_.Exception.Message)" }
+    }
+
+    Write-Step 'وضعیت ری‌استارت و سرویس‌ها'
+    Write-Host ("  CBS RebootPending  : {0}" -f (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'))
+    Write-Host ("  WU  RebootRequired : {0}" -f (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'))
+    foreach ($svc in @('vmcompute', 'LxssManager', 'WSLService', 'com.docker.service', 'docker')) {
+        $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+        if ($s) { Write-Host ("  سرویس {0}: {1}" -f $svc, $s.Status) } else { Write-Host ("  سرویس {0}: ثبت نشده" -f $svc) }
+    }
+
+    Write-Step 'Docker'
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $dockerCmd -and (Test-Path "$env:ProgramFiles\Docker\Docker\resources\bin\docker.exe")) {
+        $env:Path = "$env:Path;$env:ProgramFiles\Docker\Docker\resources\bin"
+        $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    }
+    Write-Host ("  docker CLI : {0}" -f $(if ($dockerCmd) { $dockerCmd.Source } else { 'پیدا نشد (نصب ناقص/نشده)' }))
+    if ($dockerCmd) {
+        try { & docker info *> $null; Write-Host ("  docker info exit: $LASTEXITCODE (0 = موتور در حال اجراست)") } catch { }
+    }
+    Write-Host ("  نصاب ذخیره‌شده: " + $(Get-ChildItem -Path (Join-Path $InstallDir 'installers') -Filter 'DockerDesktop*.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
+
+    Write-Step 'لاگ نصاب Docker (آخرین ۲۵ خط هر فایل)'
+    $logs = @()
+    $logs += Get-ChildItem -Path "$env:TEMP\dd*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path "$env:LOCALAPPDATA\Docker\log\install\*.log" -ErrorAction SilentlyContinue
+    if (-not $logs) { Write-Host '  لاگی پیدا نشد' }
+    foreach ($lg in ($logs | Sort-Object LastWriteTime -Descending | Select-Object -First 3)) {
+        Write-Host ("  --- $($lg.FullName)")
+        Get-Content $lg.FullName -Tail 25 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
+    }
+
+    Write-Host ''
+    Write-Host '================ پایان doctor — کل خروجی بالا را برای پشتیبانی بفرستید ================' -ForegroundColor DarkCyan
 }
 
 function Invoke-Setup {
@@ -753,6 +839,7 @@ function Show-Help {
    .\rosepsy-server-deploy.ps1 seed         دادهٔ نمونه (idempotent)
    .\rosepsy-server-deploy.ps1 seed-reset   پاک‌سازی کامل + بازسازی دادهٔ نمونه
    .\rosepsy-server-deploy.ps1 backup       بکاپ دیتابیس
+   .\rosepsy-server-deploy.ps1 doctor       تشخیص WSL2/مجازی‌سازی/Docker (خروجی را برای پشتیبانی بفرستید)
    .\rosepsy-server-deploy.ps1 help         این راهنما
 
  گواهی رایگان HTTPS (دامنهٔ جایگزین sslip.io برای IP ثابت):
@@ -776,6 +863,7 @@ try {
         'status'     { Show-Status }
         'logs'       { Show-Logs }
         'backup'     { Invoke-Backup }
+        'doctor'     { Invoke-Doctor }
         default      { Show-Help }
     }
     exit 0
