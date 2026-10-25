@@ -219,6 +219,126 @@ function Install-PowerShell7 {
     }
 }
 
+function Install-ModernWSL {
+    # روش رسمی Windows Server 2025: بستهٔ مدرن WSL (شامل هستهٔ WSL2 و سرویس WSLService)
+    # منبع: ریلیز رسمی گیت‌هاب microsoft/WSL — از این سرور دسترس‌پذیر است (برخلاف CDN مایکروسافت/استور
+    # که از بعضی کشورها از جمله ایران مسدود است و wsl --install را با «time out in 60 seconds» می‌بنداند)
+    $wslExe = Join-Path $env:ProgramFiles 'WSL\wsl.exe'
+    if (Test-Path $wslExe) {
+        try {
+            & $wslExe --version *> $null
+            if ($LASTEXITCODE -eq 0) { Write-Ok 'بستهٔ مدرن WSL نصب و سالم است'; return $true }
+        } catch { }
+        Write-Warn2 'بستهٔ مدرن WSL موجود است ولی پاسخ نمی‌دهد — نصب دوباره انجام می‌شود'
+    }
+    $pattern = '^wsl\.[\d.]+\.x64\.msi$'
+    $instDir = Join-Path $InstallDir 'installers'
+    Ensure-Directory $instDir
+    $msi = $null
+    # ۰) نصاب از قبل دانلودشده — برای اجرای بعدی حفظ می‌شود (مثل نصاب Docker)
+    $pre = Get-ChildItem -Path $instDir -Filter 'wsl.*.x64.msi' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -gt 1048576 } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($pre) { Write-Ok "نصاب آمادهٔ محلی: $($pre.FullName)"; $msi = $pre.FullName }
+
+    if (-not $msi) {
+        $url = $null
+        try {
+            $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/WSL/releases/latest' -Headers @{ 'User-Agent' = 'rosepsy-deploy' } -TimeoutSec 60
+            $asset = $rel.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1
+            if ($asset) { $url = $asset.browser_download_url }
+        } catch {
+            Write-Warn2 "API گیت‌هاب پاسخ نداد: $($_.Exception.Message)"
+        }
+        if (-not $url) {
+            $url = 'https://github.com/microsoft/WSL/releases/download/3.0.3/wsl.3.0.3.0.x64.msi'
+            Write-Warn2 'استفاده از نشانی ثابت نسخهٔ پشتیبان WSL 3.0.3'
+        }
+        Write-Step "دانلود بستهٔ مدرن WSL ($(Split-Path $url -Leaf)) — حدود ۳۵۰ مگابایت"
+        $msi = Join-Path $instDir 'wsl.x64.msi'
+        try {
+            Invoke-ResilientDownload -Url $url -OutFile $msi
+        } catch {
+            Write-Warn2 "دانلود بستهٔ مدرن WSL ناموفق بود: $($_.Exception.Message)"
+            return $false
+        }
+        if (-not (Test-Path $msi) -or (Get-Item $msi).Length -lt 1048576) {
+            Write-Warn2 'فایل MSI سالم دانلود نشد'
+            return $false
+        }
+    }
+    Write-Step 'نصب بی‌صدای بستهٔ مدرن WSL'
+    $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn /norestart" -Wait -PassThru
+    if ($p.ExitCode -eq 3010) { $script:NeedRestart = $true }
+    if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+        # حذف نصاب مشکل‌دار تا در اجرای بعدی فایل سالم دوباره دانلود شود (جلوگیری از حلقهٔ نصاب خراب)
+        Remove-Item $msi -ErrorAction SilentlyContinue
+        Write-Warn2 "نصب بستهٔ مدرن WSL با کد $($p.ExitCode) ناتمام ماند — روش جایگزین امتحان می‌شود"
+        return $false
+    }
+    try {
+        & $wslExe --version *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok 'بستهٔ مدرن WSL نصب شد'
+            try { & $wslExe --set-default-version 2 *> $null } catch { }
+            return $true
+        }
+    } catch { }
+    Write-Warn2 'نصب انجام شد ولی wsl.exe هنوز پاسخ نمی‌دهد (احتمالاً پس از ری‌استارت فعال می‌شود)'
+    return $false
+}
+
+function Get-HypervisorLaunchEvidence {
+    # روشن‌ترین سرنخِ «Nested Virtualization خاموش»: رویدادهای بوتِ هایپروایزر ویندوز.
+    # وقتی VirtualMachinePlatform فعال است، ویندوز هنگام بوت سعی می‌کند هایپروایزر خودش را بالا بیاورد؛
+    # اگر CPU میزبان VT-x/AMD-V را به VPS نداده باشد، خطای صریح در Event Log ثبت می‌شود.
+    $since = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+    $found = @()
+    foreach ($log in @('Microsoft-Windows-Hyper-V-Hypervisor-Admin', 'System')) {
+        try {
+            $evs = Get-WinEvent -FilterHashtable @{ LogName = $log; StartTime = $since } -ErrorAction Stop
+            foreach ($ev in $evs) {
+                $msg = [string]$ev.Message
+                if ($ev.ProviderName -like '*Hyper-V*' -or $msg -match 'hypervisor|virtualization') {
+                    $first = ($msg -split "`r?`n")[0]
+                    $found += ("[{0}] {1} (ID {2}): {3}" -f $ev.TimeCreated.ToString('MM-dd HH:mm'), $ev.ProviderName, $ev.Id, $first)
+                    if ($found.Count -ge 8) { break }
+                }
+            }
+        } catch { }
+    }
+    if ($found.Count -gt 0) { return $found }
+    return $null
+}
+
+function Show-NestedVirtVerdict {
+    # جمع‌بندی مجازی‌سازی + راهنمای فعال‌سازی Nested Virtualization (فقط سمت ارائه‌دهندهٔ VPS)
+    param([string[]]$Events)
+    Write-Step 'جمع‌بندی مجازی‌سازی (Nested Virtualization)'
+    try {
+        $cs = Get-CimInstance Win32_ComputerSystem
+        $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+        Write-Host ("  پلتفرم مجازی‌ساز : {0} / {1}" -f $cs.Manufacturer, $cs.Model) -ForegroundColor White
+        Write-Host ("  CPU              : {0}" -f $cpu.Name) -ForegroundColor White
+    } catch { }
+    $blocked = $false
+    if ($Events) {
+        Write-Host '  رویدادهای بوت هایپروایزر:' -ForegroundColor White
+        foreach ($e in $Events) { Write-Host ("    {0}" -f $e) -ForegroundColor DarkGray }
+        if ($Events | Where-Object { $_ -match 'did not launch|not enabled|disabled|VT-x|AMD-V' }) { $blocked = $true }
+    } else {
+        Write-Host '  رویداد صریحی دربارهٔ بوت هایپروایزر پیدا نشد (تشخیص قطعی نیازمند آزمون اجرای واقعی VM است)' -ForegroundColor DarkGray
+    }
+    if ($blocked) {
+        Write-Err2 'تشخیص: هایپروایزر ویندوز در بوت بالا نیامده — تقریباً قطعاً Nested Virtualization روی VPS خاموش است'
+    }
+    Write-Host '  فعال‌سازی فقط سمت ارائه‌دهندهٔ VPS انجام می‌شود (داخل ویندوز کاری نمی‌شود):' -ForegroundColor White
+    Write-Host '    Proxmox/KVM    : CPU Type را «host» کنید + گزینهٔ Nested (qm set <ID> --cpu host)'
+    Write-Host '    Hyper-V میزبان : Set-VMProcessor -VMName <name> -ExposeVirtualizationExtensions $true (با VM خاموش)'
+    Write-Host '    VMware ESXi    : تیک Expose hardware assisted virtualization + vhv.enable = TRUE'
+    Write-Host '    روش عمومی      : از پشتیبانی هاست بخواهید Nested Virtualization را برای این VPS فعال کند'
+    Write-Host '    پس از فعال‌سازی: سرور RESTART → دوباره «doctor» → سپس «setup»' -ForegroundColor Yellow
+}
+
 function Enable-Wsl2 {
     # فعال‌سازی WSL2 + Virtual Machine Platform؛ خروجی: آیا ری‌استارت لازم است
     $needReboot = $false
@@ -241,11 +361,24 @@ function Enable-Wsl2 {
         }
     }
 
-    # اگر دستور wsl در دسترس نیست یا کار نمی‌کند، هستهٔ WSL2 را نصب می‌کنیم
+    # اگر بستهٔ مدرن WSL در دسترس نیست، نصب می‌کنیم.
+    # ترتیب روش‌ها (مهم برای اینترنت محدود/تحریم — CDN مایکروسافت/استور از بعضی کشورها از جمله ایران بسته است):
+    #   ۱) MSI مدرن WSL از گیت‌هاب (روش رسمی Server 2025؛ شامل هستهٔ WSL2 و سرویس WSLService)
+    #   ۲) MSI قدیمی هسته (wsl_update_x64.msi) — روی Server 2025 معمولاً 1603 می‌دهد ولی بی‌ضرر است
+    #   ۳) wsl --install — مسیر استور مایکروسافت (معمولاً با timeout شکست می‌خورد)
     $wslOk = $false
-    try { & wsl.exe --status *> $null; if ($LASTEXITCODE -eq 0) { $wslOk = $true } } catch { }
+    $wslModern = Join-Path $env:ProgramFiles 'WSL\wsl.exe'
+    if (Test-Path $wslModern) {
+        try { & $wslModern --version *> $null; if ($LASTEXITCODE -eq 0) { $wslOk = $true } } catch { }
+    }
+    if ($wslOk) {
+        Write-Ok 'بستهٔ مدرن WSL در دسترس است'
+    }
     if (-not $wslOk) {
-        Write-Step 'نصب هستهٔ WSL2 (wsl_update_x64.msi)'
+        if (Install-ModernWSL) { $wslOk = $true }
+    }
+    if (-not $wslOk) {
+        Write-Step 'نصب هستهٔ WSL2 (روش قدیمی wsl_update_x64.msi — جایگزین دوم)'
         try {
             $msi = Join-Path $env:TEMP 'wsl_update_x64.msi'
             Invoke-ResilientDownload -Url 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi
@@ -255,29 +388,25 @@ function Enable-Wsl2 {
                 try { & wsl.exe --set-default-version 2 *> $null } catch { }
                 Write-Ok 'هستهٔ WSL2 نصب شد'
             } else {
-                Write-Warn2 "نصب هستهٔ WSL2 با کد $($p.ExitCode) ناتمام ماند — روش جایگزین (بستهٔ مدرن WSL) امتحان می‌شود"
+                Write-Warn2 "نصب هستهٔ WSL2 با کد $($p.ExitCode) ناتمام ماند — روش جایگزین امتحان می‌شود"
             }
         } catch {
             # این گام نباید ادامهٔ setup را متوقف کند
             Write-Warn2 "نصب هستهٔ WSL2 انجام نشد: $($_.Exception.Message) — روش جایگزین امتحان می‌شود"
         }
-        # تلاش دوم: بستهٔ مدرن WSL (روش رسمی Windows Server 2025) — چون MSI قدیمی روی Server 2025 ممکن است 1603 بدهد
-        try { & wsl.exe --status *> $null; $wslOk2 = ($LASTEXITCODE -eq 0) } catch { $wslOk2 = $false }
-        if (-not $wslOk2) {
-            Write-Step 'نصب بستهٔ مدرن WSL از گیت‌هاب (wsl --install --no-distribution)'
-            try {
-                & wsl.exe --install --no-distribution --web-download 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Warn2 "wsl --install --web-download کد $LASTEXITCODE داد — تلاش بدون --web-download"
-                    & wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
-                }
-                Write-Warn2 'اگر این دستور پیام ری‌استارت داد، سرور را RESTART و همان دستور بوت را دوباره اجرا کنید'
-            } catch {
-                Write-Warn2 "نصب بستهٔ مدرن WSL ناموفق بود: $($_.Exception.Message) — خروجی «doctor» را برای پشتیبانی بفرستید"
+    }
+    if (-not $wslOk) {
+        Write-Step 'روش آخر: wsl --install --no-distribution (مسیر استور مایکروسافت)'
+        try {
+            & wsl.exe --install --no-distribution --web-download 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn2 "wsl --install --web-download کد $LASTEXITCODE داد — تلاش بدون --web-download"
+                & wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
             }
+            Write-Warn2 'اگر این دستور پیام ری‌استارت داد، سرور را RESTART و همان دستور بوت را دوباره اجرا کنید'
+        } catch {
+            Write-Warn2 "نصب WSL ناموفق بود: $($_.Exception.Message) — خروجی «doctor» را برای پشتیبانی بفرستید"
         }
-    } else {
-        Write-Ok 'WSL در دسترس است'
     }
     return $needReboot
 }
@@ -375,7 +504,12 @@ function Install-DockerDesktop {
     }
     Write-Step 'نصب بی‌صدای Docker Desktop با بک‌اند WSL2 (چند دقیقه طول می‌کشد)'
     # --always-run-service: سرویس com.docker.service برای کارکرد درست روی Windows Server
-    $p = Start-Process -FilePath $installer -ArgumentList 'install', '--quiet', '--accept-license', '--backend=wsl-2', '--always-run-service' -Wait -PassThru
+    # خروجی نصاب برای عیب‌یابی (doctor) روی دیسک ذخیره می‌شود
+    $logDir = Join-Path $InstallDir 'logs'
+    Ensure-Directory $logDir
+    $outLog = Join-Path $logDir 'docker-install-stdout.log'
+    $errLog = Join-Path $logDir 'docker-install-stderr.log'
+    $p = Start-Process -FilePath $installer -ArgumentList 'install', '--quiet', '--accept-license', '--backend=wsl-2', '--always-run-service' -Wait -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
     if ($p.ExitCode -eq 3010) {
         Write-Warn2 'نصب Docker Desktop به ری‌استارت نیاز دارد (کد 3010)'
         $script:NeedRestart = $true
@@ -384,7 +518,8 @@ function Install-DockerDesktop {
     if ($p.ExitCode -ne 0) {
         if ($p.ExitCode -eq 3) {
             Write-Warn2 "نصاب دانلودشده حفظ شد: $installer (در اجرای بعدی دوباره دانلود نمی‌شود)"
-            throw 'نصب Docker Desktop ناموفق بود (کد ۳) — این کد تقریباً همیشه یعنی WSL2/قابلیت‌های مجازی‌سازی هنوز با یک بار ری‌استارت کامل نشده‌اند. سرور را RESTART کنید و دوباره همان دستور بوت را اجرا کنید'
+            Write-Warn2 "لاگ نصاب: $outLog و $errLog (با «doctor» هم قابل مشاهده است)"
+            throw 'نصب Docker Desktop ناموفق بود (کد ۳) — یعنی WSL2 هنوز آماده نیست. ابتدا «doctor» را اجرا کنید؛ اگر Nested Virtualization خاموش باشد، تا فعال‌سازی آن از سمت ارائه‌دهندهٔ هاست نصب ممکن نیست'
         }
         throw "نصب Docker Desktop ناموفق بود (کد خروج $($p.ExitCode)) — در صورت تکرار، نصب دستی را امتحان کنید (نصاب در $installer حفظ شده)"
     }
@@ -453,14 +588,28 @@ function Invoke-Doctor {
     Write-Step 'مجازی‌سازی (مهم‌ترین بخش)'
     $cs = Get-CimInstance Win32_ComputerSystem
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-    Write-Host ("  HypervisorPresent             : {0}   <-- برای کارکرد Docker/WSL2 باید True باشد" -f $cs.HypervisorPresent) -ForegroundColor White
-    Write-Host ("  VirtualizationFirmwareEnabled : {0}   <-- اگر False باشد یعنی Nested Virtualization روی VPS خاموش است (در پنل هاست فعال کنید)" -f $cpu.VirtualizationFirmwareEnabled) -ForegroundColor White
+    Write-Host ("  HypervisorPresent             : {0}   <-- روی VPS همیشه True است (هایپروایزرِ میزبان)؛ به‌تنهایی دلیل کارکرد WSL2 نیست" -f $cs.HypervisorPresent) -ForegroundColor White
+    Write-Host ("  VirtualizationFirmwareEnabled : {0}   <-- وقتی هایپروایزری در حال اجراست این مقدار بی‌معنا/False است؛ سرنخ قطعی در رویدادهای بوت است" -f $cpu.VirtualizationFirmwareEnabled) -ForegroundColor White
     Write-Host ("  SLAT (VT-x/AMD-V)             : {0}" -f $cpu.SecondLevelAddressTranslationExtensions) -ForegroundColor White
     try {
         $bcd = (bcdedit /enum '{current}' | Out-String)
         $m = [regex]::Match($bcd, 'hypervisorlaunchtype\s+(\S+)')
         Write-Host ("  hypervisorlaunchtype          : {0}" -f $m.Groups[1].Value) -ForegroundColor White
     } catch { }
+
+    Write-Step 'هویت سرور / پلتفرم مجازی‌ساز'
+    try {
+        Write-Host ("  Manufacturer / Model : {0} / {1}" -f $cs.Manufacturer, $cs.Model)
+        Write-Host ("  CPU                  : {0}" -f $cpu.Name)
+    } catch { }
+
+    Write-Step 'رویدادهای بوت هایپروایزر (روشن‌ترین سرنخ Nested Virtualization)'
+    $hypEvents = Get-HypervisorLaunchEvidence
+    if ($hypEvents) {
+        foreach ($e in $hypEvents) { Write-Host ("    {0}" -f $e) -ForegroundColor DarkGray }
+    } else {
+        Write-Host '  رویداد صریحی از آخرین بوت پیدا نشد' -ForegroundColor DarkGray
+    }
 
     Write-Step 'قابلیت‌های ویندوز'
     foreach ($feat in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform', 'Containers', 'Microsoft-Hyper-V-All')) {
@@ -470,7 +619,20 @@ function Invoke-Doctor {
         } catch { Write-Host ("  {0}: ناموجود/خطا" -f $feat) }
     }
 
-    Write-Step 'خروجی wsl.exe'
+    Write-Step 'بستهٔ مدرن WSL (روش رسمی Server 2025)'
+    $wslModern = Join-Path $env:ProgramFiles 'WSL\wsl.exe'
+    if (Test-Path $wslModern) {
+        Write-Host ("  نصب است: {0}" -f $wslModern)
+        try {
+            $out = (& $wslModern --version 2>&1 | Out-String)
+            Write-Host ("  wsl (مدرن) --version exit: $LASTEXITCODE")
+            if ($out.Trim()) { Write-Host ($out.Trim() -split "`n" | ForEach-Object { "    $_" }) }
+        } catch { Write-Host "    خطا: $($_.Exception.Message)" }
+    } else {
+        Write-Host '  نصب نیست (C:\Program Files\WSL\wsl.exe موجود نیست) — نسخهٔ جدید اسکریپت آن را از گیت‌هاب نصب می‌کند؛ setup را دوباره اجرا کنید'
+    }
+
+    Write-Step 'خروجی wsl.exe (مسیر سیستمی)'
     foreach ($a in @(@('--status'), @('--version'))) {
         Write-Host ("  --- wsl.exe $($a -join ' ')")
         try {
@@ -486,6 +648,14 @@ function Invoke-Doctor {
     foreach ($svc in @('vmcompute', 'LxssManager', 'WSLService', 'com.docker.service', 'docker')) {
         $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
         if ($s) { Write-Host ("  سرویس {0}: {1}" -f $svc, $s.Status) } else { Write-Host ("  سرویس {0}: ثبت نشده" -f $svc) }
+    }
+    try {
+        $vmc = Get-Service vmcompute -ErrorAction SilentlyContinue
+        if ($vmc -and $vmc.Status -ne 'Running') { Start-Service vmcompute -ErrorAction Stop }
+        $vmc2 = Get-Service vmcompute -ErrorAction SilentlyContinue
+        Write-Host ("  تلاش راه‌اندازی vmcompute: {0}" -f $(if ($vmc2) { $vmc2.Status } else { 'ناموفق' }))
+    } catch {
+        Write-Host ("  تلاش راه‌اندازی vmcompute ناموفق: {0}" -f $_.Exception.Message)
     }
 
     Write-Step 'Docker'
@@ -503,12 +673,20 @@ function Invoke-Doctor {
     Write-Step 'لاگ نصاب Docker (آخرین ۲۵ خط هر فایل)'
     $logs = @()
     $logs += Get-ChildItem -Path "$env:TEMP\dd*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path "$env:TEMP\Docker*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path "$env:TEMP\Setup Log*.txt" -ErrorAction SilentlyContinue
     $logs += Get-ChildItem -Path "$env:LOCALAPPDATA\Docker\log\install\*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path "$env:LOCALAPPDATA\Docker\log\host\*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path "$env:ProgramData\DockerDesktop\*.log" -ErrorAction SilentlyContinue
+    $logs += Get-ChildItem -Path (Join-Path $InstallDir 'logs') -Filter '*.log' -ErrorAction SilentlyContinue
     if (-not $logs) { Write-Host '  لاگی پیدا نشد' }
     foreach ($lg in ($logs | Sort-Object LastWriteTime -Descending | Select-Object -First 3)) {
         Write-Host ("  --- $($lg.FullName)")
         Get-Content $lg.FullName -Tail 25 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
     }
+
+    Write-Host ''
+    Show-NestedVirtVerdict -Events $hypEvents
 
     Write-Host ''
     Write-Host '================ پایان doctor — کل خروجی بالا را برای پشتیبانی بفرستید ================' -ForegroundColor DarkCyan
@@ -546,6 +724,17 @@ function Invoke-Setup {
         Write-Warn2 'یک ری‌استارت روی ویندوز در صف است (فعال‌سازی WSL2/به‌روزرسانی‌ها هنوز کامل نشده)'
         Write-Err2 'لطفاً سرور را RESTART کنید، سپس دوباره همان دستور بوت را اجرا کنید تا نصب Docker Desktop و استقرار ادامه یابد'
         Write-Host '    (Git نصب شد و پس از ری‌استارت تکرار نمی‌شود؛ مراحل انجام‌شده به‌صورت خودکار رد می‌شوند)' -ForegroundColor DarkGray
+        return
+    }
+
+    # ۳-ج) سد مجازی‌سازی: اگر رویدادهای بوت ثابت کند هایپروایزر ویندوز بالا نمی‌آید (Nested Virtualization
+    # خاموش در پنل هاست)، نصب Docker بی‌فایده است — راهنما چاپ و setup همین‌جا تمام می‌شود
+    $hypEvents = Get-HypervisorLaunchEvidence
+    $virtBlocked = $false
+    if ($hypEvents) { $virtBlocked = [bool]($hypEvents | Where-Object { $_ -match 'did not launch|not enabled|disabled|VT-x|AMD-V' }) }
+    if ($virtBlocked) {
+        Show-NestedVirtVerdict -Events $hypEvents
+        Write-Err2 'تا وقتی ارائه‌دهندهٔ VPS مجازی‌سازی تودرتو (Nested Virtualization) را فعال نکند، Docker اجرا نمی‌شود — نصب Docker رد شد'
         return
     }
 
