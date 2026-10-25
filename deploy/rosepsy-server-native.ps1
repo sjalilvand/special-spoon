@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -156,6 +156,18 @@ function Invoke-Native([string]$exe, [string[]]$argList, [string]$okMsg) {
     & $exe @argList
     if ($LASTEXITCODE -ne 0) { throw "اجرای ناموفق: $exe $($argList -join ' ')  (کد $LASTEXITCODE)" }
     if ($okMsg) { Write-Ok $okMsg }
+}
+
+# پروب سریع HTTP برای انتخاب خودکار مخزن (هر وضعیت زیر ۵۰۰ یعنی «قابل دسترسی»)
+function Test-HttpOk([string]$url, [int]$sec = 15) {
+    try {
+        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec $sec
+        return ($r.StatusCode -gt 0 -and $r.StatusCode -lt 500)
+    } catch {
+        $sc = 0
+        try { if ($_.Exception.Response) { $sc = [int]$_.Exception.Response.StatusCode } } catch {}
+        return ($sc -gt 0 -and $sc -lt 500)
+    }
 }
 
 # ---------- پورت‌ها: جدول شنونده‌ها + سدِ تداخل ----------
@@ -487,8 +499,17 @@ function Install-NodeAndBuildFrontend {
         Write-Ok 'Node.js باز شد'
     }
     $env:Path = "$nodeDir;$env:Path"
-    $npmArgs = @('install','--no-audit','--no-fund')
-    if ($NpmRegistry) { $npmArgs += "--registry=$NpmRegistry" }
+    # انتخاب رجیستری npm: اولویت مخزن ایران (ITO)؛ اگر -NpmRegistry داده شده باشد فقط همان
+    $regs = @()
+    if ($NpmRegistry) {
+        $regs = @($NpmRegistry)
+    } else {
+        foreach ($c in @('https://archive.ito.gov.ir/npm/','https://archive.ito.gov.ir/mirror2/npm/','https://registry.npmjs.org/')) {
+            Write-Host ("  بررسی رجیستری npm: {0}" -f $c)
+            if (Test-HttpOk $c) { $regs += $c } else { Write-Warn2 "بی‌پاسخ: $c" }
+        }
+        if ($regs.Count -eq 0) { $regs = @('https://registry.npmjs.org/') }
+    }
     foreach ($proj in @(@{d='site'; base=''}, @{d='frontend'; base='/panel/'})) {
         $pdir = Join-Path $AppDir $proj.d
         if (-not (Test-Path (Join-Path $pdir 'package.json'))) { throw "پروژهٔ فرانت یافت نشد: $pdir" }
@@ -496,8 +517,14 @@ function Install-NodeAndBuildFrontend {
         Push-Location $pdir
         try {
             & cmd.exe /c "node --version"
-            & cmd.exe /c ("npm " + ($npmArgs -join ' '))
-            if ($LASTEXITCODE -ne 0) { throw "npm install در $($proj.d) ناموفق بود" }
+            $npmOk = $false
+            foreach ($rg in $regs) {
+                Write-Host ("  npm install از {0} ..." -f $rg)
+                & cmd.exe /c ("npm install --no-audit --no-fund --fetch-retries=3 --fetch-retry-maxtimeout=60000 --registry=" + $rg)
+                if ($LASTEXITCODE -eq 0) { $npmOk = $true; break }
+                Write-Warn2 "npm install از $rg ناموفق بود؛ رجیستری بعدی..."
+            }
+            if (-not $npmOk) { throw "npm install در $($proj.d) ناموفق بود" }
             if ($proj.base) {
                 & cmd.exe /c "npm run build -- --base=/panel/"
             } else {
@@ -712,13 +739,31 @@ function Install-PythonAndVenv {
         & "$BaseDir\runtime\python\python.exe" -m venv "$BaseDir\runtime\venv"
         Write-Ok 'venv ساخته شد'
     }
-    & $VenvPy -m pip install --upgrade pip --quiet
+    # انتخاب مخزن pip: اولویت مخزن ایران (ITO)؛ اگر -PipIndexUrl داده شده باشد فقط همان
+    $indexes = @()
+    if ($PipIndexUrl) {
+        $indexes = @($PipIndexUrl)
+    } else {
+        foreach ($c in @('https://archive.ito.gov.ir/python/simple/','https://archive.ito.gov.ir/mirror2/python/simple/','https://pypi.org/simple/')) {
+            Write-Host ("  بررسی مخزن pip: {0}" -f $c)
+            if (Test-HttpOk ($c + 'pip/')) { $indexes += $c } else { Write-Warn2 "بی‌پاسخ: $c" }
+        }
+        if ($indexes.Count -eq 0) { $indexes = @('https://pypi.org/simple/') }
+    }
+    # ارتقای pip اختیاری است (از همان مخزن اول)؛ ناموفقی‌اش مرگبار نیست
+    $upIdx = $indexes[0]
+    & $VenvPy -m pip install --upgrade pip --index-url $upIdx --trusted-host ([uri]$upIdx).Host --timeout 60 --retries 2 --quiet
+    if ($LASTEXITCODE -ne 0) { Write-Warn2 'ارتقای pip رد شد (نسخهٔ همراه پایتون کافی است)' }
     $req = "$AppDir\backend\requirements.txt"
-    $pipArgs = @('-m','pip','install','-r', $req, '--quiet')
-    if ($PipIndexUrl) { $pipArgs += @('-i', $PipIndexUrl) }
-    Write-Host '  pip install -r requirements.txt (چند دقیقه)...'
-    & $VenvPy @pipArgs
-    if ($LASTEXITCODE -ne 0) { throw 'pip install ناموفق بود' }
+    $done = $false
+    foreach ($idx in $indexes) {
+        $h = ([uri]$idx).Host
+        Write-Host ("  pip install از {0} (چند دقیقه)..." -f $h)
+        & $VenvPy -m pip install -r $req --index-url $idx --trusted-host $h --timeout 60 --retries 3
+        if ($LASTEXITCODE -eq 0) { $done = $true; break }
+        Write-Warn2 "این مخزن نصب را کامل نکرد: $idx - مخزن بعدی..."
+    }
+    if (-not $done) { throw 'pip install ناموفق بود (هیچ مخزنی پاسخگو نبود)' }
     Write-Ok 'وابستگی‌های Python نصب شدند'
 }
 
@@ -812,7 +857,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.2 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.3 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
