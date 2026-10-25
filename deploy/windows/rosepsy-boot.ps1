@@ -86,6 +86,14 @@ try {
     Write-Step 'Running setup  (PowerShell 7 + WSL2 + Git + Docker Desktop)'
     Write-Host '    (this can take 10-30 minutes on a fresh server)' -ForegroundColor DarkGray
     & $Deploy 'setup'
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ''
+        Write-Err2 'Setup stopped with an error - see the messages above.'
+        Write-Host '    Fix the cause (usually network) and run the SAME one-line bootstrap command again.' -ForegroundColor Yellow
+        Write-Host '    Tip: to skip slow downloads you can place installers manually into'      -ForegroundColor Yellow
+        Write-Host '    C:\rosepsy\installers  -  Git-*-64-bit.exe  |  DockerDesktopInstaller.exe'        -ForegroundColor DarkGray
+        return
+    }
 
     # ---- 4) if the docker engine is alive, deploy right away ---------
     $dockerExe = "$env:ProgramFiles\Docker\Docker\resources\bin\docker.exe"
