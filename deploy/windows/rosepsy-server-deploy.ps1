@@ -143,6 +143,38 @@ function Ensure-Directory {
     if (-not (Test-Path $Path)) { New-Item -ItemType Directory -Path $Path -Force | Out-Null }
 }
 
+function Invoke-ResilientDownload {
+    # دانلود مقاوم برای اینترنت ناپایدار:
+    #   ۱) curl.exe (در ویندوز سرور ۲۰۱۹ به بعد از پیش نصب است) — با «ادامهٔ دانلود از محل قطع» (-C -) و تلاش خودکار
+    #   ۲) در نبود curl یا شکست آن — Invoke-WebRequest با ۳ بار تلاش
+    param(
+        [Parameter(Mandatory = $true)] [string]$Url,
+        [Parameter(Mandatory = $true)] [string]$OutFile,
+        [int]$Attempts = 4
+    )
+    Ensure-Directory (Split-Path $OutFile -Parent)
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        for ($i = 1; $i -le $Attempts; $i++) {
+            & $curl.exe -L --fail --progress-bar --connect-timeout 30 --retry 8 --retry-all-errors --retry-delay 3 -C - --output "$OutFile" "$Url"
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0)) { return }
+            Write-Warn2 "curl تلاش $i/$Attempts ناتمام ماند (کد $LASTEXITCODE) — ادامهٔ دانلود از محل قبلی..."
+            Start-Sleep -Seconds 3
+        }
+        Write-Warn2 'curl ناموفق ماند — تلاش با Invoke-WebRequest'
+    }
+    for ($i = 1; $i -le 3; $i++) {
+        try {
+            Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 3600
+            if ((Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0)) { return }
+        } catch {
+            if ($i -ge 3) { throw }
+            Write-Warn2 "تلاش $i/3 ناموفق: $($_.Exception.Message)"
+            Start-Sleep -Seconds 5
+        }
+    }
+}
+
 # ---------------------- گام setup: پیش‌نیازها ----------------------
 function Install-PowerShell7 {
     # نصب آخرین نسخهٔ پایدار PowerShell 7 (MSI بی‌صدا) — روی سرور تازه PS 5.1 هست
@@ -155,7 +187,7 @@ function Install-PowerShell7 {
         $asset = $rel.assets | Where-Object { $_.name -like 'PowerShell-*-win-x64.msi' } | Select-Object -First 1
         if ($asset) {
             $msiPath = Join-Path $env:TEMP $asset.name
-            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msiPath -UseBasicParsing
+            Invoke-ResilientDownload -Url $asset.browser_download_url -OutFile $msiPath
         }
     } catch {
         Write-Warn2 "دریافت از API گیت‌هاب ناموفق بود: $($_.Exception.Message) — تلاش با نصب‌کنندهٔ رسمی aka.ms"
@@ -210,7 +242,7 @@ function Enable-Wsl2 {
     if (-not $wslOk) {
         Write-Step 'نصب هستهٔ WSL2 (wsl_update_x64.msi)'
         $msi = Join-Path $env:TEMP 'wsl_update_x64.msi'
-        Invoke-WebRequest -Uri 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi -UseBasicParsing
+        Invoke-ResilientDownload -Url 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $msi
         Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$msi`" /qn" -Wait
         try { & wsl.exe --set-default-version 2 *> $null } catch { }
         Write-Ok 'هستهٔ WSL2 نصب شد'
@@ -223,11 +255,58 @@ function Enable-Wsl2 {
 function Install-Git {
     if (Get-Command git -ErrorAction SilentlyContinue) { Write-Ok 'Git نصب است'; return }
     Write-Step 'دانلود Git for Windows (آخرین نسخهٔ پایدار ۶۴بیتی)'
-    $setup = Join-Path $env:TEMP 'Git-64-bit.exe'
-    Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/latest/download/Git-64-bit.exe' -OutFile $setup -UseBasicParsing
+    $setup = $null
+    # نام واقعی نصاب‌ها مثل Git-2.56.0.3-64-bit.exe است (Git-64-bit.exe وجود خارجی ندارد)
+    $pattern = 'Git-\d+(\.\d+)*-64-bit\.exe'
+
+    # ۰) اگر نصاب از قبل در C:\rosepsy\installers گذاشته شده باشد، همان استفاده می‌شود
+    $pre = Get-ChildItem -Path (Join-Path $InstallDir 'installers') -Filter 'Git-*-64-bit.exe' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch 'arm64' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($pre) {
+        Write-Ok "نصاب آمادهٔ محلی: $($pre.FullName)"
+        $setup = $pre.FullName
+    }
+
+    if (-not $setup) {
+        $url = $null
+        # ۱) مسیر اصلی: API گیت‌هاب — برداشتن browser_download_url از ریلیز آخر
+        try {
+            $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/git-for-windows/git/releases/latest' -TimeoutSec 60
+            $asset = $rel.assets | Where-Object { $_.name -match $pattern } | Select-Object -First 1
+            if ($asset) { $url = $asset.browser_download_url }
+        } catch {
+            Write-Warn2 "API گیت‌هاب پاسخ نداد: $($_.Exception.Message) — تلاش با روش جایگزین"
+        }
+        # ۲) جایگزین بدون API: ریدایرکت releases/latest + صفحهٔ expanded_assets
+        if (-not $url) {
+            try {
+                $req = [System.Net.WebRequest]::Create('https://github.com/git-for-windows/git/releases/latest')
+                $req.AllowAutoRedirect = $false
+                $req.Timeout = 30000
+                $rsp = $req.GetResponse()
+                $loc = [string]$rsp.Headers['Location']
+                $rsp.Close()
+                if ($loc -match '/tag/(.+)$') {
+                    $tag = $Matches[1]
+                    Write-Host "    آخرین ریلیز: $tag" -ForegroundColor DarkGray
+                    $html = (Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/expanded_assets/$tag" -UseBasicParsing -TimeoutSec 60).Content
+                    if ($html -match $pattern) { $url = "https://github.com/git-for-windows/git/releases/download/$tag/$($Matches[0])" }
+                }
+            } catch {
+                Write-Warn2 "یافتن نصاب از صفحهٔ ریلیزها ناموفق بود: $($_.Exception.Message)"
+            }
+        }
+        if (-not $url) {
+            throw "نشانی نصاب Git پیدا نشد — فایل Git-*-64-bit.exe را از https://github.com/git-for-windows/git/releases/latest دستی دانلود و در پوشهٔ $InstallDir\installers بگذارید و دوباره اجرا کنید"
+        }
+        Write-Host "    نصاب: $((Split-Path $url -Leaf))" -ForegroundColor DarkGray
+        $setup = Join-Path $env:TEMP 'Git-installer.exe'
+        Invoke-ResilientDownload -Url $url -OutFile $setup
+    }
+
     Write-Step 'نصب بی‌صدای Git'
     $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/NORESTART', '/NOSPLASHPAGE' -Wait -PassThru
-    Remove-Item $setup -ErrorAction SilentlyContinue
+    if ($setup -like "$env:TEMP*") { Remove-Item $setup -ErrorAction SilentlyContinue }
     $env:Path = "$env:Path;$env:ProgramFiles\Git\cmd"
     if ($p.ExitCode -ne 0 -or -not (Get-Command git -ErrorAction SilentlyContinue)) {
         throw 'نصب Git ناموفق بود — پنجرهٔ PowerShell را ببندید، دوباره باز کنید و setup را تکرار کنید'
@@ -239,12 +318,19 @@ function Install-DockerDesktop {
     $dockerExe = "$env:ProgramFiles\Docker\Docker\resources\bin\docker.exe"
     if (Test-Path $dockerExe) { Write-Ok 'Docker Desktop نصب است'; return }
     Write-Step 'دانلود Docker Desktop (حدود ۵۰۰ تا ۷۰۰ مگابایت — بسته به اینترنت ممکن است طولانی شود)'
-    $installer = Join-Path $env:TEMP 'DockerDesktopInstaller.exe'
-    Invoke-WebRequest -Uri 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe' -OutFile $installer -UseBasicParsing
+    $pre = Get-ChildItem -Path (Join-Path $InstallDir 'installers') -Filter 'DockerDesktop*.exe' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($pre) {
+        Write-Ok "نصاب آمادهٔ محلی: $($pre.FullName)"
+        $installer = $pre.FullName
+    } else {
+        $installer = Join-Path $env:TEMP 'DockerDesktopInstaller.exe'
+        Invoke-ResilientDownload -Url 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe' -OutFile $installer
+    }
     Write-Step 'نصب بی‌صدای Docker Desktop با بک‌اند WSL2 (چند دقیقه طول می‌کشد)'
     # --always-run-service: سرویس com.docker.service برای کارکرد درست روی Windows Server
     $p = Start-Process -FilePath $installer -ArgumentList 'install', '--quiet', '--accept-license', '--backend=wsl-2', '--always-run-service' -Wait -PassThru
-    Remove-Item $installer -ErrorAction SilentlyContinue
+    if ($installer -like "$env:TEMP*") { Remove-Item $installer -ErrorAction SilentlyContinue }
     if ($p.ExitCode -eq 3010) {
         Write-Warn2 'نصب Docker Desktop به ری‌استارت نیاز دارد (کد 3010)'
         $script:NeedRestart = $true
@@ -328,6 +414,13 @@ function Invoke-Setup {
 
     # ۴) Docker Desktop
     Install-DockerDesktop
+
+    # ۴-ب) اگر ری‌استارتی روی ویندوز در صف است (مثلاً فعال‌سازی WSL2 هنوز با ری‌استارت کامل نشده)،
+    # موتور Docker تا ری‌استارت بعدی بالا نمی‌آید — پس همان‌جا متوقف شو تا کاربر یک‌بار restart کند
+    if (-not $script:NeedRestart -and (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')) {
+        Write-Warn2 'یک ری‌استارت روی ویندوز در صف است (فعال‌سازی WSL2/به‌روزرسانی‌ها باید با یک بار ری‌استارت کامل شود)'
+        $script:NeedRestart = $true
+    }
 
     if ($script:NeedRestart) {
         Write-Host ''
@@ -641,6 +734,7 @@ try {
         'backup'     { Invoke-Backup }
         default      { Show-Help }
     }
+    exit 0
 } catch {
     Write-Host ''
     Write-Err2 "خطا: $($_.Exception.Message)"
