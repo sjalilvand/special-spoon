@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۷ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۸ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -62,7 +62,11 @@ $VER = @{
     git         = 'https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe'
     winsw       = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe'
     clamav      = 'https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.4.6/clamav-1.4.6.win.x64.msi'
-    redisMsi    = 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.msi'
+    # رفع اشکال ۱.۰.۸: MSI به INSTALLDIR ما احترام نمی‌گذاشت (کد ۰ اما مسیر خالی)؛ zip رسمی جای آن را گرفت
+    redisZip    = 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip'
+    # آینهٔ امضاهای ClamAV: اول از release خودِ این مخزن (به‌روز)، بعد آینهٔ چندبخشی ladar (خودکار اما کهنه‌تر)
+    clamDbRepo    = 'https://github.com/sjalilvand/special-spoon/releases/download/clamav-db'
+    clamDbMirror2 = 'https://github.com/ladar/clamav-data/raw/main'
     mc          = 'https://github.com/minio/mc/releases/download/RELEASE.2025-08-13T08-35-41Z/mc.windows-amd64.RELEASE.2025-08-13T08-35-41Z.exe'
     caddy       = 'https://github.com/caddyserver/caddy/releases/latest/download/caddy_windows_amd64.exe'
 }
@@ -103,16 +107,23 @@ function Assert-Admin {
         throw 'این اسکریپت باید در PowerShell «Run as Administrator» اجرا شود.'
     }
 }
-function Invoke-Download([string]$url, [string]$dest, [int]$maxMb = 800) {
+function Invoke-Download([string]$url, [string]$dest, [int]$maxMb = 800, [string]$UserAgent = '') {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $curlOk = $true
+    # CDN امضاهای ClamAV درخواست‌های curl/مرورگر را می‌بندد و فقط UA خودِ کلاینت‌های
+    # رسمی (freshclam/cvdupdate) را می‌پذیرد (رفع اشکال ۱.۰.۸ - تست واقعی: همان IP،
+    # UA مرورگر = 403 و UA «ClamAV/1.4.6» = 200)
+    $uaArgs = @()
+    if ($UserAgent) { $uaArgs = @('-A', $UserAgent) }
     try {
-        & curl.exe -sSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 1800 -o "$dest.part" $url 2>$null
+        & curl.exe -sSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 1800 @uaArgs -o "$dest.part" $url 2>$null
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$dest.part")) { $curlOk = $false }
     } catch { $curlOk = $false }
     if (-not $curlOk) {
         Write-Warn2 "curl ناموفق؛ تلاش با Invoke-WebRequest: $url"
-        Invoke-WebRequest -Uri $url -OutFile "$dest.part" -UseBasicParsing -TimeoutSec 1800
+        $iwrArgs = @{ Uri = $url; OutFile = "$dest.part"; UseBasicParsing = $true; TimeoutSec = 1800 }
+        if ($UserAgent) { $iwrArgs.UserAgent = $UserAgent }
+        Invoke-WebRequest @iwrArgs
     }
     $size = (Get-Item "$dest.part").Length
     if ($size -lt 1000) { throw "فایل دانلودشده بیش‌ازحد کوچک است ($size بایت): $url" }
@@ -126,6 +137,63 @@ function Expand-Pkg([string]$zip, [string]$dest) {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     & tar.exe -xf $zip -C $dest
     if ($LASTEXITCODE -ne 0) { Expand-Archive -Path $zip -DestinationPath $dest -Force }
+}
+# ---------- WinSW: پوشش سرویس‌های ویندوزی (رفع اشکال ۱.۰.۸) ----------
+# پیش‌تر فقط URL تعریف شده بود اما هیچ گامی آن را دانلود نمی‌کرد؛
+# اولین New-WinSvc (rosepsy-clamd فقط هشدار داد و rosepsy-api کل اجرا را با throw خاتمه داد)
+function Ensure-WinSW {
+    $dst = "$BaseDir\tools\WinSW-x64.exe"
+    $valid = $false
+    if (Test-Path $dst) {
+        try {
+            if ((Get-Item $dst).Length -gt 1MB) {
+                $fs = [System.IO.File]::OpenRead($dst)
+                try {
+                    $b = New-Object byte[] 2
+                    $null = $fs.Read($b, 0, 2)
+                    if ($b[0] -eq 0x4D -and $b[1] -eq 0x5A) { $valid = $true }  # امضای 'MZ'
+                } finally { $fs.Dispose() }
+            }
+        } catch {}
+    }
+    if ($valid) { return $dst }
+    if (Test-Path $dst) { Write-Warn2 'WinSW موجود ناقص/خراب است - دوباره دانلود می‌شود' }
+    Invoke-Download $VER.winsw $dst 40 | Out-Null
+    Write-Ok 'WinSW (پوشش سرویس‌های ویندوزی) آماده شد'
+    return $dst
+}
+# تاریخ ساخت یک فایل CVD را از هدر ۵۱۲ بایتی برمی‌گرداند (شفافیت دربارهٔ کهنگی امضاها)
+function Get-CvdBuildDate([string]$cvdPath) {
+    try {
+        $fs = [System.IO.File]::OpenRead($cvdPath)
+        try {
+            $b = New-Object byte[] 512
+            $null = $fs.Read($b, 0, 512)
+            $h = [System.Text.Encoding]::ASCII.GetString($b).Split([char]0)[0]
+            if ($h -match '^ClamAV-VDB:([0-9]{2} \w{3} [0-9]{4})') { return $Matches[1] }
+        } finally { $fs.Dispose() }
+    } catch {}
+    return '?'
+}
+# دانلود امضاها از آینهٔ چندبخشی ladar/clamav-data (فایل تکی یا بخش‌های 01..N تا اولین 404، سپس چسباندن)
+function Get-ClamDbFromLadar([string]$mirror, [string]$dbdir) {
+    New-Item -ItemType Directory -Force -Path $dbdir | Out-Null
+    foreach ($f in 'main.cvd','daily.cvd','bytecode.cvd') {
+        $dst = Join-Path $dbdir $f
+        if (Test-Path $dst) { continue }
+        try { Invoke-Download ($mirror.TrimEnd('/') + '/' + $f) $dst 300 | Out-Null; continue } catch {}
+        $parts = @()
+        for ($i = 1; $i -le 40; $i++) {
+            $pn = '{0:D2}' -f $i
+            $pp = Join-Path $dbdir "$f.part$pn"
+            try { Invoke-Download ($mirror.TrimEnd('/') + '/' + $f + '.' + $pn) $pp 200 | Out-Null; $parts += $pp }
+            catch { break }
+        }
+        if ($parts.Count -eq 0) { throw ("هیچ نسخه‌ای از {0} در آینه یافت نشد" -f $f) }
+        $fsOut = [System.IO.File]::Open($dst, [System.IO.FileMode]::Append)
+        try { foreach ($pp in $parts) { $bytes = [System.IO.File]::ReadAllBytes($pp); $fsOut.Write($bytes, 0, $bytes.Length); Remove-Item $pp -Force } }
+        finally { $fsOut.Dispose() }
+    }
 }
 # خواندن فایل .env به دیکشنری
 function Read-EnvMap([string]$path) {
@@ -314,7 +382,8 @@ function New-WinSvc {
     )
     $dir = Join-Path $SvcDir $Name
     New-Item -ItemType Directory -Force -Path $dir, (Join-Path $LogDir $Name) | Out-Null
-    if (-not (Test-Path "$BaseDir\tools\WinSW-x64.exe")) { throw 'WinSW-x64.exe یافت نشد' }
+    # رفع اشکال ۱.۰.۸: به‌جای throw، خودش دانلود می‌کند (idempotent)
+    Ensure-WinSW | Out-Null
     Copy-Item "$BaseDir\tools\WinSW-x64.exe" (Join-Path $dir "$Name.exe") -Force
     $envXml = ''
     foreach ($k in $EnvMap.Keys) {
@@ -706,36 +775,61 @@ function New-DbRoleAndDatabase([string]$superPass, [string]$appPass) {
 }
 
 # ---------- گام ۵: Redis (اختیاری؛ نبودش = fail-open مطابق بند ۶ ADR-05) ----------
+# رفع اشکال ۱.۰.۸: MSI به INSTALLDIR ما احترام نمی‌گذاشت (کد خروج ۰ اما redis-server.exe
+# در مسیر مورد انتظار نبود)؛ حالا zip رسمی tporadowski + سرویس WinSW «Redis» -
+# همان الگوی بقیهٔ سرویس‌ها (لاگ رول‌شده + ری‌استارت خودکار)
 function Install-Redis {
     Write-Step 'گام ۵: Redis برای ویندوز (سرویس «Redis»، فقط 127.0.0.1)'
     if ($SkipRedis) { Write-Warn2 'با پارامتر SkipRedis رد شد'; return $false }
+    # سرویس موجود (نصب MSI قدیمی یا اجرای قبلی) بدون دست‌کاری استفاده می‌شود
     if (Get-Service -Name 'Redis' -ErrorAction SilentlyContinue) {
         Write-Ok 'سرویس Redis از قبل نصب است'
         Start-WinSvc 'Redis' ; return $true
     }
     try {
-        $msi = Invoke-Download $VER.redisMsi "$DlDir\redis.msi" 60
-        $p = Start-Process 'msiexec.exe' -ArgumentList '/i', "`"$msi`"", 'INSTALLDIR="C:\rosepsy\runtime\redis"', '/qn', '/norestart' -Wait -PassThru
-        # رفع اشکال ۱.۰.۶: کد خروج در PS 5.1 گاهی تهی است؛ ملاک، وجود redis-server.exe است
-        $rcode = Get-ExitCode $p
-        if (-not (Test-Path 'C:\rosepsy\runtime\redis\redis-server.exe')) { throw ("msiexec ناموفق بود (کد: {0})" -f $rcode) }
-        $conf = 'C:\rosepsy\runtime\redis\redis.windows-service.conf'
-        if (Test-Path $conf) {
-            $txt = [System.IO.File]::ReadAllText($conf)
-            $txt = $txt -replace '(?m)^bind\s+.*$', 'bind 127.0.0.1'
-            $txt = $txt -replace '(?m)^port\s+6379\s*$', ("port {0}" -f $RedisPort)
-            $txt = $txt -replace '(?m)^appendonly\s+no\s*$', 'appendonly yes'
-            $txt = $txt -replace '(?m)^dir\s+.*$', ("dir {0}" -f ($DataDir + '\redis').Replace('\','/'))
-            [System.IO.File]::WriteAllText($conf, $txt)
-        }
-        # تضمین فقط-لوکال‌هاست (مستقل از پیش‌فرض MSI)
-        $txt2 = [System.IO.File]::ReadAllText($conf)
-        if ($txt2 -notmatch '(?m)^bind\s+127\.0\.0\.1\s*$') { Add-Content $conf 'bind 127.0.0.1' }
-        if ($txt2 -notmatch '(?m)^protected-mode\s+yes\s*$') { Add-Content $conf 'protected-mode yes' }
+        $rdir = "$BaseDir\runtime\redis"
+        if (-not (Test-Path "$rdir\redis-server.exe")) {
+            Ensure-WinSW | Out-Null
+            $zip = Invoke-Download $VER.redisZip "$DlDir\redis.zip" 40
+            $zroot = "$BaseDir\runtime\redisz"
+            if (Test-Path $zroot) { Remove-Item $zroot -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Pkg $zip $zroot
+            New-Item -ItemType Directory -Force -Path $rdir | Out-Null
+            # ساختار zip: فایل‌ها در ریشه (redis-server.exe و ...)؛ برای اطمینان حالت پوشهٔ داخلی هم پوشش داده می‌شود
+            if (Test-Path "$zroot\redis-server.exe") { Copy-Item "$zroot\*" $rdir -Force }
+            else {
+                $inner = Get-ChildItem $zroot -Directory | Select-Object -First 1
+                if ($inner -and (Test-Path (Join-Path $inner.FullName 'redis-server.exe'))) { Copy-Item (Join-Path $inner.FullName '*') $rdir -Force }
+            }
+            if (-not (Test-Path "$rdir\redis-server.exe")) { throw 'redis-server.exe بعد از استخراج یافت نشد' }
+            Write-Ok 'Redis باز شد (zip رسمی tporadowski)'
+        } else { Write-Ok 'باینری‌های Redis از قبل موجودند (دانلود رد شد)' }
+        # پیکربندی مینیمال: فقط-لوکال + مسیر دادهٔ خودمان
         New-Item -ItemType Directory -Force -Path "$DataDir\redis" | Out-Null
+        $dataR = ($DataDir + '\redis').Replace('\','/')
+        $conf = @"
+bind 127.0.0.1
+protected-mode yes
+port $RedisPort
+dir $dataR
+appendonly yes
+appendfilename "rosepsy.aof"
+save ""
+"@
+        [System.IO.File]::WriteAllText("$rdir\redis.conf", $conf, (New-Object System.Text.UTF8Encoding($false)))
+        New-WinSvc -Name 'Redis' -DisplayName 'Rosepsy Redis (cache/rate-limit)' `
+            -Description 'Redis for Windows - فقط 127.0.0.1' `
+            -Exe "$rdir\redis-server.exe" -ArgsStr ('"' + "$rdir\redis.conf" + '"') -WorkDir $rdir
         Start-WinSvc 'Redis'
-        & 'C:\rosepsy\runtime\redis\redis-cli.exe' -p $RedisPort ping | Out-Null
-        if ($LASTEXITCODE -eq 0) { Write-Ok ("Redis روی 127.0.0.1:{0} PING/PONG درست است" -f $RedisPort); return $true }
+        # PING با تلاش محدود (سرویس تازه شروع شده)
+        $pong = $false
+        for ($i = 0; $i -lt 10; $i++) {
+            & "$rdir\redis-cli.exe" -h 127.0.0.1 -p $RedisPort ping | Out-Null
+            if ($LASTEXITCODE -eq 0) { $pong = $true; break }
+            Start-Sleep 2
+        }
+        if ($pong) { Write-Ok ("Redis روی 127.0.0.1:{0} PING/PONG درست است" -f $RedisPort) }
+        else { Write-Warn2 'سرویس Redis ساخته شد اما PING پاسخ نشد - لاگ: C:\rosepsy\logs\Redis' }
         return $true
     } catch {
         Write-Warn2 ("Redis نصب نشد: {0}" -f $_.Exception.Message)
@@ -785,17 +879,51 @@ function Install-ClamAV {
         # به‌روزرسانی امضاها (بار اول ممکن است چند دقیقه طول بکشد)
         Write-Host '  به‌روزرسانی پایگاه امضاها (freshclam) - صبور باشید...'
         $fp = Start-Process "$clamDir\freshclam.exe" -ArgumentList '--show-progress' -Wait -PassThru -NoNewWindow
-        if ($fp.ExitCode -ne 0) { Write-Warn2 'freshclam ناموفق بود (شبکه؟) - clamd ممکن است تا امضاکنندهٔ بعدی بالا نیاید' }
-        else { Write-Ok 'امضاها به‌روز شدند' }
-        New-WinSvc -Name 'rosepsy-clamd' -DisplayName 'Rosepsy ClamAV Daemon' `
-            -Description 'clamd برای اسکن آنتی‌ویروس آپلودها (TCP 127.0.0.1)' `
-            -Exe "$clamDir\clamd.exe" -ArgsStr '--config-file="C:\Program Files\ClamAV\clamd.conf"' `
-            -WorkDir $clamDir
+        $fcode = Get-ExitCode $fp
+        if ($fcode -eq 0) { Write-Ok 'امضاها به‌روز شدند' }
+        else { Write-Warn2 ("freshclam ناموفق بود (کد: {0}) - CDN رسمی کلاینت‌های غیررسمی و برخی مناطق/شبکه‌ها را می‌بندد (403)" -f $fcode) }
+        # رفع اشکال ۱.۰.۸: اگر هنوز هیچ امضایی نداریم، از آینه‌های جایگزین (GitHub) دانلود می‌شود؛
+        # ۱) release «clamav-db» خودِ این مخزن (امضاهای به‌روز آپلودشده)  ۲) آینهٔ چندبخشی ladar
+        $dbFile = "$clamDir\database\daily.cvd"
+        $dbAlt  = "$clamDir\database\daily.cld"
+        if (-not ((Test-Path $dbFile) -or (Test-Path $dbAlt))) {
+            $clamUa = 'ClamAV/1.4.6 (OS: windows, ARCH: x86_64, CPU: amd64)'
+            foreach ($mirror in @($VER.clamDbRepo, $VER.clamDbMirror2)) {
+                try {
+                    Write-Host ("  تلاش آینهٔ جایگزین امضاها: {0}" -f $mirror)
+                    if ($mirror -eq $VER.clamDbMirror2) {
+                        Get-ClamDbFromLadar -mirror $mirror -dbdir "$clamDir\database"
+                    } else {
+                        foreach ($f in 'main.cvd','daily.cvd','bytecode.cvd') {
+                            Invoke-Download ($mirror.TrimEnd('/') + '/' + $f) "$clamDir\database\$f" 400 $clamUa | Out-Null
+                        }
+                    }
+                    if ((Test-Path $dbFile) -or (Test-Path $dbAlt)) {
+                        Write-Ok ("امضاها از آینهٔ جایگزین دانلود شد (تاریخ ساخت daily: {0})" -f (Get-CvdBuildDate $dbFile))
+                        break
+                    }
+                } catch { Write-Warn2 ("آینهٔ {0} ناموفق: {1}" -f $mirror, $_.Exception.Message) }
+            }
+        }
+        $haveDb = (Test-Path $dbFile) -or (Test-Path $dbAlt)
+        # سرویس به‌روزرسان همیشه ساخته می‌شود (خودترمیمی وقتی CDN باز شود)
         New-WinSvc -Name 'rosepsy-freshclam' -DisplayName 'Rosepsy FreshClam Updater' `
             -Description 'به‌روزرسان دوره‌ای امضاهای ClamAV' `
             -Exe "$clamDir\freshclam.exe" -ArgsStr '-d --quiet --checks=12' -WorkDir $clamDir
-        try { Start-WinSvc 'rosepsy-clamd' } catch { Write-Warn2 "clamd هنوز بالا نیامد (احتمالاً امضا ناقص): $($_.Exception.Message)" }
         try { Start-WinSvc 'rosepsy-freshclam' } catch {}
+        # clamd بدون هیچ امضایی اصلاً بالا نمی‌آید و WinSW آن را بی‌پایان ری‌استارت می‌کند؛
+        # پس فقط در صورت وجود امضا ساخته/اجرا می‌شود (اجرای بعدیِ idempotent آن را می‌سازد)
+        if ($haveDb) {
+            New-WinSvc -Name 'rosepsy-clamd' -DisplayName 'Rosepsy ClamAV Daemon' `
+                -Description 'clamd برای اسکن آنتی‌ویروس آپلودها (TCP 127.0.0.1)' `
+                -Exe "$clamDir\clamd.exe" -ArgsStr '--config-file="C:\Program Files\ClamAV\clamd.conf"' `
+                -WorkDir $clamDir
+            try { Start-WinSvc 'rosepsy-clamd' } catch { Write-Warn2 "clamd هنوز بالا نیامد (احتمالاً امضا ناقص): $($_.Exception.Message)" }
+        } else {
+            Write-Warn2 'هیچ پایگاه امضایی در دسترس نیست - سرویس clamd ساخته نشد (اسکن آپلودها موقتاً از کار افتاد)'
+            Write-Warn2 'سرویس rosepsy-freshclam در پس‌زمینه تلاش می‌کند؛ یا main.cvd/daily.cvd/bytecode.cvd را دستی در C:\Program Files\ClamAV\database بگذارید و setup را دوباره اجرا کنید'
+            return $false
+        }
         return $true
     } catch {
         Write-Warn2 ("ClamAV نصب نشد: {0}" -f $_.Exception.Message)
@@ -1180,9 +1308,12 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.7 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.8 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
+    # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
+    # همین ابتدا تلاش می‌شود (خطا مرگبار نیست - New-WinSvc موقع نیاز دوباره تلاش می‌کند)
+    try { Ensure-WinSW | Out-Null } catch { Write-Warn2 'دانلود WinSW فعلاً ناموفق بود - هنگام ساخت سرویس‌ها دوباره تلاش می‌شود' }
     Install-GitIfNeeded
     Get-AppRepo
     Install-PythonAndVenv
