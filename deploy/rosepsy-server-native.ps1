@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۹ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۰ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -388,7 +388,29 @@ function New-WinSvc {
     New-Item -ItemType Directory -Force -Path $dir, (Join-Path $LogDir $Name) | Out-Null
     # رفع اشکال ۱.۰.۸: به‌جای throw، خودش دانلود می‌کند (idempotent)
     Ensure-WinSW | Out-Null
-    Copy-Item "$BaseDir\tools\WinSW-x64.exe" (Join-Path $dir "$Name.exe") -Force
+    # رفع اشکال ۱.۰.۱۰: wrapper exe تصویر فرایندِ در حال اجراست و ویندوز آن را قفل می‌کند
+    # («being used by another process» در گام‌های ۶/۱۱ اجرای v1.۰.۹). سرویس آمادهٔ موجود =
+    # بدون دست‌زدن به فایل‌ها فقط بازگردانی مسیر (idempotent)؛ حالت ناقص = توقف سرویس، سپس بازسازی
+    $wrapper = Join-Path $dir "$Name.exe"
+    $xmlPath = Join-Path $dir "$Name.xml"
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($svc -and (Test-Path $wrapper) -and (Test-Path $xmlPath)) {
+        if ($svc.Status -eq 'Running') { Write-Ok ("سرویس «{0}» از قبل آماده و در حال اجراست" -f $Name) }
+        return $wrapper
+    }
+    if ($svc -and $svc.Status -eq 'Running') {
+        try {
+            Stop-Service -Name $Name -Force -ErrorAction Stop
+            (Get-Service -Name $Name).WaitForStatus('Stopped', '00:00:40')
+        } catch { Start-Sleep -Seconds 3 }
+        Start-Sleep -Seconds 1
+    }
+    $copied = $false
+    for ($ri = 0; $ri -lt 5; $ri++) {
+        try { Copy-Item "$BaseDir\tools\WinSW-x64.exe" $wrapper -Force -ErrorAction Stop; $copied = $true; break }
+        catch { Start-Sleep -Seconds 2 }
+    }
+    if (-not $copied) { throw ("رونویسی wrapper سرویس «{0}» ناموفق بود (فایل قفل است)" -f $Name) }
     $envXml = ''
     foreach ($k in $EnvMap.Keys) {
         $v = [System.Security.SecurityElement]::Escape([string]$EnvMap[$k])
@@ -1366,7 +1388,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.9 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.10 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
