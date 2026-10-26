@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۸ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۹ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -68,7 +68,11 @@ $VER = @{
     clamDbRepo    = 'https://github.com/sjalilvand/special-spoon/releases/download/clamav-db'
     clamDbMirror2 = 'https://github.com/ladar/clamav-data/raw/main'
     mc          = 'https://github.com/minio/mc/releases/download/RELEASE.2025-08-13T08-35-41Z/mc.windows-amd64.RELEASE.2025-08-13T08-35-41Z.exe'
-    caddy       = 'https://github.com/caddyserver/caddy/releases/latest/download/caddy_windows_amd64.exe'
+    # رفع اشکال ۱.۰.۹: Caddy هیچ exe خام منتشر نمی‌کند (فقط zip با شمارهٔ نسخه در نام)؛
+    # URL قدیمی «latest/download/caddy_windows_amd64.exe» همیشه 404 (۹ بایت Not Found) می‌داد
+    caddy       = 'https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_windows_amd64.zip'
+    caddyAlt    = 'https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_windows_amd64.zip'
+    caddyApi    = 'https://caddyserver.com/api/download?os=windows&arch=amd64'
 }
 $PGBin   = "$BaseDir\runtime\pgsql\bin"
 $VenvPy  = "$BaseDir\runtime\venv\Scripts\python.exe"
@@ -778,13 +782,33 @@ function New-DbRoleAndDatabase([string]$superPass, [string]$appPass) {
 # رفع اشکال ۱.۰.۸: MSI به INSTALLDIR ما احترام نمی‌گذاشت (کد خروج ۰ اما redis-server.exe
 # در مسیر مورد انتظار نبود)؛ حالا zip رسمی tporadowski + سرویس WinSW «Redis» -
 # همان الگوی بقیهٔ سرویس‌ها (لاگ رول‌شده + ری‌استارت خودکار)
+# ---------- بررسی واقعی bind ردیس (رفع اشکال ۱.۰.۹) ----------
+# سرویس «Redis» روی این سرور از MSI قدیمی آمده و conf آن ناشناخته است؛
+# به‌جای فرض، با netstat می‌سنجیم که فقط روی loopback گوش می‌دهد (هشدار، بدون دست‌کاری).
+function Test-RedisLoopback {
+    try {
+        $bad = @()
+        foreach ($ln in (netstat -ano | Select-String (':{0}\s' -f $RedisPort))) {
+            $t = (($ln.ToString().Trim() -split '\s+'))[1]
+            if ($t -and (-not $t.StartsWith('127.0.0.1:')) -and (-not $t.StartsWith('[::1]:'))) { $bad += $t }
+        }
+        if ($bad.Count -gt 0) {
+            Write-Warn2 ("هشدار امنیتی: Redis روی آدرس غیرلوکال هم گوش می‌دهد: {0}" -f ($bad -join ' , '))
+            Write-Warn2 'با requirepass تنظیم‌نشده، protected-mode=yes دسترسی خارجی را رد می‌کند؛ توصیه: فایل conf سرویس را به «bind 127.0.0.1» محدود و سرویس را ری‌استارت کنید'
+        } else {
+            Write-Ok 'Redis فقط روی loopback گوش می‌دهد (امن)'
+        }
+    } catch { Write-Warn2 ("بررسی bind Redis ناموفق بود: {0}" -f $_.Exception.Message) }
+}
 function Install-Redis {
     Write-Step 'گام ۵: Redis برای ویندوز (سرویس «Redis»، فقط 127.0.0.1)'
     if ($SkipRedis) { Write-Warn2 'با پارامتر SkipRedis رد شد'; return $false }
     # سرویس موجود (نصب MSI قدیمی یا اجرای قبلی) بدون دست‌کاری استفاده می‌شود
     if (Get-Service -Name 'Redis' -ErrorAction SilentlyContinue) {
         Write-Ok 'سرویس Redis از قبل نصب است'
-        Start-WinSvc 'Redis' ; return $true
+        Start-WinSvc 'Redis'
+        Test-RedisLoopback
+        return $true
     }
     try {
         $rdir = "$BaseDir\runtime\redis"
@@ -830,6 +854,7 @@ save ""
         }
         if ($pong) { Write-Ok ("Redis روی 127.0.0.1:{0} PING/PONG درست است" -f $RedisPort) }
         else { Write-Warn2 'سرویس Redis ساخته شد اما PING پاسخ نشد - لاگ: C:\rosepsy\logs\Redis' }
+        Test-RedisLoopback
         return $true
     } catch {
         Write-Warn2 ("Redis نصب نشد: {0}" -f $_.Exception.Message)
@@ -988,8 +1013,41 @@ function Install-Caddy {
     $caddyDir = "$BaseDir\runtime\caddy"
     New-Item -ItemType Directory -Force -Path $caddyDir, $EtcDir | Out-Null
     if (-not (Test-Path "$caddyDir\caddy.exe")) {
-        Invoke-Download $VER.caddy "$caddyDir\caddy.exe" 60 | Out-Null
+        # رفع اشکال ۱.۰.۹: منابع به ترتیب - حل لحظه‌ای آخرین نسخه از GitHub API،
+        # دو نسخهٔ پین‌شده، بیلدر رسمی caddyserver.com - اولین منبع موفق برنده است
+        $urls = @()
+        $tmpApi = "$caddyDir\caddy-api.json"
+        try {
+            & curl.exe -sSL --connect-timeout 15 --max-time 60 -H 'User-Agent: rosepsy-deploy' -o $tmpApi 'https://api.github.com/repos/caddyserver/caddy/releases/latest' 2>$null
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $tmpApi)) {
+                $rel = Get-Content $tmpApi -Raw -Encoding UTF8 | ConvertFrom-Json
+                $asset = @($rel.assets | Where-Object { $_.name -match '^caddy_.*_windows_amd64\.zip$' })[0]
+                if ($asset -and $asset.browser_download_url) { $urls += [string]$asset.browser_download_url }
+            }
+        } catch {}
+        if (Test-Path $tmpApi) { Remove-Item $tmpApi -Force -ErrorAction SilentlyContinue }
+        $urls += @($VER.caddy, $VER.caddyAlt, $VER.caddyApi)
+        $zipPath = "$caddyDir\caddy.zip"
+        foreach ($u in $urls) {
+            try {
+                Invoke-Download $u $zipPath 90 | Out-Null
+                $fs = [System.IO.File]::OpenRead($zipPath); $m = New-Object byte[] 2; [void]$fs.Read($m, 0, 2); $fs.Close()
+                if ($m[0] -eq 0x50 -and $m[1] -eq 0x4B) {
+                    # PK = zip رسمی (caddy.exe در ریشه)
+                    Expand-Pkg $zipPath $caddyDir
+                } elseif ($m[0] -eq 0x4D -and $m[1] -eq 0x5A) {
+                    # MZ = خودِ exe (پاسخ بیلدر رسمی) - مستقیم جابه‌جا می‌شود
+                    Move-Item $zipPath "$caddyDir\caddy.exe" -Force
+                } else { throw 'محتوای دانلودشده نه zip است نه exe' }
+                if (Test-Path "$caddyDir\caddy.exe") { break }
+            } catch { Write-Warn2 ("این منبع Caddy ناموفق بود - منبع بعدی: {0}" -f $u) }
+        }
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
+        if (-not (Test-Path "$caddyDir\caddy.exe")) {
+            throw 'هیچ‌یک از منابع Caddy پاسخ ندادند - دسترسی سرور به github.com را بررسی کنید یا caddy.exe را دستی در C:\rosepsy\runtime\caddy بگذارید'
+        }
     }
+    if ((Get-Item "$caddyDir\caddy.exe").Length -lt 5MB) { throw 'caddy.exe ناقص/خراب است (کمتر از ۵MB)' }
     Write-Ok 'caddy.exe آماده است'
     $siteDist  = "$AppDir\site\dist"
     $panelDist = "$AppDir\frontend\dist"
@@ -1308,7 +1366,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.8 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.9 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
