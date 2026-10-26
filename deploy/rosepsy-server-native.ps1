@@ -1115,6 +1115,16 @@ $siteAddr {
                 redir /panel/ 301
         }
 
+        # رفع اشکال ۱.۰.۱۱: assets پنل باید «قبل از» بلوک /panel/* و با handle_path (حذف پیشوند) باشد؛
+        # بلوک قبلی handle بود و چون Caddy بلوک‌های handle را زودتر از handle_path ارزیابی می‌کند،
+        # مسیر بدون حذف /panel جست‌وجو می‌شد (dist\panel\assets) و همیشه 404 می‌داد
+        handle_path /panel/assets/* {
+                root * "$panelDist"
+                try_files {path} =404
+                header Cache-Control "public, max-age=2592000, immutable"
+                file_server
+        }
+
         handle_path /panel/* {
                 root * "$panelDist"
                 try_files {path} /index.html
@@ -1125,12 +1135,6 @@ $siteAddr {
                 file_server
         }
 
-        handle /panel/assets/* {
-                root * "$panelDist"
-                try_files {path} =404
-                header Cache-Control "public, max-age=2592000, immutable"
-                file_server
-        }
 
         handle /assets/* {
                 root * "$siteDist"
@@ -1388,7 +1392,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.10 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.11 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
