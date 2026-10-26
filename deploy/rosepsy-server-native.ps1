@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۴ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۵ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -297,6 +297,59 @@ function Start-WinSvc([string]$Name) {
     Write-Ok ("سرویس «{0}» در حال اجراست" -f $Name)
 }
 
+# اعطای حق «Log on as a service» به حساب سرویس (با LSA API). بدون این حق،
+# Start-Service برای حساب محلی معمولی با خطای 1069 (logon failure) ترک می‌خورد.
+function Grant-ServiceLogonRight([string]$userName) {
+    try {
+        $src = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class LsaRights {
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    private static extern bool LookupAccountName(string system, string account, byte[] sid, ref int sidSize, StringBuilder refDomain, ref int refSize, out int use);
+    [DllImport("advapi32.dll", SetLastError=true)]
+    private static extern int LsaOpenPolicy(IntPtr system, ref LSA_OBJECT_ATTRIBUTES attrs, int access, out IntPtr policy);
+    [DllImport("advapi32.dll", SetLastError=true)]
+    private static extern int LsaAddAccountRights(IntPtr policy, byte[] sid, LSA_UNICODE_STRING[] rights, int count);
+    [DllImport("advapi32.dll")]
+    private static extern int LsaClose(IntPtr policy);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LSA_OBJECT_ATTRIBUTES {
+        public int Length; public IntPtr RootDirectory; public IntPtr ObjectName;
+        public int Attributes; public IntPtr SecurityDescriptor; public IntPtr SecurityQualityOfService;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LSA_UNICODE_STRING { public ushort Length; public ushort MaximumLength; public IntPtr Buffer; }
+    public static void AddServiceLogon(string account) {
+        byte[] sid = new byte[68]; int sidSize = sid.Length;
+        StringBuilder dom = new StringBuilder(256); int domSize = dom.Capacity; int use;
+        if (!LookupAccountName(null, account, sid, ref sidSize, dom, ref domSize, out use))
+            throw new Exception("LookupAccountName failed: " + Marshal.GetLastWin32Error());
+        LSA_OBJECT_ATTRIBUTES oa = new LSA_OBJECT_ATTRIBUTES();
+        oa.Length = Marshal.SizeOf(typeof(LSA_OBJECT_ATTRIBUTES));
+        IntPtr policy;
+        int st = LsaOpenPolicy(IntPtr.Zero, ref oa, 0x00000800 | 0x00000010, out policy);
+        if (st != 0) throw new Exception("LsaOpenPolicy: 0x" + st.ToString("X"));
+        try {
+            string right = "SeServiceLogonRight";
+            LSA_UNICODE_STRING lsa = new LSA_UNICODE_STRING();
+            lsa.Buffer = Marshal.StringToHGlobalUni(right);
+            lsa.Length = (ushort)(right.Length * 2);
+            lsa.MaximumLength = (ushort)((right.Length + 1) * 2);
+            int r = LsaAddAccountRights(policy, sid, new LSA_UNICODE_STRING[] { lsa }, 1);
+            Marshal.FreeHGlobal(lsa.Buffer);
+            if (r != 0) throw new Exception("LsaAddAccountRights: 0x" + r.ToString("X"));
+        } finally { LsaClose(policy); }
+    }
+}
+'@
+        if (-not ('LsaRights' -as [type])) { Add-Type -TypeDefinition $src -Language CSharp }
+        [LsaRights]::AddServiceLogon($userName)
+        Write-Ok ("حق «Log on as a service» به {0} داده شد" -f $userName)
+    } catch { Write-Warn2 ("اعطای حق سرویس به {0} ناموفق ماند: {1}" -f $userName, $_.Exception.Message) }
+}
+
 # ---------- گام ۴: PostgreSQL 16 ----------
 function Install-PostgreSQL([string]$superPass) {
     Write-Step 'گام ۴: PostgreSQL 16 (سرویس ویندوزی rosepsy-pg، فقط 127.0.0.1)'
@@ -308,60 +361,108 @@ function Install-PostgreSQL([string]$superPass) {
     try {
         Write-Host '  مسیر اصلی: نصب‌کنندهٔ رسمی EDB در حالت بی‌صدا (چند دقیقه طول می‌کشد)...'
         $pkg = Invoke-Download $VER.pgInstaller "$DlDir\pg-installer.exe" 500
-        $pgArgs = @(
-            '--mode','unattended','--unattendedmodeui','none',
-            '--superpassword', $superPass,
-            '--servicename','rosepsy-pg',
-            '--serviceaccount','NT AUTHORITY\NetworkService',
-            '--serverport',"$DbPort",
-            '--prefix',"$BaseDir\runtime\pgsql",
-            '--datadir',"$DataDir\pgdata",
-            '--locale','C',
-            '--enable-components','server,commandlinetools',
-            '--disable-components','pgAdmin,stackbuilder'
-        )
-        $p = Start-Process -FilePath $pkg -ArgumentList $pgArgs -Wait -PassThru -NoNewWindow
+        # نکتهٔ PS 5.1: در ArgumentList آرایه‌ای، رشته‌های دارای فاصله بدون گیومه
+        # ارسال می‌شوند؛ «NT AUTHORITY\NetworkService» به دو پارامتر می‌شکند و نصاب
+        # با خطای Expected option but got "AUTHORITY\NetworkService" می‌میرد.
+        # راه‌حل: ساخت یک رشتهٔ واحد با گیومهٔ داخلی و ارسال آن به‌صورت یک‌جا.
+        $pgArgs = (
+            '--mode unattended',
+            '--unattendedmodeui none',
+            ('--superpassword "{0}"' -f $superPass),
+            '--servicename "rosepsy-pg"',
+            '--serviceaccount "NT AUTHORITY\NetworkService"',
+            ('--serverport {0}' -f $DbPort),
+            ('--prefix "{0}"' -f "$BaseDir\runtime\pgsql"),
+            ('--datadir "{0}"' -f "$DataDir\pgdata"),
+            '--locale C',
+            '--enable-components server,commandlinetools',
+            '--disable-components pgAdmin,stackbuilder'
+        ) -join ' '
+        # با تایم‌اوت منتظر بمان تا اگر نصاب روی پنجره‌ای قفل شد، اسکریپت بی‌پایان نماند
+        $p = Start-Process -FilePath $pkg -ArgumentList $pgArgs -PassThru -NoNewWindow
+        if (-not $p.WaitForExit(15 * 60 * 1000)) {
+            try { $p.Kill() } catch {}
+            throw 'نصب‌کنندهٔ EDB بیش از ۱۵ دقیقه معطل ماند (احتمالاً پنجرهٔ پنهان) - به مسیر جایگزین می‌رویم'
+        }
         if ($p.ExitCode -ne 0) { throw ("نصب‌کنندهٔ EDB کد {0} برگرداند" -f $p.ExitCode) }
         $msiDone = $true
         Write-Ok 'PostgreSQL با نصب‌کنندهٔ EDB نصب شد'
     } catch {
         Write-Warn2 ("نصب‌کنندهٔ EDB ناموفق: {0}" -f $_.Exception.Message)
         # لاگ نصب‌کنندهٔ EDB (BitRock) برای عیب‌یابی
+        # فرایند رهاشدهٔ نصاب (پنجرهٔ خطای بازمانده) بسته شود
+        Get-Process -Name 'postgresql-*' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         $edblog = Join-Path $env:TEMP 'install-postgresql.log'
         if (Test-Path $edblog) {
             Write-Warn2 'آخرین خطوط لاگ نصب‌کنندهٔ EDB:'
             Get-Content $edblog -Tail 12 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
         }
         Write-Host '  مسیر جایگزین: باینری Zip رسمی EDB + initdb دستی...'
-        $zip = Invoke-Download $VER.pgZip "$DlDir\pg-bin.zip" 600
-        Expand-Pkg $zip "$BaseDir\runtime\pgz"
-        # ساختار zip: pgsql/...  -> به runtime\pgsql منتقل کن
-        if (Test-Path "$BaseDir\pgz\pgsql\bin\initdb.exe") {
-            Move-Item "$BaseDir\pgz\pgsql" "$BaseDir\runtime\pgsql" -Force
-        } elseif (Test-Path "$BaseDir\pgz\bin\initdb.exe") {
-            Move-Item "$BaseDir\pgz" "$BaseDir\runtime\pgsql" -Force
+        if (-not (Test-Path "$PGBin\initdb.exe")) {
+            $zip = Invoke-Download $VER.pgZip "$DlDir\pg-bin.zip" 600
+            $pgzRoot = "$BaseDir\runtime\pgz"
+            if (Test-Path $pgzRoot) { Remove-Item $pgzRoot -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Pkg $zip $pgzRoot
+            # ساختار zip: pgsql/... -> به runtime\pgsql منتقل شود
+            # (رفع اشکال ۱.۰.۵: پیش‌تر مسیر استخراج runtime\pgz بود اما از
+            #  $BaseDir\pgz بررسی می‌شد و initdb هرگز پیدا نمی‌شد)
+            if (Test-Path "$pgzRoot\pgsql\bin\initdb.exe") {
+                if (Test-Path "$BaseDir\runtime\pgsql") { Remove-Item "$BaseDir\runtime\pgsql" -Recurse -Force -ErrorAction SilentlyContinue }
+                Move-Item "$pgzRoot\pgsql" "$BaseDir\runtime\pgsql" -Force
+            } elseif (Test-Path "$pgzRoot\bin\initdb.exe") {
+                if (Test-Path "$BaseDir\runtime\pgsql") { Remove-Item "$BaseDir\runtime\pgsql" -Recurse -Force -ErrorAction SilentlyContinue }
+                Move-Item $pgzRoot "$BaseDir\runtime\pgsql" -Force
+            }
+            if (-not (Test-Path "$PGBin\initdb.exe")) { throw "باینری PostgreSQL بعد از استخراج Zip پیدا نشد" }
+            # باینری‌های Zip زمان‌اجرای VC++ را به‌همراه ندارند (نصاب EDB خودش می‌گنجاند)
+            if (-not (Test-Path "$env:SystemRoot\System32\vcruntime140.dll") -or -not (Test-Path "$env:SystemRoot\System32\msvcp140.dll")) {
+                Write-Host '  نصب Microsoft VC++ 2015-2022 Redistributable (لازم برای باینری‌ها)...'
+                try {
+                    $vc = Invoke-Download 'https://aka.ms/vs/17/release/vc_redist.x64.exe' "$DlDir\vc_redist.x64.exe" 60
+                    $p = Start-Process $vc -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru
+                    if ($p.ExitCode -in @(0,1638,3010)) { Write-Ok 'VC++ Redistributable نصب شد' }
+                    else { Write-Warn2 ("VC++ Redistributable کد {0} برگرداند" -f $p.ExitCode) }
+                } catch { Write-Warn2 'نصب VC++ ناموفق بود؛ بدون زمان‌اجرای VC++ ممکن است initdb بالا نیاید' }
+            }
+        } else {
+            Write-Ok 'باینری‌های PostgreSQL از قبل موجودند (دانلود مجدد رد شد)'
         }
         # حساب سرویس کم‌اختیار (postgres به‌عنوان ادمین اجرا نمی‌شود)
         $pgSvcUser = 'rosepsy_pg'
         $pgSvcPass = New-RandomPass 20
-        try {
-            net user $pgSvcUser $pgSvcPass /add /passwordchg:no /passwordreq:yes /active:yes | Out-Null
-            net user $pgSvcUser /comment:'Rosepsy PostgreSQL service account' | Out-Null
-        } catch { Write-Warn2 'حساب rosepsy_pg شاید از قبل موجود باشد' }
+        net user $pgSvcUser $pgSvcPass /add /passwordchg:no /passwordreq:yes /active:yes | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            # حساب از اجرای نیمه‌کارهٔ قبل مانده؛ رمز آن با مقدار تازه هم‌راستا می‌شود
+            Write-Warn2 'حساب rosepsy_pg موجود بود - رمز آن هم‌راستا می‌شود'
+            net user $pgSvcUser $pgSvcPass /active:yes /passwordreq:yes | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'تنظیم رمز حساب rosepsy_pg ناموفق بود' }
+        }
+        net user $pgSvcUser /comment:'Rosepsy PostgreSQL service account' | Out-Null
         New-Item -ItemType Directory -Force -Path "$DataDir\pgdata" | Out-Null
         icacls "$DataDir" /grant "${pgSvcUser}:(OI)(CI)F" /T | Out-Null
-        # initdb باید با حساب غیرادمین اجرا شود (سیاست امنیتی خود PostgreSQL)
-        $pwFile = "$DataDir\pgpw.txt"
-        [System.IO.File]::WriteAllText($pwFile, $superPass)
-        icacls $pwFile /grant "${pgSvcUser}:R" | Out-Null
-        $cred = New-Object System.Management.Automation.PSCredential(".\$pgSvcUser", (ConvertTo-SecureString $pgSvcPass -AsPlainText -Force))
-        $cmd = "`"$PGBin\initdb.exe`" -D `"$DataDir\pgdata`" -U postgres -E UTF8 --locale=C -A scram-sha-256 --pwfile=`"$pwFile`" > `"$DataDir\initdb.log`" 2>&1"
-        $p = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $cmd" -Credential $cred -Wait -PassThru -WindowStyle Hidden
-        if ($p.ExitCode -ne 0) { Get-Content "$DataDir\initdb.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Err2 $_ }; throw 'initdb ناموفق بود' }
-        Remove-Item $pwFile -Force -ErrorAction SilentlyContinue
-        Add-Content "$DataDir\pgdata\postgresql.conf" ("listen_addresses = '127.0.0.1'`nport = {0}" -f $DbPort)
-        Add-Content "$DataDir\pgdata\pg_hba.conf" ("host all all 127.0.0.1/32 scram-sha-256")
-        & "$PGBin\pg_ctl.exe" register -N 'rosepsy-pg' -U ".\$pgSvcUser" -P $pgSvcPass -D "$DataDir\pgdata" -o "-p $DbPort"
+        # بدون حق Log on as a service، Start-Service با خطای 1069 ترک می‌خورد
+        Grant-ServiceLogonRight $pgSvcUser
+        if (Test-Path "$DataDir\pgdata\PG_VERSION") {
+            Write-Ok 'خوشهٔ دادهٔ PostgreSQL از قبل مقداردهی شده (initdb رد شد)'
+        } else {
+            # initdb باید با حساب غیرادمین اجرا شود (سیاست امنیتی خود PostgreSQL)
+            $pwFile = "$DataDir\pgpw.txt"
+            [System.IO.File]::WriteAllText($pwFile, $superPass)
+            icacls $pwFile /grant "${pgSvcUser}:R" | Out-Null
+            $cred = New-Object System.Management.Automation.PSCredential(".\$pgSvcUser", (ConvertTo-SecureString $pgSvcPass -AsPlainText -Force))
+            $cmd = "`"$PGBin\initdb.exe`" -D `"$DataDir\pgdata`" -U postgres -E UTF8 --locale=C -A scram-sha-256 --pwfile=`"$pwFile`" > `"$DataDir\initdb.log`" 2>&1"
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $cmd" -Credential $cred -Wait -PassThru -WindowStyle Hidden
+            if ($p.ExitCode -ne 0) { Get-Content "$DataDir\initdb.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Err2 $_ }; throw 'initdb ناموفق بود' }
+            Remove-Item $pwFile -Force -ErrorAction SilentlyContinue
+            Add-Content "$DataDir\pgdata\postgresql.conf" ("listen_addresses = '127.0.0.1'`nport = {0}" -f $DbPort)
+            Add-Content "$DataDir\pgdata\pg_hba.conf" ("host all all 127.0.0.1/32 scram-sha-256")
+            Write-Ok 'initdb با موفقیت اجرا شد'
+        }
+        if (-not (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue)) {
+            & "$PGBin\pg_ctl.exe" register -N 'rosepsy-pg' -U ".\$pgSvcUser" -P $pgSvcPass -D "$DataDir\pgdata" -o "-p $DbPort"
+            if ($LASTEXITCODE -ne 0) { throw 'ثبت سرویس rosepsy-pg ناموفق بود' }
+            try { Set-Service 'rosepsy-pg' -StartupType Automatic } catch {}
+        }
         Write-Ok 'PostgreSQL از باینری Zip نصب شد'
     }
     if (-not (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue)) { throw 'سرویس rosepsy-pg ساخته نشد' }
@@ -863,7 +964,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.4 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.5 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
