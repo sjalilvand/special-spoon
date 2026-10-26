@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۵ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۶ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -156,6 +156,18 @@ function Invoke-Native([string]$exe, [string[]]$argList, [string]$okMsg) {
     & $exe @argList
     if ($LASTEXITCODE -ne 0) { throw "اجرای ناموفق: $exe $($argList -join ' ')  (کد $LASTEXITCODE)" }
     if ($okMsg) { Write-Ok $okMsg }
+}
+
+# خواندن امنِ کد خروج پروسهٔ Start-Process (رفع اشکال ۱.۰.۶)
+# PS 5.1: در برخی اجراها p.ExitCode حتی پس از پایان پروسه تهی برمی‌گردد؛
+# نمونهٔ واقعی روی Windows Server 2025: پیام «کد  برگرداند» با کد خالی،
+# در حالی که لاگ خود نصاب می‌گفت Installation completed / Exiting with code 0.
+# فراخوانی WaitForExit بدون پارامتر کد خروج را نهایی می‌کند؛ تهی یعنی «نامشخص»،
+# پس در تماس‌گیرنده‌ها ملاک، ردپای واقعی نصب است نه صرف کد خروج.
+function Get-ExitCode($p) {
+    if ($null -eq $p) { return $null }
+    try { $null = $p.WaitForExit() } catch {}
+    try { return $p.ExitCode } catch { return $null }
 }
 
 # پروب سریع HTTP برای انتخاب خودکار مخزن (هر وضعیت زیر ۵۰۰ یعنی «قابل دسترسی»)
@@ -384,7 +396,17 @@ function Install-PostgreSQL([string]$superPass) {
             try { $p.Kill() } catch {}
             throw 'نصب‌کنندهٔ EDB بیش از ۱۵ دقیقه معطل ماند (احتمالاً پنجرهٔ پنهان) - به مسیر جایگزین می‌رویم'
         }
-        if ($p.ExitCode -ne 0) { throw ("نصب‌کنندهٔ EDB کد {0} برگرداند" -f $p.ExitCode) }
+        # رفع اشکال ۱.۰.۶: ملاکِ موفقیت، ردپای نصب است (باینری + خوشهٔ داده + سرویس)
+        # نه کد خروجی که در PS 5.1 گاهی تهی برمی‌گردد و شکست کاذب می‌سازد
+        $code = Get-ExitCode $p
+        $binOk  = (Test-Path "$PGBin\postgres.exe")
+        $dataOk = (Test-Path "$DataDir\pgdata\PG_VERSION")
+        $svcOk  = ($null -ne (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue))
+        if ($binOk -and $dataOk -and $svcOk) {
+            if ($code -ne 0) { Write-Warn2 ("کد خروج نصاب خوانده نشد ({0}) اما ردپای نصب کامل است - ادامه" -f $code) }
+        } else {
+            throw ("نصب‌کنندهٔ EDB ناموفق (کد: {0}، باینری: {1}، خوشهٔ داده: {2}، سرویس: {3})" -f $code, $binOk, $dataOk, $svcOk)
+        }
         $msiDone = $true
         Write-Ok 'PostgreSQL با نصب‌کنندهٔ EDB نصب شد'
     } catch {
@@ -397,6 +419,12 @@ function Install-PostgreSQL([string]$superPass) {
             Write-Warn2 'آخرین خطوط لاگ نصب‌کنندهٔ EDB:'
             Get-Content $edblog -Tail 12 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
         }
+        # رفع اشکال ۱.۰.۶: اگر با وجود این خطا نصب EDB کامل شده باشد (سناریوی «کد خالی»)
+        # مسیر جایگزین اجرا نمی‌شود و از همین نصب استفاده می‌شود
+        $edbOk = (Test-Path "$PGBin\postgres.exe") -and (Test-Path "$DataDir\pgdata\PG_VERSION") -and ($null -ne (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue))
+        if ($edbOk) {
+            Write-Ok 'با وجود خطای بالا، ردپای نصب کامل EDB پیدا شد (باینری + خوشهٔ داده + سرویس) - از همین نصب استفاده می‌شود'
+        } else {
         Write-Host '  مسیر جایگزین: باینری Zip رسمی EDB + initdb دستی...'
         if (-not (Test-Path "$PGBin\initdb.exe")) {
             $zip = Invoke-Download $VER.pgZip "$DlDir\pg-bin.zip" 600
@@ -420,8 +448,10 @@ function Install-PostgreSQL([string]$superPass) {
                 try {
                     $vc = Invoke-Download 'https://aka.ms/vs/17/release/vc_redist.x64.exe' "$DlDir\vc_redist.x64.exe" 60
                     $p = Start-Process $vc -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru
-                    if ($p.ExitCode -in @(0,1638,3010)) { Write-Ok 'VC++ Redistributable نصب شد' }
-                    else { Write-Warn2 ("VC++ Redistributable کد {0} برگرداند" -f $p.ExitCode) }
+                    $vcode = Get-ExitCode $p
+                    if ((Test-Path "$env:SystemRoot\System32\vcruntime140.dll") -and (Test-Path "$env:SystemRoot\System32\msvcp140.dll")) { Write-Ok 'VC++ Redistributable نصب شد' }
+                    elseif ($null -ne $vcode -and $vcode -in @(0,1638,3010)) { Write-Ok 'VC++ Redistributable نصب شد' }
+                    else { Write-Warn2 ("VC++ Redistributable وضعیت نامشخص (کد: {0})" -f $vcode) }
                 } catch { Write-Warn2 'نصب VC++ ناموفق بود؛ بدون زمان‌اجرای VC++ ممکن است initdb بالا نیاید' }
             }
         } else {
@@ -452,7 +482,12 @@ function Install-PostgreSQL([string]$superPass) {
             $cred = New-Object System.Management.Automation.PSCredential(".\$pgSvcUser", (ConvertTo-SecureString $pgSvcPass -AsPlainText -Force))
             $cmd = "`"$PGBin\initdb.exe`" -D `"$DataDir\pgdata`" -U postgres -E UTF8 --locale=C -A scram-sha-256 --pwfile=`"$pwFile`" > `"$DataDir\initdb.log`" 2>&1"
             $p = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $cmd" -Credential $cred -Wait -PassThru -WindowStyle Hidden
-            if ($p.ExitCode -ne 0) { Get-Content "$DataDir\initdb.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Err2 $_ }; throw 'initdb ناموفق بود' }
+            # رفع اشکال ۱.۰.۶: ملاک، وجود PG_VERSION است نه کد خروج (که گاهی تهی است)
+            $icode = Get-ExitCode $p
+            if (-not (Test-Path "$DataDir\pgdata\PG_VERSION")) {
+                Get-Content "$DataDir\initdb.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Err2 $_ }
+                throw ("initdb ناموفق بود (کد: {0})" -f $icode)
+            }
             Remove-Item $pwFile -Force -ErrorAction SilentlyContinue
             Add-Content "$DataDir\pgdata\postgresql.conf" ("listen_addresses = '127.0.0.1'`nport = {0}" -f $DbPort)
             Add-Content "$DataDir\pgdata\pg_hba.conf" ("host all all 127.0.0.1/32 scram-sha-256")
@@ -464,6 +499,7 @@ function Install-PostgreSQL([string]$superPass) {
             try { Set-Service 'rosepsy-pg' -StartupType Automatic } catch {}
         }
         Write-Ok 'PostgreSQL از باینری Zip نصب شد'
+        }
     }
     if (-not (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue)) { throw 'سرویس rosepsy-pg ساخته نشد' }
     Start-WinSvc 'rosepsy-pg'
@@ -508,7 +544,9 @@ function Install-Redis {
     try {
         $msi = Invoke-Download $VER.redisMsi "$DlDir\redis.msi" 60
         $p = Start-Process 'msiexec.exe' -ArgumentList '/i', "`"$msi`"", 'INSTALLDIR="C:\rosepsy\runtime\redis"', '/qn', '/norestart' -Wait -PassThru
-        if ($p.ExitCode -ne 0) { throw ("msiexec کد {0}" -f $p.ExitCode) }
+        # رفع اشکال ۱.۰.۶: کد خروج در PS 5.1 گاهی تهی است؛ ملاک، وجود redis-server.exe است
+        $rcode = Get-ExitCode $p
+        if (-not (Test-Path 'C:\rosepsy\runtime\redis\redis-server.exe')) { throw ("msiexec ناموفق بود (کد: {0})" -f $rcode) }
         $conf = 'C:\rosepsy\runtime\redis\redis.windows-service.conf'
         if (Test-Path $conf) {
             $txt = [System.IO.File]::ReadAllText($conf)
@@ -543,7 +581,8 @@ function Install-ClamAV {
         if (-not (Test-Path "$clamDir\clamd.exe")) {
             $msi = Invoke-Download $VER.clamav "$DlDir\clamav.msi" 200
             $p = Start-Process 'msiexec.exe' -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart' -Wait -PassThru
-            if ($p.ExitCode -ne 0) { throw ("msiexec کد {0}" -f $p.ExitCode) }
+            $ccode = Get-ExitCode $p
+            if (-not (Test-Path "$clamDir\clamd.exe")) { throw ("msiexec ناموفق بود (کد: {0})" -f $ccode) }
         }
         Write-Ok 'ClamAV نصب شد'
         # تنظیم clamd.conf و freshclam.conf از نمونه‌های رسمی
@@ -792,9 +831,12 @@ function Install-GitIfNeeded {
     if ($SkipGitInstall) { Write-Warn2 'SkipGitInstall - git یافت نشد'; throw 'git لازم است' }
     $exe = Invoke-Download $VER.git "$DlDir\git-installer.exe" 100
     $p = Start-Process $exe -ArgumentList '/VERYSILENT','/NORESTART','/SUPPRESSMSGBOXES' -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -ne 0) { throw ("نصب Git کد {0}" -f $p.ExitCode) }
+    $gcode = Get-ExitCode $p
     $env:Path = "C:\Program Files\Git\cmd;$env:Path"
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'پس از نصب، git در PATH نیست (PowerShell را دوباره باز کنید)' }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        if ($null -ne $gcode -and $gcode -ne 0) { throw ("نصب Git کد {0} برگرداند" -f $gcode) }
+        throw 'پس از نصب، git در PATH نیست (PowerShell را دوباره باز کنید)'
+    }
     Write-Ok 'Git نصب شد'
 }
 function Get-AppRepo {
@@ -839,7 +881,9 @@ function Install-PythonAndVenv {
         $p = Start-Process $exe -ArgumentList '/quiet','InstallAllUsers=1','PrependPath=1',`
                 "TargetDir=$BaseDir\runtime\python",'Include_doc=0','Include_test=0','Include_launcher=0' `
                 -Wait -PassThru -NoNewWindow
-        if ($p.ExitCode -ne 0) { throw ("نصب Python کد {0}" -f $p.ExitCode) }
+        # رفع اشکال ۱.۰.۶: ملاک، وجود python.exe است نه کد خروج (که گاهی تهی است)
+        $pycode = Get-ExitCode $p
+        if (-not (Test-Path "$BaseDir\runtime\python\python.exe")) { throw ("نصب Python ناموفق بود (کد: {0})" -f $pycode) }
         Write-Ok 'Python نصب شد'
     }
     if (-not (Test-Path $VenvPy)) {
@@ -964,7 +1008,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.5 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.6 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
