@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۶ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۷ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
@@ -203,27 +203,78 @@ function Get-ListenerTable {
     return $rows
 }
 
+# سرویس‌هایی که خودِ Rosepsy می‌شناسد؛ سدِ پورت برای آن‌ها اعمال نمی‌شود (به‌جای آن resume می‌کنیم)
+$OwnSvcNames = @('rosepsy-pg','rosepsy-api','rosepsy-caddy','rosepsy-clamd','rosepsy-freshclam','Redis')
+
+function Test-PortHeldByUs([int]$port) {
+    # اگر پورت را سرویس‌های خودِ Rosepsy نگه داشته باشند برچسب خودی برمی‌گرداند؛ وگرنه $null
+    $hit = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $hit) { return $null }
+    $opid = [int]$hit.OwningProcess
+    # ۱) سرویس‌های بومی (PostgreSQL/Redis) خودشان شنونده‌اند؛ PID مستقیم به سرویس می‌رسد
+    $svc = $null
+    try { $svc = Get-CimInstance Win32_Service -Filter ("ProcessId = {0}" -f $opid) -ErrorAction Stop | Select-Object -First 1 } catch {}
+    if ($svc) {
+        $nm = [string]$svc.Name
+        if ($OwnSvcNames -contains $nm) { return $nm }
+        if (($nm -like 'postgres*') -and (([string]$svc.PathName) -like ("*{0}\runtime\pgsql*" -f $BaseDir))) { return $nm }
+        if (($nm -like 'rosepsy-*') -or ($nm -eq 'Redis')) { return $nm }
+    }
+    # ۲) فرایندِ فرزند WinSW شنونده است نه خود WinSW (uvicorn/caddy/clamd)؛ پس با مسیر باینری تشخیص می‌دهیم
+    $exep = try { (Get-Process -Id $opid -ErrorAction Stop).Path } catch { $null }
+    if ($exep) {
+        if ($exep -like ("{0}\runtime\*" -f $BaseDir)) { return 'سرویس‌های Rosepsy (runtime)' }
+        if ($exep -like 'C:\Program Files\ClamAV\*') { return 'rosepsy-clamd' }
+    }
+    return $null
+}
+
 function Test-ReservedPortsFree {
     $busy = @()
     foreach ($rp in ($ReservedPorts | Select-Object -Unique)) {
         $hit = Get-NetTCPConnection -State Listen -LocalPort $rp -ErrorAction SilentlyContinue
         if ($hit) { $busy += $rp }
     }
-    if ($busy.Count -gt 0) {
-        Write-Err2 'پورت‌های زیر پیش‌تر اشغال شده‌اند:'
-        foreach ($b in $busy) {
-            $proc = (Get-NetTCPConnection -State Listen -LocalPort $b -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
-            $pname = try { (Get-Process -Id $proc -ErrorAction Stop).ProcessName } catch { '?' }
-            Write-Err2 ("   پورت {0}  <-  فرایند: {1} (PID {2})" -f $b, $pname, $proc)
-        }
-        Write-Host ''
-        Write-Host '  دو راه‌حل:' -ForegroundColor White
-        Write-Host '   1) اگر آن فرایند متعلق به برنامهٔ دیگری است، پورت Rosepsy را عوض کنید؛ مثال:'
-        Write-Host '      powershell -File rosepsy-server-native.ps1 -Mode setup -DbPort 5433 -ApiPort 8010'
-        Write-Host '   2) اگر سرویس قدیمی Rosepsy است: Stop-Service rosepsy-api; Stop-Service rosepsy-pg'
-        throw 'سد پیش‌شرط: تداخل پورت. با پورت‌های آزاد دوباره اجرا کنید.'
+    if ($busy.Count -eq 0) {
+        Write-Ok ('پورت‌های رزرو Rosepsy آزادند: ' + (($ReservedPorts | Select-Object -Unique) -join ', '))
+        return
     }
-    Write-Ok ('پورت‌های رزرو Rosepsy آزادند: ' + (($ReservedPorts | Select-Object -Unique) -join ', '))
+    # تفاوت ۱.۰.۷: پورت‌هایی که سرویس‌های خودِ اجرای قبلی نگه داشته‌اند «سد» نیستند؛
+    # اجرای مجدد به‌صورت «ادامهٔ نصب» (resume) پیش می‌رود، نه شکست.
+    $foreign = @()
+    foreach ($b in $busy) {
+        $ours = Test-PortHeldByUs $b
+        if ($ours) {
+            Write-Ok ("پورت {0} در اختیار سرویس خودِ Rosepsy («{1}») است - اجرا به‌صورت ادامهٔ نصب پیش می‌رود" -f $b, $ours)
+        } else { $foreign += $b }
+    }
+    if ($foreign.Count -eq 0) { return }
+    Write-Err2 'پورت‌های زیر را فرایندهای خارج از Rosepsy اشغال کرده‌اند:'
+    $anyPg = $false
+    foreach ($b in $foreign) {
+        $conn = Get-NetTCPConnection -State Listen -LocalPort $b -ErrorAction SilentlyContinue | Select-Object -First 1
+        $opid = 0; $pname = '?'; $svcName = ''
+        if ($conn) {
+            $opid = [int]$conn.OwningProcess
+            $pname = try { (Get-Process -Id $opid -ErrorAction Stop).ProcessName } catch { '?' }
+            try {
+                $s2 = Get-CimInstance Win32_Service -Filter ("ProcessId = {0}" -f $opid) -ErrorAction Stop | Select-Object -First 1
+                if ($s2) { $svcName = [string]$s2.Name; if ($svcName -like 'postgres*') { $anyPg = $true } }
+            } catch {}
+        }
+        if ($svcName) { Write-Err2 ("   پورت {0}  <-  فرایند: {1} (PID {2})  [سرویس: {3}]" -f $b, $pname, $opid, $svcName) }
+        else { Write-Err2 ("   پورت {0}  <-  فرایند: {1} (PID {2})" -f $b, $pname, $opid) }
+    }
+    Write-Host ''
+    Write-Host '  راه‌حل‌ها:' -ForegroundColor White
+    Write-Host '   1) اگر آن فرایند متعلق به برنامهٔ دیگری است، پورت Rosepsy را عوض کنید؛ مثال:'
+    Write-Host '      powershell -File rosepsy-server-native.ps1 -Mode setup -DbPort 5433 -ApiPort 8010'
+    Write-Host '   2) یا فرایند/سرویس اشغالکننده را متوقف کنید و دوباره اجرا کنید'
+    if ($anyPg) {
+        Write-Host '   3) اگر PostgreSQL قدیمی دیگری است (مثلاً postgresql-x64-16):'
+        Write-Host '      Stop-Service postgresql-x64-16; Set-Service postgresql-x64-16 -StartupType Manual'
+    }
+    exit 1
 }
 
 function Invoke-Doctor {
@@ -362,11 +413,136 @@ public static class LsaRights {
     } catch { Write-Warn2 ("اعطای حق سرویس به {0} ناموفق ماند: {1}" -f $userName, $_.Exception.Message) }
 }
 
+# ---------- رمز superuser و مسیر دادهٔ PostgreSQL (پشتیبانی اجرای مجدد - ۱.۰.۷) ----------
+# datadir واقعی را از خط فرمان سرویس برمی‌تاباند (-D "...") تا اگر نصاب مسیر دیگری ساخته باشد هم درست کار کند
+function Get-PgDataDir([string]$svcName) {
+    $dd = "$DataDir\pgdata"
+    try {
+        $svc = Get-CimInstance Win32_Service -Filter ("Name = '{0}'" -f $svcName) -ErrorAction Stop | Select-Object -First 1
+        if ($svc -and $svc.PathName -match '-D\s+"([^"]+)"') { $dd = $Matches[1] }
+    } catch {}
+    return $dd
+}
+# رمز superuser در فایل محافظت‌شده ذخیره می‌شود تا اجرای مجدد idempotent بماند
+function Set-PgSuperPassFile([string]$pass) {
+    New-Item -ItemType Directory -Force -Path $EtcDir | Out-Null
+    $f = "$EtcDir\pg-superpass.txt"
+    [System.IO.File]::WriteAllText($f, $pass, (New-Object System.Text.UTF8Encoding($false)))
+    # فقط Administrators و SYSTEM؛ با SID معروف تا به نام‌های محلی‌سازی‌شده وابسته نباشد
+    icacls $f /inheritance:r /grant '*S-1-5-32-544:F' /grant '*S-1-5-18:F' | Out-Null
+}
+function Resolve-PgSuperPass {
+    $f = "$EtcDir\pg-superpass.txt"
+    if (Test-Path $f) {
+        $p = ''
+        try { $p = (Get-Content $f -Raw -ErrorAction Stop) } catch {}
+        if ($p) { $p = $p.Trim() }
+        if ($p) { Write-Ok 'رمز superuser PostgreSQL از فایل محافظت‌شده خوانده شد'; return $p }
+    }
+    $p = New-RandomHex 12
+    Set-PgSuperPassFile $p
+    return $p
+}
+# بازنشانی رمز postgres با trust موقت (وقتی رمزِ به‌جامانده از اجرای نیمه‌کارهٔ قبل در دسترس نیست)
+function Reset-PgSuperPass([string]$superPass, [string]$svcName) {
+    $hba = Join-Path (Get-PgDataDir $svcName) 'pg_hba.conf'
+    if (-not (Test-Path $hba)) { throw ("pg_hba.conf یافت نشد: {0} (خوشهٔ دادهٔ PostgreSQL قابل شناسایی نیست)" -f $hba) }
+    Copy-Item $hba "$hba.rosepsy-bak" -Force
+    $lines = @('host all postgres 127.0.0.1/32 trust') + @(Get-Content $hba)
+    [System.IO.File]::WriteAllLines($hba, $lines)
+    try {
+        Restart-Service $svcName -ErrorAction Stop
+        (Get-Service $svcName).WaitForStatus('Running', '00:01:00')
+        Start-Sleep 2
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -v ON_ERROR_STOP=1 -c ("ALTER USER postgres PASSWORD '{0}';" -f $superPass) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'ALTER USER در حالت trust ناموفق بود' }
+        Write-Ok 'رمز superuser بازنشانی شد (pg_hba به حالت قبل برگشت)'
+    } finally {
+        Copy-Item "$hba.rosepsy-bak" $hba -Force
+        try {
+            Restart-Service $svcName -ErrorAction SilentlyContinue
+            (Get-Service $svcName).WaitForStatus('Running', '00:01:00')
+            Start-Sleep 2
+        } catch {}
+    }
+}
+# مسیر مشترکِ «راه‌اندازی سرویس + اتصال + هم‌راستاسازی پیکربندی» برای نصب تازه و اجرای مجدد
+function Ensure-PgRunning([string]$superPass) {
+    $svcName = 'rosepsy-pg'
+    if (-not (Get-Service -Name $svcName -ErrorAction SilentlyContinue)) {
+        # اگر نصاب EDB نام سرویس دیگری ثبت کرده اما مسیرش همان runtime ماست، همان را به کار می‌بریم
+        $alt = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
+            Where-Object { (([string]$_.PathName) -like ("*{0}\runtime\pgsql*" -f $BaseDir)) -and (([string]$_.Name) -like 'postgres*') } |
+            Select-Object -First 1
+        if ($alt) { $svcName = [string]$alt.Name; Write-Warn2 ("سرویس PostgreSQL با نام «{0}» یافت شد و به‌کار گرفته می‌شود" -f $svcName) }
+        else { throw 'سرویس rosepsy-pg ساخته نشد' }
+    }
+    Start-WinSvc $svcName
+    # صف اتصال اول ممکن است چند ثانیه طول بکشد
+    $ok = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        try {
+            $env:PGPASSWORD = $superPass
+            & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -c 'SELECT version();' | Out-Null
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+        } catch { Start-Sleep 2 }
+        Start-Sleep 2
+    }
+    # اگر رمزِ به‌جامانده از اجرای نیمه‌کاره گم شده باشد، با trust موقت بازنشانی می‌شود
+    if (-not $ok) {
+        Write-Warn2 'اتصال با رمز فعلی برقرار نشد - بازنشانی رمز superuser با trust موقت...'
+        Reset-PgSuperPass -superPass $superPass -svcName $svcName
+        for ($i = 0; $i -lt 10; $i++) {
+            try {
+                $env:PGPASSWORD = $superPass
+                & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -c 'SELECT version();' | Out-Null
+                if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            } catch { Start-Sleep 2 }
+            Start-Sleep 2
+        }
+    }
+    if (-not $ok) { throw 'اتصال به PostgreSQL حتی پس از بازنشانی رمز برقرار نشد' }
+    # نصاب EDB پیش‌فرض listen_addresses='*' می‌گذارد؛ فقط-لوکال بودن تضمین می‌شود
+    $conf = Join-Path (Get-PgDataDir $svcName) 'postgresql.conf'
+    if (Test-Path $conf) {
+        $ctxt = [System.IO.File]::ReadAllText($conf)
+        $changed = $false
+        if ($ctxt -match "(?m)^\s*listen_addresses\s*=\s*'([^']*)'") {
+            if ($Matches[1] -ne '127.0.0.1') {
+                $ctxt = $ctxt -replace "(?m)^(\s*)listen_addresses\s*=\s*'[^']*'", "`$1listen_addresses = '127.0.0.1'"
+                $changed = $true
+            }
+        } else {
+            $ctxt += "`nlisten_addresses = '127.0.0.1'"
+            $changed = $true
+        }
+        if ($ctxt -match "(?m)^\s*port\s*=\s*(\d+)\s*$") {
+            if ([int]$Matches[1] -ne $DbPort) {
+                $ctxt = $ctxt -replace "(?m)^(\s*)port\s*=\s*\d+", ("`$1port = {0}" -f $DbPort)
+                $changed = $true
+            }
+        } else {
+            $ctxt += ("`nport = {0}" -f $DbPort)
+            $changed = $true
+        }
+        if ($changed) {
+            [System.IO.File]::WriteAllText($conf, $ctxt)
+            Write-Warn2 'listen_addresses/port در postgresql.conf هم‌راستا شد - سرویس یک‌بار دیگر راه‌اندازی می‌شود'
+            Restart-Service $svcName -ErrorAction SilentlyContinue
+            try { (Get-Service $svcName).WaitForStatus('Running', '00:01:00') } catch {}
+            Start-Sleep 2
+        }
+    }
+    Set-PgSuperPassFile $superPass
+    Write-Ok ("PostgreSQL روی 127.0.0.1:{0} پاسخ می‌دهد" -f $DbPort)
+}
 # ---------- گام ۴: PostgreSQL 16 ----------
 function Install-PostgreSQL([string]$superPass) {
     Write-Step 'گام ۴: PostgreSQL 16 (سرویس ویندوزی rosepsy-pg، فقط 127.0.0.1)'
     if (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue) {
         Write-Ok 'سرویس rosepsy-pg از قبل نصب است - نصب دوباره رد شد'
+        Ensure-PgRunning -superPass $superPass
         return
     }
     $msiDone = $false
@@ -501,33 +677,29 @@ function Install-PostgreSQL([string]$superPass) {
         Write-Ok 'PostgreSQL از باینری Zip نصب شد'
         }
     }
-    if (-not (Get-Service -Name 'rosepsy-pg' -ErrorAction SilentlyContinue)) { throw 'سرویس rosepsy-pg ساخته نشد' }
-    Start-WinSvc 'rosepsy-pg'
-    # صف اتصال اول ممکن است چند ثانیه طول بکشد
-    $ok = $false
-    for ($i = 0; $i -lt 15; $i++) {
-        try {
-            $env:PGPASSWORD = $superPass
-            & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -c 'SELECT version();' | Out-Null
-            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
-        } catch { Start-Sleep 2 }
-        Start-Sleep 2
-    }
-    if (-not $ok) { throw 'اتصال به PostgreSQL برقرار نشد' }
-    Write-Ok ("PostgreSQL روی 127.0.0.1:{0} پاسخ می‌دهد" -f $DbPort)
+    Ensure-PgRunning -superPass $superPass
 }
 
 function New-DbRoleAndDatabase([string]$superPass, [string]$appPass) {
     Write-Step 'ساخت نقش و بانک rosepsy (idempotent)'
     $env:PGPASSWORD = $superPass
     $roleExists = & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -tAc "SELECT 1 FROM pg_roles WHERE rolname='rosepsy';"
+    if ($LASTEXITCODE -ne 0) { throw 'اتصال superuser به PostgreSQL برای ساخت نقش برقرار نشد' }
     if ("$roleExists".Trim() -ne '1') {
-        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -c ("CREATE ROLE rosepsy LOGIN PASSWORD '{0}';" -f $appPass.Replace("'","''")) | Out-Null
+        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -v ON_ERROR_STOP=1 -c ("CREATE ROLE rosepsy LOGIN PASSWORD '{0}';" -f $appPass.Replace("'","''")) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'ساخت نقش rosepsy ناموفق بود' }
         Write-Ok 'نقش rosepsy ساخته شد'
-    } else { Write-Ok 'نقش rosepsy از قبل موجود است' }
+    } else {
+        # هم‌راستاسازی رمز نقش با .env تا وضعیت همیشه converge شود
+        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -v ON_ERROR_STOP=1 -c ("ALTER ROLE rosepsy WITH LOGIN PASSWORD '{0}';" -f $appPass.Replace("'","''")) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'هم‌راستاسازی رمز نقش rosepsy ناموفق بود' }
+        Write-Ok 'نقش rosepsy موجود است - رمز با .env هم‌راستا شد'
+    }
     $dbExists = & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -tAc "SELECT 1 FROM pg_database WHERE datname='rosepsy';"
+    if ($LASTEXITCODE -ne 0) { throw 'اتصال superuser به PostgreSQL برای ساخت بانک برقرار نشد' }
     if ("$dbExists".Trim() -ne '1') {
-        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -c 'CREATE DATABASE rosepsy OWNER rosepsy;' | Out-Null
+        & "$PGBin\psql.exe" -U postgres -h 127.0.0.1 -p $DbPort -v ON_ERROR_STOP=1 -c 'CREATE DATABASE rosepsy OWNER rosepsy;' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'ساخت بانک rosepsy ناموفق بود' }
         Write-Ok 'بانک rosepsy ساخته شد'
     } else { Write-Ok 'بانک rosepsy از قبل موجود است' }
     Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
@@ -1008,13 +1180,13 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.6 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.7 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     Install-GitIfNeeded
     Get-AppRepo
     Install-PythonAndVenv
-    $superPass = New-RandomHex 12
+    $superPass = Resolve-PgSuperPass
     Install-PostgreSQL -superPass $superPass
     if (Test-Path "$BaseDir\runtime\pgz") { Remove-Item "$BaseDir\runtime\pgz" -Recurse -Force -ErrorAction SilentlyContinue }
     $script:RedisOk = Install-Redis
