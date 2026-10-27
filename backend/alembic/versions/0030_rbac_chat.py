@@ -211,6 +211,24 @@ def upgrade() -> None:
             ),
             {"c": code, "s": section, "t": title, "o": sort},
         )
+    # اطمینان از وجود همهٔ نقش‌های مپ پیش‌فرض (DPO در 0002 seed نشده بود!)
+    ROLE_TITLES = {
+        "SYSTEM_ADMIN": "مدیر سامانه",
+        "ORG_MANAGER": "مدیر سازمان",
+        "RECEPTION": "پذیرش",
+        "COUNSELOR": "مشاور",
+        "TECHNICAL_SUPERVISOR": "مسئول فنی",
+        "APPLICANT": "متقاضی",
+        "DPO": "حسابرس حفاظت داده (DPO)",
+    }
+    for role_code in ROLE_DEFAULT_PERMS:
+        conn.execute(
+            sa.text(
+                "INSERT INTO roles (code, title, data_scope) "
+                "VALUES (:r, :t, 'all') ON CONFLICT (code) DO NOTHING"
+            ),
+            {"r": role_code, "t": ROLE_TITLES.get(role_code, role_code)},
+        )
     for role_code, perms in ROLE_DEFAULT_PERMS.items():
         scope = ROLE_DEFAULT_DATA_SCOPE.get(role_code, "all")
         conn.execute(
