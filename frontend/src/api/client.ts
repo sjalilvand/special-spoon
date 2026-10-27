@@ -102,6 +102,14 @@ async function callRefresh(): Promise<string | null> {
   }
 }
 
+/** فاز ۵۲: توضمن وجود access token (برای WebSocket چت) — در صورت نبود، refresh می‌زند */
+export async function ensureAccessToken(): Promise<string | null> {
+  if (tokenStore.accessToken) return tokenStore.accessToken;
+  const fresh = await callRefresh();
+  if (fresh) tokenStore.accessToken = fresh;
+  return fresh;
+}
+
 apiClient.interceptors.response.use(unwrapEnvelope, async (error: AxiosError) => {
   const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
   const url = original?.url ?? "";

@@ -41,6 +41,8 @@ import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import TopicsPage from "../pages/TopicsPage";
 import UsersPage from "../pages/UsersPage";
+import RolesPermissionsPage from "../pages/RolesPermissionsPage";
+import ChatPage from "../pages/ChatPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import WalletPage from "../pages/WalletPage";
 import ProtectedRoute from "./ProtectedRoute";
@@ -82,6 +84,14 @@ export default function AppRoutes() {
       } />
       <Route path="/users" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><UsersPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۵۲: ماتریس نقش‌ها و دسترسی‌ها (گرافیکی) */}
+      <Route path="/roles-permissions" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><RolesPermissionsPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال */}
+      <Route path="/chat" element={
+        <ProtectedRoute><Layout><ChatPage /></Layout></ProtectedRoute>
       } />
       <Route path="/counselors" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>

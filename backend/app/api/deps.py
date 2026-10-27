@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
@@ -39,6 +40,39 @@ def require_roles(*role_codes: str):
     def checker(user: User = Depends(get_current_user)) -> User:
         user_role_codes = {r.code for r in user.roles}
         if not user_role_codes.intersection(set(role_codes)):
+            raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
+        return user
+
+    return checker
+
+
+# ---------------------------------------------------------------------------
+# فاز ۵۲ - کنترل دسترسی ریزدانه بر اساس ماتریس نقش ↔ دسترسی
+# - نقش SYSTEM_ADMIN همیشه دسترسی کامل دارد (bypass) تا مدیر خودش را قفل نکند؛
+# - اثربخشی کاربر = اجتماع دسترسی‌های همهٔ نقش‌های او (role_permissions)؛
+# - ``require_perm`` مکمل ``require_roles`` است؛ روت‌های موجود با require_roles
+#   دست‌نخورده می‌مانند و روت‌های جدید (rbac/chat/...) از require_perm استفاده
+#   می‌کنند تا ماتریس گرافیکی پنل واقعاً اثر عملیاتی داشته باشد.
+# ---------------------------------------------------------------------------
+def user_permissions(db: Session, user: User) -> set[str]:
+    """مجموعهٔ کدهای دسترسی مؤثر کاربر؛ ``*`` یعنی همه."""
+    from app.models.rbac import effective_permissions
+
+    return effective_permissions(user.roles)
+
+
+def require_perm(*perm_codes: str):
+    """سازندهٔ دیپندنسی: کاربر باید حداقل یکی از دسترسی‌های داده‌شده را داشته باشد."""
+
+    def checker(
+        request: Request,
+        db: Session = Depends(get_db),
+        user: User = Depends(get_current_user),
+    ) -> User:
+        perms = user_permissions(db, user)
+        if "*" in perms:
+            return user
+        if not perms.intersection(set(perm_codes)):
             raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
         return user
 

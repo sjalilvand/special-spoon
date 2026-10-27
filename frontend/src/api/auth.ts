@@ -22,6 +22,15 @@ export interface Me {
   status: string;
   must_change_password: boolean;
   roles: string[];
+  /** فاز ۵۲: دسترسی‌های مؤثر (اجتماع نقش‌ها)؛ * یعنی همه — SYSTEM_ADMIN */
+  permissions?: string[];
+}
+
+/** بررسی دسترسی مؤثر کاربر (سمت کلاینت برای گیت منو/دکمه؛ سرور ملاک نهایی است) */
+export function hasPerm(me: Me | null, code: string): boolean {
+  if (!me) return false;
+  const perms = me.permissions ?? [];
+  return perms.includes("*") || perms.includes(code);
 }
 
 export interface LoginResponse {
@@ -104,5 +113,24 @@ export async function createActivationToken(
   id: string
 ): Promise<{ token: string; expires_at: string }> {
   const res = await apiClient.post(`/users/${id}/activation-token`);
+  return res.data;
+}
+
+/** فاز ۵۲: تغییر نقش‌های کاربر از پنل */
+export async function setUserRoles(id: string, roles: string[]): Promise<UserRow> {
+  const res = await apiClient.put(`/users/${id}/roles`, { roles });
+  return res.data;
+}
+
+/** فاز ۵۲: بازنشانی رمز توسط مدیر — رمز جدید را همان‌جا تعیین می‌کنیم */
+export async function resetUserPassword(
+  id: string,
+  newPassword: string,
+  mustChange = true
+): Promise<{ ok: boolean; username: string }> {
+  const res = await apiClient.post(`/users/${id}/reset-password`, {
+    new_password: newPassword,
+    must_change_password: mustChange,
+  });
   return res.data;
 }

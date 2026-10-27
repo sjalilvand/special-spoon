@@ -15,6 +15,8 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.branches import router as branches_router
 from app.api.v1.cases import router as cases_router
 from app.api.v1.catalog import router as catalog_router
+from app.api.v1.chat import router as chat_router
+from app.api.v1.rbac import router as rbac_router
 from app.api.v1.consents import router as consents_router
 from app.api.v1.files import router as files_router
 from app.api.v1.counselors import router as counselors_router
@@ -105,6 +107,12 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (ai_router, None),
     (integrations_router, None),
     (processes_router, None),
+    # فاز ۵۲: RBAC گرافیکی + چت آنلاین — WebSocket (chat/ws) فقط یک‌بار سوار
+    # می‌شود؛ در حلقهٔ دوباره‌سواری v2 exclude نمی‌شویم چون include_router با
+    # websocket route هم سازگار است، ولی برای جلوگیری از دو مسیر ws، چت را با
+    # tags صریح و rbac را معمولی اضافه کردیم و هر دو زیر v1 و v2 سرو می‌شوند.
+    (rbac_router, None),
+    (chat_router, ["chat"]),
 ]
 
 for _router, _tags in _ROUTERS:

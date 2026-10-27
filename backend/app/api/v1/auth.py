@@ -195,7 +195,10 @@ def logout(
 
 
 @router.get("/me")
-def me(user: User = Depends(get_current_user)) -> dict:
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    # فاز ۵۲: دسترسی‌های مؤثر برای گیت‌کردن منو/صفحه‌های پنل (SYSTEM_ADMIN → *)
+    from app.api.deps import user_permissions
+
     return {
         "id": str(user.id),
         "username": user.username,
@@ -205,6 +208,7 @@ def me(user: User = Depends(get_current_user)) -> dict:
         "status": user.status,
         "must_change_password": user.must_change_password,
         "roles": sorted(r.code for r in user.roles),
+        "permissions": sorted(user_permissions(db, user)),
     }
 
 

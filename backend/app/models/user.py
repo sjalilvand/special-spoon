@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.rbac import role_permissions_table
 
 # بند ۳.۱ سند - نقش‌های نسخه اولیه (DPO: فاز ۲۷ - حسابرس حفاظت داده)
 ROLE_CODES: dict[str, str] = {
@@ -19,6 +20,10 @@ ROLE_CODES: dict[str, str] = {
     "APPLICANT": "متقاضی",
     "DPO": "حسابرس حفاظت داده (DPO)",
 }
+
+# نقش‌های سیستمی - قابل حذف نیستند و ماتریسشان در رابط گرافیکی قابل ویرایش است
+# ولی حذف نقش/تغییر کد آن مجاز نیست (فاز ۵۲)
+SYSTEM_ROLE_CODES = set(ROLE_CODES.keys())
 
 
 class UserStatus:
@@ -40,6 +45,15 @@ class Role(Base):
 
     code: Mapped[str] = mapped_column(String(50), primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
+    # فاز ۵۲: سطح دسترسی روی داده (all/own/assigned) - پیش‌فرض همهٔ داده‌ها
+    data_scope: Mapped[str] = mapped_column(String(20), default="all", server_default="all")
+
+    # فاز ۵۲: ماتریس دسترسی نقش - کاتالوگ در app.models.rbac
+    permissions: Mapped[list["Permission"]] = relationship(
+        "Permission",
+        secondary=role_permissions_table,
+        lazy="selectin",
+    )
 
 
 class User(Base):

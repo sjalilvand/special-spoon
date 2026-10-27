@@ -30,9 +30,12 @@ import {
   createActivationToken,
   createUser,
   fetchUsers,
+  resetUserPassword,
   roleTitle,
+  setUserRoles,
   updateUserStatus,
 } from "../api/auth";
+import { fetchRoles } from "../api/rbac";
 import type { UserRow } from "../api/auth";
 import { formatJalaliDateTime } from "../utils/jalali";
 
@@ -49,6 +52,9 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [tokenInfo, setTokenInfo] = useState<{ username: string; token: string; expires_at: string } | null>(null);
+  const [rolesTarget, setRolesTarget] = useState<UserRow | null>(null);
+  const [pwTarget, setPwTarget] = useState<UserRow | null>(null);
+  const [pwResult, setPwResult] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["users", page, search],
@@ -145,6 +151,12 @@ export default function UsersPage() {
                       <Button size="small" onClick={() => makeToken.mutate(row)}>
                         توکن فعال‌سازی
                       </Button>
+                      <Button size="small" onClick={() => setRolesTarget(row)}>
+                        نقش‌ها
+                      </Button>
+                      <Button size="small" color="warning" onClick={() => setPwTarget(row)}>
+                        بازنشانی رمز
+                      </Button>
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -168,6 +180,40 @@ export default function UsersPage() {
         onClose={() => setCreateOpen(false)}
         onError={setError}
       />
+
+      {/* فاز ۵۲: ویرایش نقش‌های کاربر (نقش‌های سیستمی + سفارشی از /rbac/roles) */}
+      <UserRolesDialog
+        target={rolesTarget}
+        onClose={() => setRolesTarget(null)}
+        onError={setError}
+      />
+
+      {/* فاز ۵۲: بازنشانی رمز توسط مدیر (تعیین رمز جدید همان‌جا) */}
+      <ResetPasswordDialog
+        target={pwTarget}
+        onClose={() => setPwTarget(null)}
+        onDone={(username, password) => {
+          setPwTarget(null);
+          setPwResult(`${username}:${password}`);
+        }}
+        onError={setError}
+      />
+
+      <Dialog open={pwResult !== null} onClose={() => setPwResult(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>رمز جدید ثبت شد</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            این رمز فقط یک بار نمایش داده می‌شود؛ آن را به کاربر اعلام کنید.
+          </Alert>
+          <TextField fullWidth multiline value={pwResult ?? ""} InputProps={{ readOnly: true }} />
+          <Button sx={{ mt: 1 }} onClick={() => pwResult && navigator.clipboard.writeText(pwResult)}>
+            کپی
+          </Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPwResult(null)}>بستن</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={tokenInfo !== null} onClose={() => setTokenInfo(null)} maxWidth="sm" fullWidth>
         <DialogTitle>توکن فعال‌سازی — {tokenInfo?.username}</DialogTitle>
@@ -214,6 +260,9 @@ function CreateUserDialog({
   const [roles, setRoles] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // فاز ۵۲: نقش‌ها از سرور (سیستمی + سفارشی) — نه لیست ثابت
+  const rolesQ = useQuery({ queryKey: ["rbac-roles"], queryFn: fetchRoles });
+  const roleItems = (rolesQ.data ?? []).map((r) => ({ code: r.code, title: r.title }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -264,7 +313,7 @@ function CreateUserDialog({
               <Typography variant="body2" sx={{ mb: 1 }}>
                 نقش‌ها:
               </Typography>
-              {ROLE_OPTIONS.map((r) => (
+              {(roleItems.length ? roleItems : ROLE_OPTIONS).map((r) => (
                 <FormControlLabel
                   key={r.code}
                   control={
@@ -290,6 +339,140 @@ function CreateUserDialog({
           </Button>
         </DialogActions>
       </form>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۵۲ - ویرایش نقش‌های کاربر: نقش‌های سیستمی + سفارشی از /rbac/roles
+// ---------------------------------------------------------------------------
+function UserRolesDialog({
+  target,
+  onClose,
+  onError,
+}: {
+  target: UserRow | null;
+  onClose: () => void;
+  onError: (msg: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [initialized, setInitialized] = useState<string | null>(null);
+
+  const rolesQ = useQuery({ queryKey: ["rbac-roles"], queryFn: fetchRoles, enabled: target !== null });
+
+  if (target && initialized !== target.id) {
+    setInitialized(target.id);
+    setSelected(target.roles);
+  }
+
+  const save = useMutation({
+    mutationFn: () => setUserRoles(target!.id, selected),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["rbac-roles"] });
+      onClose();
+      setInitialized(null);
+    },
+    onError: (e) => onError(errDetail(e)),
+  });
+
+  const roleItems = rolesQ.data ?? [];
+
+  return (
+    <Dialog open={target !== null} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>نقش‌های کاربر — {target?.display_name}</DialogTitle>
+      <DialogContent>
+        {roleItems.map((r) => (
+          <FormControlLabel
+            key={r.code}
+            control={
+              <Checkbox
+                checked={selected.includes(r.code)}
+                onChange={(e) =>
+                  setSelected((prev) =>
+                    e.target.checked ? [...prev, r.code] : prev.filter((c) => c !== r.code)
+                  )
+                }
+              />
+            }
+            label={`${r.title} (${r.code})`}
+          />
+        ))}
+        {roleItems.length === 0 && <Typography variant="body2">در حال دریافت نقش‌ها…</Typography>}
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            onClose();
+            setInitialized(null);
+          }}
+        >
+          انصراف
+        </Button>
+        <Button variant="contained" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "در حال ذخیره…" : "ذخیره"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۵۲ - بازنشانی رمز عبور کاربر توسط مدیر (تعیین رمز جدید در همین دیالوگ)
+// ---------------------------------------------------------------------------
+function ResetPasswordDialog({
+  target,
+  onClose,
+  onDone,
+  onError,
+}: {
+  target: UserRow | null;
+  onClose: () => void;
+  onDone: (username: string, password: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [newPw, setNewPw] = useState("");
+  const [mustChange, setMustChange] = useState(false);
+
+  const reset = useMutation({
+    mutationFn: () => resetUserPassword(target!.id, newPw, mustChange),
+    onSuccess: () => {
+      onDone(target!.username, newPw);
+      setNewPw("");
+      setMustChange(false);
+    },
+    onError: (e) => onError(errDetail(e)),
+  });
+
+  return (
+    <Dialog open={target !== null} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>بازنشانی رمز — {target?.username}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <TextField
+            label="رمز عبور جدید (حداقل ۸ نویسه)"
+            type="text"
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+          />
+          <FormControlLabel
+            control={<Checkbox checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} />}
+            label="کاربر در ورود بعدی مجبور به تغییر رمز شود"
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>انصراف</Button>
+        <Button
+          variant="contained"
+          color="warning"
+          disabled={newPw.length < 8 || reset.isPending}
+          onClick={() => reset.mutate()}
+        >
+          {reset.isPending ? "در حال ثبت…" : "بازنشانی"}
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

@@ -25,3 +25,10 @@ class RolesUpdate(BaseModel):
 class ActivationTokenOut(BaseModel):
     token: str
     expires_at: datetime
+
+
+class ResetPasswordRequest(BaseModel):
+    """فاز ۵۲ - بازنشانی رمز توسط مدیر سامانه."""
+
+    new_password: str = Field(min_length=8, max_length=128)
+    must_change_password: bool = True

@@ -20,10 +20,10 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
 import PersonPanelRoundedIcon from "@mui/icons-material/PersonRounded";
 import {
-  Badge, Dashboard as DashboardIcon, Description, Diversity3, EventNote,
+  Badge, ChatBubbleRounded, Dashboard as DashboardIcon, Description, Diversity3, EventNote,
   Folder, Forum, Gavel, GroupAdd, HealthAndSafety, HelpOutline, HistoryEdu,
   Inbox, Insights, Map, MenuBook, Paid, PersonSearch, Psychology, QueryStats,
-  Receipt, RequestQuote, Rule, SupportAgent, TrackChanges, UploadFile, Warning,
+  Receipt, RequestQuote, Rule, ShieldRounded, SupportAgent, TrackChanges, UploadFile, Warning,
   Wallet, Web, VerifiedUser,
 } from "@mui/icons-material";
 
@@ -61,6 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "داشبورد عملیاتی", path: "/dashboard", roles: ALL_STAFF, icon: <DashboardIcon /> },
       { label: "داشبورد مدیر", code: "B24", path: "/admin-dashboard", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], icon: <QueryStats /> },
       { label: "گزارش انطباق DPO", path: "/dpo-report", roles: ["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"], icon: <Gavel /> },
+      // فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال (همکاران و متقاضیان)
+      { label: "گفتگوی آنلاین", path: "/chat", roles: ["*"], icon: <ChatBubbleRounded /> },
     ],
   },
   {
@@ -123,6 +125,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "دستیار هوشمند", path: "/assistant", roles: [...ALL_STAFF, "APPLICANT"], icon: <Forum /> },
       { label: "یکپارچه‌سازی‌ها", code: "B28", path: "/integrations", roles: ["SYSTEM_ADMIN", "ORG_MANAGER"], icon: <Web /> },
       { label: "کاربران", path: "/users", roles: ["SYSTEM_ADMIN"], icon: <GroupAdd /> },
+      { label: "نقش‌ها و دسترسی‌ها", path: "/roles-permissions", roles: ["SYSTEM_ADMIN"], icon: <ShieldRounded /> },
       { label: "رخدادهای امنیتی", path: "/audit-events", roles: ["SYSTEM_ADMIN"], icon: <Description /> },
       { label: "راهنمای سامانه", path: `${import.meta.env.BASE_URL}user-guide.html`, roles: ["*"], icon: <HelpOutline /> },
       { label: "گزارش پیشرفت پروژه", path: `${import.meta.env.BASE_URL}project-status.html`, roles: ["*"], icon: <MenuBook /> },

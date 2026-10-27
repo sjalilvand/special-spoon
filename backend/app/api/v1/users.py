@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.security import generate_activation_token
 from app.db.session import get_db
 from app.models.user import ROLE_CODES, ActivationToken, AuthSession, Role, User, UserStatus
-from app.schemas.user import ActivationTokenOut, RolesUpdate, UserCreate, UserUpdate
+from app.schemas.user import ActivationTokenOut, ResetPasswordRequest, RolesUpdate, UserCreate, UserUpdate
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -182,3 +182,59 @@ def create_activation(
         entity_type="user", entity_id=str(user.id),
     )
     return ActivationTokenOut(token=raw, expires_at=expires_at)
+
+
+# ---------------------------------------------------------------------------
+# فاز ۵۲ - بازنشانی رمز توسط مدیر (رفع مشکل «create_admin روی کاربر موجود
+# رمز را عوض نمی‌کند») + لیست کاربران فعال برای چت/دعوت به مشاوره
+# ---------------------------------------------------------------------------
+@router.post("/{user_id}/reset-password")
+def reset_password(
+    user_id: uuid.UUID,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("SYSTEM_ADMIN")),
+) -> dict:
+    from app.core.security import hash_password
+
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="کاربر یافت نشد")
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = bool(payload.must_change_password)
+    user.auth_version += 1  # ابطال نشست‌های قبلی - بند ۴.۲
+    _revoke_all_sessions(db, user.id)
+    db.commit()
+    record_audit(
+        db, action="user.password_reset", actor_user_id=actor.id,
+        entity_type="user", entity_id=str(user.id),
+    )
+    return {"ok": True, "username": user.username}
+
+
+@router.get("/directory")
+def chat_directory(
+    search: str = Query(default="", max_length=100),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLE_CODES.keys())),
+) -> dict:
+    """فهرست حساب‌های فعال برای شروع گفتگو/دعوت — همهٔ کاربران فعال سامانه.
+
+    برای حفظ حریم، فقط نام/نام نمایشی/نقش برمی‌گردد (بدون ایمیل/موبایل).
+    """
+    like = f"%{search.strip()}%"
+    q = select(User).where(User.status == UserStatus.ACTIVE, User.id != actor.id)
+    if search.strip():
+        q = q.where(or_(User.username.ilike(like), User.display_name.ilike(like)))
+    rows = db.scalars(q.order_by(User.display_name).limit(50)).all()
+    return {
+        "items": [
+            {
+                "id": str(u.id),
+                "username": u.username,
+                "display_name": u.display_name,
+                "roles": sorted(r.code for r in u.roles),
+            }
+            for u in rows
+        ]
+    }
