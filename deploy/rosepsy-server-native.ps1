@@ -1,9 +1,11 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۳ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۴ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.14 - جمع‌بندی پایانی دیگر در حالت upgrade به‌اشتباه «Redis/ClamAV نصب نشد»
+#             چاپ نمی‌کند؛ وضعیت واقعی سرویس‌ها از ویندوز پرسیده می‌شود.
 #    1.0.13 - همگام با فاز ۵۲: مدیریت کاربران RBAC گرافیکی (ماتریس چک‌باکس +
 #             data_scope) و چت آنلاین با پیام صوتی (WebSocket). حالت upgrade
 #             مایگریشن 0030_rbac_chat را اعمال و فرانت‌اند را دوباره می‌سازد.
@@ -1380,9 +1382,14 @@ function Invoke-HealthAndSummary {
     Write-Host ("  دامنه/وب        : https://{0}   (پنل: /panel/)" -f $Domain)
     Write-Host ("  API داخلی       : http://127.0.0.1:{0}/api/v1" -f $ApiPort)
     Write-Host ("  PostgreSQL      : 127.0.0.1:{0}  (سرویس rosepsy-pg)" -f $DbPort)
-    if ($script:RedisOk) { Write-Host ("  Redis           : 127.0.0.1:{0}  (سرویس Redis)" -f $RedisPort) }
+    # رفع اشکال ۱.۰.۱۴: در حالت upgrade، متغیرهای RedisOk/ClamOk هرگز ست نمی‌شوند (فقط در setup ست می‌شوند)
+    # و جمع‌بندی همیشه «نصب نشد» چاپ می‌کرد حتی وقتی سرویس‌ها واقعاً در حال اجرا هستند؛
+    # اکنون وضعیت واقعی سرویس از خود ویندوز پرسیده می‌شود.
+    $redisSvc = if ($script:RedisOk) { $true } else { $null -ne (Get-Service -Name 'Redis','rosepsy-redis' -ErrorAction SilentlyContinue | Select-Object -First 1) }
+    if ($redisSvc) { Write-Host ("  Redis           : 127.0.0.1:{0}  (سرویس Redis)" -f $RedisPort) }
     else { Write-Host '  Redis           : نصب نشد - سقف نرخ fail-open' }
-    if ($script:ClamOk) { Write-Host ("  ClamAV clamd    : 127.0.0.1:{0}  (سرویس rosepsy-clamd)" -f $ClamavPort) }
+    $clamSvc = if ($script:ClamOk) { $true } else { $null -ne (Get-Service -Name 'rosepsy-clamd' -ErrorAction SilentlyContinue) }
+    if ($clamSvc) { Write-Host ("  ClamAV clamd    : 127.0.0.1:{0}  (سرویس rosepsy-clamd)" -f $ClamavPort) }
     else { Write-Host '  ClamAV          : نصب نشد - fallback به clamscan محلی' }
     Write-Host '  ذخیره‌سازی      : STORAGE_BACKEND=local (پوشهٔ C:\rosepsy\data\uploads)'
     Write-Host '  لاگ‌ها          : C:\rosepsy\logs\<service-name>\'
@@ -1402,7 +1409,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.13 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.14 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
