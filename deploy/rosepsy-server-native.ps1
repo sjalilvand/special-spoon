@@ -1,7 +1,16 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۰ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۳ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
+#  ---------------------------------------------------------------------------
+#  تغییرات نسخه‌ها:
+#    1.0.13 - همگام با فاز ۵۲: مدیریت کاربران RBAC گرافیکی (ماتریس چک‌باکس +
+#             data_scope) و چت آنلاین با پیام صوتی (WebSocket). حالت upgrade
+#             مایگریشن 0030_rbac_chat را اعمال و فرانت‌اند را دوباره می‌سازد.
+#    1.0.12 - فیکس روت asset پنل در Caddyfile (handle_path /panel/assets/*
+#             با root = dist\assets) - رفع 404 صفحهٔ سفید پنل.
+#    1.0.11 - رفع سایه‌شدن بلوک assets پنل توسط handle /panel/*
+#    (نسخه‌های قدیمی‌تر: تاریخچهٔ گیت را ببینید)
 #  ---------------------------------------------------------------------------
 #  پیش‌زمینه: Hyper-V/WSL2 روی این VPS غیرفعال است (رویداد ID 41 از
 #  Hyper-V-Hypervisor: VMX در BIOS لایهٔ زیرین فعال نیست) و Docker Desktop
@@ -1115,11 +1124,12 @@ $siteAddr {
                 redir /panel/ 301
         }
 
-        # رفع اشکال ۱.۰.۱۱: assets پنل باید «قبل از» بلوک /panel/* و با handle_path (حذف پیشوند) باشد؛
-        # بلوک قبلی handle بود و چون Caddy بلوک‌های handle را زودتر از handle_path ارزیابی می‌کند،
-        # مسیر بدون حذف /panel جست‌وجو می‌شد (dist\panel\assets) و همیشه 404 می‌داد
+                # رفع اشکال ۱.۰.۱۲: handle_path خودش پیشوند /panel/assets را حذف می‌کند و try_files {path}
+        # مسیرِ «بدون پیشوند» را جست‌وجو می‌کند؛ پس روت باید مستقیماً به distssets اشاره کند.
+        # (اشکال ۱.۰.۱۱: روت dist بود → جست‌وجوی index-*.js در ریشهٔ dist → 404 با وجود فایل)
+        # ترتیب هم درست است: Caddy مسیر مشخص‌تر /panel/assets/* را قبل از /panel/* ارزیابی می‌کند
         handle_path /panel/assets/* {
-                root * "$panelDist"
+                root * "$panelDist\assets"
                 try_files {path} =404
                 header Cache-Control "public, max-age=2592000, immutable"
                 file_server
@@ -1392,7 +1402,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.11 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.13 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
