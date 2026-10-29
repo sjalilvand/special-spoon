@@ -30,6 +30,9 @@ const CATEGORY_COLORS: Record<string, string> = {
   "زوج و خانواده": "#c4767f",
   "شغلی": "#5c8a72",
   "هوش": "#4a7ba6",
+  "خلاقیت": "#c98a2d",
+  "تحصیلی": "#4a6fa6",
+  "سبک زندگی": "#3f8f7a",
 };
 
 const topicColor = (name: string | null) =>
@@ -130,13 +133,36 @@ export default function PsychTestCenterPage() {
             </Paper>
           )}
 
-          <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={2}>
-            {filtered.map((t) => (
-              <TestCard key={t.id} test={t} color={t.accent_color || topicColor(t.topic_name)}
-                code={t.code || ""}
-                onRun={() => navigate(`/psych-tests/${t.slug}/run`)} />
-            ))}
-          </Box>
+          {/* فاز ۵۷ - نمایش گروه‌بندی‌شده بر اساس دسته (در جست‌وجو: نمایش تخت) */}
+          {!catalog.isLoading && (search ? (
+            <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={2}>
+              {filtered.map((t) => (
+                <TestCard key={t.id} test={t} color={t.accent_color || topicColor(t.topic_name)}
+                  code={t.code || ""}
+                  onRun={() => navigate(`/psych-tests/${t.slug}/run`)} />
+              ))}
+            </Box>
+          ) : (
+            <Stack spacing={3}>
+              {topicCounts.filter(([name]) => filtered.some((t) => t.topic_name === name)).map(([name, count]) => (
+                <Box key={name}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
+                    <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: topicColor(name) }} />
+                    <Typography variant="subtitle1" fontWeight={800}>{name}</Typography>
+                    <Chip size="small" variant="outlined" sx={{ height: 22, fontSize: 11 }}
+                      label={`${count.toLocaleString("fa-IR")} آزمون`} />
+                  </Stack>
+                  <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }} gap={2}>
+                    {filtered.filter((t) => t.topic_name === name).map((t) => (
+                      <TestCard key={t.id} test={t} color={t.accent_color || topicColor(t.topic_name)}
+                        code={t.code || ""}
+                        onRun={() => navigate(`/psych-tests/${t.slug}/run`)} />
+                    ))}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          ))}
         </>
       )}
 

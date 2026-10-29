@@ -305,7 +305,8 @@ export default function PsychTestRunPage() {
 
         {q && (
           <Paper sx={{ p: { xs: 2, md: 3.5 } }}>
-            {q.subscale && (
+            {/* فاز ۵۷ - در ابزارهای بلند (مثل نئو ۲۴۰) نام زیرمقیاس نشان داده نمی‌شود تا پاسخ‌دهی بی‌سوگیری بماند */}
+            {q.subscale && questions.length < 100 && (
               <Chip size="small" color="secondary" variant="outlined" label={q.subscale} sx={{ mb: 1.5 }} />
             )}
             <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.9, mb: 2.5 }}>

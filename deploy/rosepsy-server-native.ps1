@@ -1,9 +1,16 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۷ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۸ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.18 - همگام با فاز ۵۷: بانک آزمون‌های روان‌سنجی گسترش یافت — نئو فرم بلند
+#             (۲۴۰ گویهٔ واقعی با ۳۰ زیرمقیاس وجهی و نمره‌گذاری معکوس استاندارد)،
+#             GHQ-28 با متن و گزینه‌های رسمی (برش ۲۲)، و ۹ آزمون جدید هم‌تراز
+#             کاتالوگ ای‌سنج (SCL-90-R، مسلش، باس-پری، شرر، دلبستگی هازن-شیور،
+#             اضطراب امتحان اهواز، WHOQOL-BREF، ذهن‌آگاهی FFMQ-15، سبک‌های عشق لی)
+#             + دسته‌بندی مرئی مرکز آزمون در پنل. حالت جدید «psychseed» برای درج
+#             بانک آزمون‌ها (idempotent) اضافه شد؛ بدون مایگریشن جدید.
 #    1.0.17 - همگام با فاز ۵۶: اتصال زندهٔ پذیرش به گفتگوی عمومی (پاسخ اپراتور
 #             از پنل مستقیم در ویجت سایت؛ دستیار تا ۱۵ دقیقه ساکت می‌ماند) +
 #             دسترسی chat.public_reply + فیکس «نگه‌داشت منقضی» اولین رزرو +
@@ -50,10 +57,10 @@
 #     powershell -ExecutionPolicy Bypass -File $f -Mode doctor
 #     powershell -ExecutionPolicy Bypass -File $f -Mode setup
 #
-#  حالت‌ها: doctor | setup | upgrade | backup | status
+#  حالت‌ها: doctor | setup | upgrade | psychseed | backup | status
 # ============================================================================
 param(
-    [ValidateSet('doctor','setup','upgrade','backup','status')]
+    [ValidateSet('doctor','setup','upgrade','psychseed','backup','status')]
     [string]$Mode = 'setup',
     [string]$BaseDir = 'C:\rosepsy',
     [string]$RepoUrl = 'https://github.com/sjalilvand/special-spoon.git',
@@ -1469,6 +1476,24 @@ function Invoke-Upgrade {
     Invoke-HealthAndSummary
 }
 
+# ---------- درج بانک آزمون‌های روان‌سنجی (فاز ۵۷) ----------
+function Invoke-PsychSeed {
+    Assert-Admin
+    Write-Step 'درج بانک آزمون‌های روان‌سنجی (seed_psych_tests.py — idempotent)'
+    if (-not (Test-Path "$AppDir\backend\seed_psych_tests.py")) { throw 'بانک آزمون در مخزن یافت نشد؛ اول -Mode upgrade را اجرا کنید' }
+    if (Test-Path "$AppDir\.env") { Copy-Item "$AppDir\.env" "$AppDir\backend\.env" -Force }
+    $map = Read-EnvMap "$AppDir\backend\.env"
+    if ($map.ContainsKey('DATABASE_URL')) { $env:DATABASE_URL = $map['DATABASE_URL'] }
+    Push-Location "$AppDir\backend"
+    try {
+        & $VenvPy seed_psych_tests.py
+        if ($LASTEXITCODE -ne 0) { throw 'درج بانک آزمون ناموفق بود' }
+    } finally { Pop-Location }
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+    Write-Ok 'بانک آزمون‌ها درج/همگام شد (آزمون‌ها در مرکز آزمون پنل قابل مشاهده‌اند)'
+    Invoke-HealthAndSummary
+}
+
 # ---------- وضعیت (status) ----------
 function Invoke-Status {
     Write-Step 'وضعیت سرویس‌ها و پورت‌ها'
@@ -1496,6 +1521,7 @@ switch ($Mode) {
     'doctor' { Invoke-Doctor }
     'setup'  { Invoke-Setup }
     'upgrade'{ Invoke-Upgrade }
+    'psychseed' { Invoke-PsychSeed }
     'status' { Invoke-Status }
     'backup' { Invoke-ManualBackup }
     default  { Invoke-Doctor }
