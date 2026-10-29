@@ -43,7 +43,7 @@ from app.models.idempotency import IdempotencyKey
 from app.models.integration import SmsOutbox, SmsOutboxStatus
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
-from app.models.org_contract import Contract, ContractService, Organization
+from app.models.org_contract import Contract, ContractService, ContractTest, Organization
 from app.models.org_program import (
     OrgProgram,
     OrgProgramCounselor,
@@ -133,7 +133,7 @@ __all__ = [
     "Diagnosis", "EmailOutbox", "EmailOutboxStatus", "FileScan", "FormVersion",
     "ImportJob", "ImportRow", "IntakeQuestionnaire", "Invoice", "InvoiceItem",
     "InvoiceStatus", "Notification", "SmsOutbox", "SmsOutboxStatus",
-    "Contract", "ContractService", "Organization", "Order", "OrderStatus",
+    "Contract", "ContractService", "ContractTest", "Organization", "Order", "OrderStatus",
     "OrganizationUnit", "Payment", "PaymentStatus",
     "Recommendation", "Referral", "Refund", "RefundRequest", "RefundRequestStatus",
     "ReviewAction", "Role",

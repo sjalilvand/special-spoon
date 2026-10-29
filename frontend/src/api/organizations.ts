@@ -21,10 +21,18 @@ export interface Organization {
   is_active: boolean;
   contract_count: number;
   active_contract: ActiveContractRef | null;
+  /** فاز ۶۲: null = قرارداد فعال ندارد؛ [] = همه آزمون‌ها باز؛ لیست = فقط همین‌ها */
+  open_tests: ContractTestRef[] | null;
   created_at: string | null;
 }
 
 export interface ContractServiceRef {
+  id: string;
+  title: string;
+}
+
+// فاز ۶۲: آزمون‌های باز قرارداد/سازمان
+export interface ContractTestRef {
   id: string;
   title: string;
 }
@@ -41,6 +49,8 @@ export interface Contract {
   status: "draft" | "active" | "terminated";
   notes: string | null;
   services: ContractServiceRef[];
+  /** فاز ۶۲: آزمون‌های باز این قرارداد؛ خالی = همه آزمون‌ها */
+  tests: ContractTestRef[];
   created_at: string | null;
 }
 

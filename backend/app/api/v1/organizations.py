@@ -24,9 +24,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
 from app.models.catalog import Service
-from app.models.org_contract import Contract, ContractService, Organization
+from app.models.org_contract import Contract, ContractService, ContractTest, Organization
 from app.models.org_statement import OrgStatement, OrgStatementItem, OrgStatementStatus
 from app.models.payment import Order, OrderStatus
+from app.models.psych_test import PsychTest
 from app.models.user import User
 from app.services.accounting import entry_for_org_statement
 
@@ -68,6 +69,8 @@ class ContractCreate(BaseModel):
     valid_to: date | None = None
     notes: str | None = Field(default=None, max_length=1000)
     service_ids: list[uuid.UUID] = Field(default_factory=list)
+    # فاز ۶۲: کدام آزمون‌ها برای سازمان باز باشد؛ خالی = همه آزمون‌ها
+    test_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class ContractUpdate(BaseModel):
@@ -79,6 +82,7 @@ class ContractUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
     status: str | None = None
     service_ids: list[uuid.UUID] | None = None
+    test_ids: list[uuid.UUID] | None = None
 
 
 # ---------------------------------------------------------------- helpers
@@ -98,6 +102,12 @@ def _contract_out(db: Session, c: Contract) -> dict:
         .where(ContractService.contract_id == c.id)
         .order_by(Service.title)
     ).all()
+    test_rows = db.execute(
+        select(PsychTest)
+        .join(ContractTest, ContractTest.test_id == PsychTest.id)
+        .where(ContractTest.contract_id == c.id)
+        .order_by(PsychTest.title)
+    ).scalars().all()
     return {
         "id": str(c.id),
         "organization_id": str(c.organization_id),
@@ -112,6 +122,8 @@ def _contract_out(db: Session, c: Contract) -> dict:
         "services": [
             {"id": str(svc.id), "title": svc.title} for _cs, svc in svc_rows
         ],
+        # فاز ۶۲: فهرست آزمون‌های باز این قرارداد؛ خالی = همه آزمون‌ها
+        "tests": [{"id": str(t.id), "title": t.title} for t in test_rows],
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
 
@@ -129,6 +141,17 @@ def _org_out(db: Session, o: Organization) -> dict:
         ),
         None,
     )
+    # فاز ۶۲: آزمون‌های باز سازمان از قرارداد فعال مشتق می‌شود؛
+    # None = قرارداد فعال ندارد؛ [] = همه آزمون‌ها باز؛ elif لیست = فقط همان‌ها.
+    open_tests: list[dict] | None = None
+    if active_contract is not None:
+        rows = db.execute(
+            select(PsychTest)
+            .join(ContractTest, ContractTest.test_id == PsychTest.id)
+            .where(ContractTest.contract_id == active_contract.id)
+            .order_by(PsychTest.title)
+        ).scalars().all()
+        open_tests = [{"id": str(t.id), "title": t.title} for t in rows]
     return {
         "id": str(o.id),
         "name": o.name,
@@ -151,6 +174,7 @@ def _org_out(db: Session, o: Organization) -> dict:
             if active_contract
             else None
         ),
+        "open_tests": open_tests,
         "created_at": o.created_at.isoformat() if o.created_at else None,
     }
 
@@ -177,6 +201,24 @@ def _set_contract_services(db: Session, contract: Contract, service_ids: list[uu
         ).first()
         if exists is None:
             db.add(ContractService(contract_id=contract.id, service_id=sid))
+
+
+def _set_contract_tests(db: Session, contract: Contract, test_ids: list[uuid.UUID]) -> None:
+    """فاز ۶۲: ثبت آزمون‌های باز قرارداد؛ idempotent و بدون ردیف تکراری."""
+    seen: set[uuid.UUID] = set()
+    for tid in test_ids:
+        if tid in seen:
+            continue
+        seen.add(tid)
+        if db.get(PsychTest, tid) is None:
+            raise HTTPException(status_code=404, detail=f"آزمون یافت نشد: {tid}")
+        exists = db.scalars(
+            select(ContractTest).where(
+                ContractTest.contract_id == contract.id, ContractTest.test_id == tid
+            )
+        ).first()
+        if exists is None:
+            db.add(ContractTest(contract_id=contract.id, test_id=tid))
 
 
 # ---------------------------------------------------------------- organizations
@@ -295,6 +337,7 @@ def create_contract(
     db.add(contract)
     db.flush()
     _set_contract_services(db, contract, payload.service_ids)
+    _set_contract_tests(db, contract, payload.test_ids)
     db.commit()
     db.refresh(contract)
     return _contract_out(db, contract)
@@ -337,6 +380,14 @@ def update_contract(
             select(ContractService).where(ContractService.contract_id == contract.id)
         ).all():
             if row.service_id not in keep:
+                db.delete(row)
+    if payload.test_ids is not None:
+        _set_contract_tests(db, contract, payload.test_ids)
+        keep_tests = set(payload.test_ids)
+        for row in db.scalars(
+            select(ContractTest).where(ContractTest.contract_id == contract.id)
+        ).all():
+            if row.test_id not in keep_tests:
                 db.delete(row)
     db.commit()
     db.refresh(contract)

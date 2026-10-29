@@ -32,6 +32,8 @@ interface SessionInfo {
   identity: "user" | "guest";
   display_name: string;
   is_registered: boolean;
+  // فاز ۶۲: وضعیت نشست — open/closed؛ بسته = باید دکمهٔ گفتگوی جدید بدهیم
+  status?: string;
   rating: number | null;
   disclaimer: string;
   message_count: number;
@@ -46,6 +48,13 @@ function clientToken(): string {
     t = (crypto.randomUUID ? crypto.randomUUID() : `w${Date.now()}${Math.random().toString(36).slice(2, 10)}`).replace(/-/g, "");
     try { localStorage.setItem(TOKEN_KEY, t); } catch { /* ignore */ }
   }
+  return t;
+}
+
+// فاز ۶۲: توکن تازه برای «گفتگوی جدید» — نشست بستهٔ قبلی کنار گذاشته می‌شود
+function freshToken(): string {
+  const t = (crypto.randomUUID ? crypto.randomUUID() : `w${Date.now()}${Math.random().toString(36).slice(2, 10)}`).replace(/-/g, "");
+  try { localStorage.setItem(TOKEN_KEY, t); } catch { /* ignore */ }
   return t;
 }
 
@@ -93,10 +102,10 @@ export default function PublicChatWidget() {
     });
   }, []);
 
-  const openSession = useCallback(async () => {
+  const openSession = useCallback(async (tok?: string) => {
     setOpening(true);
     setError(null);
-    tokenRef.current = clientToken();
+    tokenRef.current = tok || clientToken();
     try {
       const r = await fetch("/api/v1/public/chat/session", {
         method: "POST",
@@ -138,6 +147,19 @@ export default function PublicChatWidget() {
     setOpen(true);
     if (!session && messages.length === 0) openSession();
   };
+
+  // فاز ۶۲: شروع گفتگوی جدید — توکن تازه + پاک‌سازی وضعیت + بازکردن نشست نو
+  const startNewChat = useCallback(() => {
+    tokenRef.current = freshToken();
+    setMessages([]);
+    setSession(null);
+    setRating(0);
+    setRatingComment("");
+    setRated(false);
+    setError(null);
+    setInput("");
+    void openSession(tokenRef.current);
+  }, [openSession]);
 
   useEffect(() => {
     if (open) scrollToBottom();
@@ -232,6 +254,8 @@ export default function PublicChatWidget() {
   const lastQuick = [...messages].reverse().find((m) => m.role === "assistant" && m.quick_replies?.length)?.quick_replies ?? null;
   const assistantCount = messages.filter((m) => m.role === "assistant").length;
   const showRateInline = !rated && assistantCount >= 2;
+  // فاز ۶۲: گفتگوی بسته — ورودی غیرفعال + بنر «شروع گفتگوی جدید»
+  const closed = !!session && session.status != null && session.status !== "open";
 
   return (
     <>
@@ -286,6 +310,18 @@ export default function PublicChatWidget() {
                 </Box>
               </Stack>
               <Stack direction="row" spacing={0.5} alignItems="center">
+                {/* فاز ۶۲: گفتگوی جدید همیشه در دسترس سرصفحه */}
+                <Tooltip title="گفتگوی جدید" placement="bottom">
+                  <IconButton
+                    size="small"
+                    onClick={startNewChat}
+                    disabled={opening || (!session && messages.length === 0)}
+                    aria-label="شروع گفتگوی جدید"
+                    sx={{ color: "#fff", opacity: 0.9 }}
+                  >
+                    <Box component="span" sx={{ fontSize: 15, lineHeight: 1, fontWeight: 800 }}>＋</Box>
+                  </IconButton>
+                </Tooltip>
                 {!session?.is_registered && (
                   <IconButton size="small" onClick={() => setShowNameField((v) => !v)}
                     aria-label="معرفی خودم" sx={{ color: "#fff", opacity: 0.9 }}>
@@ -382,6 +418,29 @@ export default function PublicChatWidget() {
             )}
           </Box>
 
+          {/* فاز ۶۲: بنر گفتگوی بسته + دکمهٔ شروع گفتگوی جدید */}
+          {closed && (
+            <Box sx={{ px: 1.5, pt: 1 }}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 1.4, bgcolor: "#fff8f0", borderColor: "#f0d9b8", textAlign: "center" }}
+              >
+                <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: "#8a5a1e", mb: 1 }}>
+                  این گفتگو بسته شده است؛ برای ادامه، گفتگوی تازه‌ای شروع کنید.
+                </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={startNewChat}
+                  disabled={opening}
+                  sx={{ borderRadius: 2 }}
+                >
+                  {opening ? "در حال بازکردن…" : "شروع گفتگوی جدید"}
+                </Button>
+              </Paper>
+            </Box>
+          )}
+
           {/* پاسخ‌های پیشنهادی */}
           {!busy && lastQuick && (
             <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.6, px: 1.5, pb: 0.8 }} useFlexGap>
@@ -456,8 +515,9 @@ export default function PublicChatWidget() {
           >
             <InputBase
               fullWidth
-              placeholder="پیام خود را بنویسید…"
+              placeholder={closed ? "این گفتگو بسته شده — گفتگوی جدیدی شروع کنید" : "پیام خود را بنویسید…"}
               value={input}
+              disabled={closed}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
               inputProps={{ maxLength: 1000, "aria-label": "متن پیام" }}
@@ -466,7 +526,7 @@ export default function PublicChatWidget() {
             <IconButton
               color="primary"
               onClick={() => send(input)}
-              disabled={busy || !input.trim()}
+              disabled={busy || closed || !input.trim()}
               aria-label="ارسال پیام"
               sx={{ bgcolor: "primary.main", color: "#fff", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "#e8d7dd", color: "#fff" } }}
             >

@@ -2,14 +2,15 @@
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
   InputLabel, ListItemText, MenuItem, OutlinedInput, Paper, Select, Snackbar, Stack, Switch,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { errDetail } from "../api/client";
 import JalaliDateField from "../components/JalaliDateField";
 import { formatJalali } from "../utils/jalali";
 import { fetchAllServices } from "../api/branches";
+import { fetchPsychTests, type PsychTest } from "../api/psych";
 import {
   Contract, Organization, ReceivablesReport, createContract, createOrganization,
   createStatement, fetchContracts, fetchOrganizations, fetchReceivables, settleStatement,
@@ -41,6 +42,12 @@ export default function OrganizationsPage() {
     enabled: !!selectedOrg,
   });
   const services = useQuery({ queryKey: ["all-services"], queryFn: fetchAllServices });
+  // فاز ۶۲: فهرست آزمون‌ها برای انتخاب «آزمون‌های باز سازمان» در قرارداد
+  const psychTests = useQuery({ queryKey: ["psych-tests"], queryFn: () => fetchPsychTests() });
+  const publishedTests = useMemo(
+    () => (psychTests.data ?? []).filter((t) => t.status === "published"),
+    [psychTests.data],
+  );
   const receivables = useQuery({
     queryKey: ["receivables", receivablesOrg?.id],
     queryFn: () => fetchReceivables(receivablesOrg!.id),
@@ -135,8 +142,18 @@ export default function OrganizationsPage() {
                 <TableCell dir="ltr">{o.phone ?? "—"}</TableCell>
                 <TableCell>
                   {o.active_contract ? (
-                    <Chip size="small" color="success" variant="outlined"
-                          label={`${o.active_contract.title} — ${fa(o.active_contract.coverage_percent)}٪`} />
+                    <Stack spacing={0.5}>
+                      <Chip size="small" color="success" variant="outlined"
+                            label={`${o.active_contract.title} — ${fa(o.active_contract.coverage_percent)}٪`} />
+                      {/* فاز ۶۲: آزمون‌های باز این سازمان از قرارداد فعال */}
+                      <Typography variant="caption" color="text.secondary">
+                        {o.open_tests == null
+                          ? "آزمون‌های باز: —"
+                          : o.open_tests.length === 0
+                            ? "آزمون‌های باز: همه آزمون‌ها"
+                            : `آزمون‌های باز: ${fa(o.open_tests.length)} آزمون مشخص`}
+                      </Typography>
+                    </Stack>
                   ) : (
                     <Chip size="small" label="بدون قرارداد فعال" />
                   )}
@@ -181,7 +198,8 @@ export default function OrganizationsPage() {
                   <TableCell>سهم سازمان</TableCell>
                   <TableCell>سقف هر سفارش</TableCell>
                   <TableCell>اعتبار</TableCell>
-                  <TableCell>دامنه</TableCell>
+                  <TableCell>دامنه خدمات</TableCell>
+                  <TableCell>آزمون‌های باز</TableCell>
                   <TableCell>وضعیت</TableCell>
                   <TableCell align="left">عملیات</TableCell>
                 </TableRow>
@@ -192,7 +210,7 @@ export default function OrganizationsPage() {
                                onStatus={(s) => setContractStatusMut.mutate({ id: c.id, status: s })} />
                 ))}
                 {(contracts.data ?? []).length === 0 && (
-                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableRow><TableCell colSpan={8} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     قراردادی ثبت نشده است.
                   </TableCell></TableRow>
                 )}
@@ -211,6 +229,7 @@ export default function OrganizationsPage() {
       <CreateContractDialog
         org={newContractFor}
         services={services.data ?? []}
+        tests={publishedTests}
         loading={createContractMut.isPending}
         onClose={() => setNewContractFor(null)}
         onSubmit={(payload) => newContractFor && createContractMut.mutate({ orgId: newContractFor.id, payload })}
@@ -236,6 +255,8 @@ export default function OrganizationsPage() {
 function ContractRow({ c, onStatus }: { c: Contract; onStatus: (s: string) => void }) {
   const st = C_STATUS[c.status] ?? C_STATUS.draft;
   const scope = c.services.length === 0 ? "همه خدمات" : `${c.services.length} خدمت مشخص`;
+  // فاز ۶۲: نمایش آزمون‌های باز قرارداد (خالی = همه)
+  const testScope = c.tests.length === 0 ? "همه آزمون‌ها" : c.tests.map((t) => t.title).join("، ");
   return (
     <TableRow sx={{ opacity: c.status === "terminated" ? 0.55 : 1 }}>
       <TableCell>{c.title}</TableCell>
@@ -246,6 +267,16 @@ function ContractRow({ c, onStatus }: { c: Contract; onStatus: (s: string) => vo
         {formatJalali(c.valid_from)} ← {c.valid_to ? formatJalali(c.valid_to) : "∞"}
       </TableCell>
       <TableCell>{scope}</TableCell>
+      <TableCell sx={{ maxWidth: 260 }}>
+        {c.tests.length === 0 ? (
+          <Typography variant="body2">همه آزمون‌ها</Typography>
+        ) : (
+          <Tooltip title={testScope} placement="top">
+            <Chip size="small" variant="outlined" color="secondary"
+                  label={`${fa(c.tests.length)} آزمون مشخص`} />
+          </Tooltip>
+        )}
+      </TableCell>
       <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
       <TableCell align="left">
         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
@@ -307,9 +338,10 @@ function CreateOrgDialog({ open, loading, onClose, onSubmit }: {
   );
 }
 
-function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
+function CreateContractDialog({ org, services, tests, loading, onClose, onSubmit }: {
   org: Organization | null;
   services: { id: string; title: string; status: string }[];
+  tests: PsychTest[];
   loading: boolean;
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
@@ -320,6 +352,7 @@ function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10));
   const [validTo, setValidTo] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [testIds, setTestIds] = useState<string[]>([]);
   if (!org) return null;
 
   const submit = (e: FormEvent) => {
@@ -330,8 +363,10 @@ function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
       valid_from: validFrom,
       valid_to: validTo || null,
       service_ids: serviceIds,
+      // فاز ۶۲: خالی = همه آزمون‌ها برای سازمان باز باشد
+      test_ids: testIds,
     });
-    setTitle(""); setPercent(30); setCap(""); setServiceIds([]);
+    setTitle(""); setPercent(30); setCap(""); setServiceIds([]); setTestIds([]);
   };
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
@@ -367,6 +402,32 @@ function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
                   </MenuItem>
                 ))}
               </Select>
+            </FormControl>
+            {/* فاز ۶۲: کدام آزمون‌ها برای این سازمان باز باشد */}
+            <FormControl size="small">
+              <InputLabel>آزمون‌های باز برای سازمان (خالی = همه آزمون‌ها)</InputLabel>
+              <Select multiple value={testIds}
+                      onChange={(e) => setTestIds(e.target.value as string[])}
+                      input={<OutlinedInput label="آزمون‌های باز برای سازمان (خالی = همه آزمون‌ها)" />}
+                      renderValue={(sel) => (sel as string[]).length === 0
+                        ? "همه آزمون‌ها"
+                        : (sel as string[])
+                          .map((id) => tests.find((t) => t.id === id)?.title ?? "؟").join("، ")}>
+                {tests.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>
+                    <ListItemText
+                      primary={t.title}
+                      secondary={t.code ? `کد: ${t.code}` : undefined}
+                    />
+                  </MenuItem>
+                ))}
+                {tests.length === 0 && (
+                  <MenuItem disabled>آزمون منتشرشده‌ای یافت نشد</MenuItem>
+                )}
+              </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                اگر آزمونی انتخاب کنید، فقط همان آزمون‌ها برای اعضای این سازمان باز می‌شود.
+              </Typography>
             </FormControl>
           </Stack>
         </DialogContent>

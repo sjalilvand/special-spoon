@@ -111,3 +111,28 @@ class ContractService(Base):
         UUID(as_uuid=True), ForeignKey("services.id", ondelete="RESTRICT"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContractTest(Base):
+    """فاز ۶۲ - دامنه آزمون روان‌شناسی قرارداد؛ بدون ردیف = همه آزمون‌ها باز.
+
+    مدیر در قرارداد سازمان مشخص می‌کند کدام آزمون‌ها برای آن سازمان باز باشد؛
+    نمایش «آزمون‌های باز سازمان» از قرارداد فعال مشتق می‌شود.
+    """
+
+    __tablename__ = "contract_tests"
+    __table_args__ = (
+        UniqueConstraint("contract_id", "test_id", name="uq_contract_test"),
+        Index("ix_contract_tests_contract", "contract_id"),
+        Index("ix_contract_tests_test", "test_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    contract_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contracts.id", ondelete="RESTRICT"), nullable=False
+    )
+    test_id: Mapped[uuid.UUID] = mapped_column(
+        # رفرش با نام جدول برای پرهیز از وابستگی حلقوی به مدل PsychTest
+        UUID(as_uuid=True), ForeignKey("psych_tests.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
