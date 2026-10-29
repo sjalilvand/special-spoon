@@ -106,7 +106,13 @@ SEED_FORMS = [
 def upgrade() -> None:
     op.create_table(
         "form_templates",
-        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        # server_default برای اینکه INSERTهای مستقیم SQL (بدون ORM) هم id بگیرند
+        sa.Column(
+            "id",
+            pg.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("code", sa.String(80), nullable=False, unique=True),
         sa.Column("title", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
@@ -117,7 +123,7 @@ def upgrade() -> None:
             "is_default_call_survey", sa.Boolean(), nullable=False, server_default=sa.text("false")
         ),
         sa.Column(
-            "created_by",
+            "created_by_id",
             pg.UUID(as_uuid=True),
             sa.ForeignKey("users.id", ondelete="SET NULL"),
             nullable=True,
@@ -129,7 +135,12 @@ def upgrade() -> None:
 
     op.create_table(
         "call_sessions",
-        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "id",
+            pg.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column(
             "conversation_id",
             pg.UUID(as_uuid=True),
@@ -171,7 +182,12 @@ def upgrade() -> None:
 
     op.create_table(
         "form_responses",
-        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "id",
+            pg.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column(
             "template_id",
             pg.UUID(as_uuid=True),
@@ -226,8 +242,8 @@ def upgrade() -> None:
     for form in SEED_FORMS:
         conn.execute(
             sa.text(
-                "INSERT INTO form_templates (code, title, description, kind, fields, is_active, is_default_call_survey) "
-                "VALUES (:code, :title, :desc, :kind, :fields, true, :dflt) "
+                "INSERT INTO form_templates (id, code, title, description, kind, fields, is_active, is_default_call_survey) "
+                "VALUES (gen_random_uuid(), :code, :title, :desc, :kind, :fields, true, :dflt) "
                 "ON CONFLICT (code) DO NOTHING"
             ),
             {
