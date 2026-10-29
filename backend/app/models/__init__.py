@@ -111,6 +111,7 @@ from app.models.chat import (
     TEXT_MAX_LEN,
     VOICE_MAX_BYTES,
 )
+from app.models.public_chat import PublicChatMessage, PublicChatSession
 
 __all__ = [
     "Account", "AccountType", "ActivationToken", "Applicant", "Appointment", "AppointmentStatus",
@@ -140,4 +141,5 @@ __all__ = [
     "Conversation", "ConversationKind", "ConversationMember",
     "Message", "MessageKind", "TEXT_MAX_LEN", "VOICE_MAX_BYTES",
     "AgentSession", "AgentMessage",
+    "PublicChatSession", "PublicChatMessage",
 ]

@@ -3,6 +3,7 @@ import {
   Paper, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from "@mui/material";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   createBookingHold, fetchBookingSlots, fetchPublicCounselors, postConsultation,
   releaseBookingHold, requestOtp, verifyOtp,
@@ -28,6 +29,7 @@ function fmtCountdown(total: number): string {
 }
 
 export default function BookingPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [counselors, setCounselors] = useState<PublicCounselor[] | null>(null);
   const [counselor, setCounselor] = useState<PublicCounselor | null>(null);
@@ -56,7 +58,23 @@ export default function BookingPage() {
   const [otpBusy, setOtpBusy] = useState(false);
 
   useEffect(() => {
-    fetchPublicCounselors().then(setCounselors).catch(() => setCounselors([]));
+    fetchPublicCounselors().then((list) => {
+      setCounselors(list);
+      // فاز ۵۴ - پیش‌انتخاب مشاور از لینک چت: /booking?counselor=<id>
+      const wanted = searchParams.get("counselor");
+      if (wanted) {
+        const found = list.find((c) => c.id === wanted);
+        if (found) {
+          setCounselor(found);
+          setStep(1);
+          fetchBookingSlots(found.id)
+            .then(setDays)
+            .catch(() => setDays([]));
+        }
+        setSearchParams({}, { replace: true });
+      }
+    }).catch(() => setCounselors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // شمارش معکوس نگهداشت - محدودشده به زمان سمت سرور با remaining_seconds
