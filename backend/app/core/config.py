@@ -130,6 +130,12 @@ class Settings(BaseSettings):
     ai_provider: str = "rule"
     # کلید سرویس AI؛ خالی = fallback به rule (fail-soft)؛ کلید هرگز به کلاینت/لاگ نمی‌رود
     ai_api_key: str = ""
+    # فاز ۵۳ - عامل هوشمند (الگوی deepseek-harness): هر سرویس OpenAI-سازگار
+    # ai_api_base_url خالی/کلید خالی = ابزارهای عامل به rule سقوط می‌کنند (fail-soft)
+    ai_api_base_url: str = ""
+    ai_model: str = "deepseek-chat"
+    # سقف گام حلقهٔ عامل (ابزار→مدل→ابزار...) برای جلوگیری از حلقهٔ بی‌پایان
+    ai_agent_max_steps: int = 4
 
     # فاز ۳۶ - B28: یکپارچه‌سازی‌های بیرونی — سرویس پیامک پلاگین‌پذیر
     # همان الگوی D02/D03/D07:

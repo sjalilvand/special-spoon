@@ -1,0 +1,227 @@
+"""فاز ۵۳ - حلقهٔ عامل Rosepsy (الگوی Agent Turn/Step Lifecycle سند dsh).
+
+جریان یک Turn:
+    پیام کاربر
+      → نشست (system + تاریخچه + پیام جدید)
+        → مدل (با شِمای ابزارهای مجاز همان کاربر)
+          ← tool_calls؟ → اجرای امن ابزار → append پیام tool → دوباره مدل
+          ← پیام نهایی → ثبت در نشست → پاسخ به UI
+- سقف گام (AI_AGENT_MAX_STEPS، پیش‌فرض ۴) مثل dsh جلوی حلقهٔ بی‌پایان را می‌گیرد؛
+- fail-soft: نبود کلید/خطای مدل/هر استثنا → همان پاسخ‌دهندهٔ قاعده‌محور فاز ۳۵؛
+- مرز داده: ابزارها فقط خودِ کاربر یا دادهٔ عمومی؛ ابزار کارکنان فقط با نقش؛
+- دیسکلیمر ثابت فاز ۳۵ روی پاسخ نهایی می‌ماند.
+"""
+from __future__ import annotations
+
+import json
+import time
+import uuid
+from dataclasses import dataclass, field
+
+from sqlalchemy.orm import Session
+
+from app.models.agent import AgentMessage, AgentSession
+from app.models.user import User
+from app.services.agent import provider
+from app.services.agent.tools import ToolRegistry, build_registry, staff_allowed
+from app.services.ai_assistant import _DISCLAIMER, _rule_answer  # بازاستفاده از هستهٔ فاز ۳۵
+
+SYSTEM_PROMPT = (
+    "تو «دستیار هوشمند Rosepsy» هستی؛ دستیار سامانهٔ مدیریت مراکز مشاوره و آزمون‌های روان‌شناسی. "
+    "همیشه فارسی و کوتاه و دقیق پاسخ بده. "
+    "برای اطلاع از خدمات، شعب، سفارش‌ها، نوبت‌ها، کیف پول و آمار عملیاتی از ابزارهای در دسترس استفاده کن "
+    "و پیش از پاسخ نهایی، دادهٔ ابزار را با اعداد واقعی بازگو کن؛ عددی از خودت نساز. "
+    "پاسخ تو فقط دربارهٔ اطلاعات عمومی سامانه است؛ تشخیص یا درمان بالینی ارائه نکن و "
+    "در موارد بالینی کاربر را به مشاور حرفه‌ای ارجاع بده. "
+    "اگر ابزار پاسخ لازم را نداد، صادقانه بگو موضوع خارج از دامنهٔ توست."
+)
+
+
+@dataclass
+class StepTrace:
+    """رد یک گام ابزار برای UI و لاگ (بدون کلید، بدون دادهٔ بالینی)."""
+
+    tool_name: str
+    tool_title: str
+    args: dict
+    result: dict
+
+
+@dataclass
+class AgentTurnResult:
+    response: str
+    provider: str
+    disclaimer: str
+    latency_ms: int
+    steps: list[StepTrace] = field(default_factory=list)
+    fallback_used: bool = False
+
+
+def _openai_tools(reg: ToolRegistry, actor: User) -> list[dict]:
+    """شِمای ابزارهای مجاز برای همان کاربر (ابزار کارکنان فقط با نقش)."""
+    out = []
+    for t in reg.tools.values():
+        if not staff_allowed(actor, t):
+            continue
+        out.append({
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": f"{t.title}: {t.description}",
+                "parameters": t.parameters,
+            },
+        })
+    return out
+
+
+def _history_messages(db: Session, session_id: uuid.UUID, limit: int = 20) -> list[dict]:
+    """بازپخش نشست (Session Replay — الگوی dsh): آخرین پیام‌ها به ترتیب زمانی."""
+    rows = (
+        db.query(AgentMessage)
+        .filter(AgentMessage.session_id == session_id)
+        .order_by(AgentMessage.created_at.desc(), AgentMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    msgs: list[dict] = []
+    for r in rows:
+        if r.role == "user":
+            msgs.append({"role": "user", "content": r.content or ""})
+        elif r.role == "assistant":
+            msgs.append({"role": "assistant", "content": r.content or ""})
+        # پیام‌های tool در بازپخش ساده حذف می‌شوند (مدل وضعیت را از پاسخ نهایی می‌فهمد)
+    return msgs
+
+
+def _run_tool(db: Session, actor: User, reg: ToolRegistry, name: str, raw_args: str) -> tuple[dict, StepTrace | None]:
+    """اجرای امن یک ابزار؛ خطا → دیکشنری خطا (هیچ استثنایی به بیرون نمی‌رود)."""
+    tool = reg.get(name)
+    if tool is None:
+        return {"error": "ابزار شناخته‌شده نیست"}, None
+    if not staff_allowed(actor, tool):
+        return {"error": "دسترسی به این ابزار برای نقش شما مجاز نیست"}, None
+    try:
+        args = json.loads(raw_args or "{}")
+        if not isinstance(args, dict):
+            args = {}
+    except ValueError:
+        args = {}
+    try:
+        result = tool.func(db, actor, args)
+    except Exception:  # noqa: BLE001 — خطای ابزار هرگز Turn را نمی‌شکند
+        result = {"error": "اجرای ابزار ناموفق بود"}
+    trace = StepTrace(tool_name=tool.name, tool_title=tool.title, args=args, result=result)
+    return result, trace
+
+
+def _tool_result_text(result: dict) -> str:
+    """فشرده‌سازی خروجی ابزار برای مدل (متن کوتاه فارسی/JSON)."""
+    try:
+        return json.dumps(result, ensure_ascii=False)[:1500]
+    except (TypeError, ValueError):
+        return "{}"
+
+
+def run_turn(
+    db: Session,
+    actor: User,
+    session: AgentSession,
+    message: str,
+    registry: ToolRegistry | None = None,
+) -> AgentTurnResult:
+    """یک Turn کامل حلقهٔ عامل + ثبت ماندگار در نشست (append-only)."""
+    started = time.monotonic()
+    reg = registry or build_registry()
+    steps: list[StepTrace] = []
+    provider_name = "rule"
+    fallback = False
+    final_answer: str | None = None
+
+    db.add(AgentMessage(session_id=session.id, role="user", content=(message or "")[:2000]))
+    db.commit()
+
+    if provider.is_enabled():
+        try:
+            from app.core.config import get_settings
+            max_steps = min(int(getattr(get_settings(), "ai_agent_max_steps", 4) or 4), 8)
+        except Exception:  # noqa: BLE001
+            max_steps = 4
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages += _history_messages(db, session.id, limit=18)
+        messages.append({"role": "user", "content": (message or "")[:2000]})
+        openai_tools = _openai_tools(reg, actor)
+
+        for _step_index in range(max_steps):
+            result = provider.chat_completion(messages, tools=openai_tools or None)
+            if result is None:
+                fallback = True
+                break
+            provider_name = "llm"
+            if result.tool_calls:
+                messages.append({
+                    "role": "assistant",
+                    "content": result.content or "",
+                    "tool_calls": result.tool_calls,
+                })
+                for tc in result.tool_calls:
+                    fn = (tc.get("function") or {}) if isinstance(tc, dict) else {}
+                    name = fn.get("name") or ""
+                    raw_args = fn.get("arguments") or "{}"
+                    tool_result, trace = _run_tool(db, actor, reg, name, raw_args)
+                    if trace is not None:
+                        steps.append(trace)
+                        db.add(AgentMessage(
+                            session_id=session.id,
+                            role="tool",
+                            content=_tool_result_text(tool_result),
+                            tool_name=trace.tool_name,
+                            tool_args=trace.args,
+                            tool_result=trace.result,
+                        ))
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": (tc.get("id") if isinstance(tc, dict) else None) or "",
+                        "content": _tool_result_text(tool_result),
+                    })
+                db.commit()
+                continue  # گام بعدی: مدل با نتایج ابزار
+            # پاسخ نهایی متنی
+            final_answer = (result.content or "").strip() or None
+            break
+        else:
+            # سقف گام پر شد — از مدل خواسته می‌شود جمع‌بندی کند؛ اگر نشد fallback
+            result = provider.chat_completion(messages + [{
+                "role": "user",
+                "content": "خلاصهٔ کوتاه نهایی را همین حالا بدون ابزار جدید بده.",
+            }])
+            if result is not None and (result.content or "").strip():
+                final_answer = result.content.strip()
+            else:
+                fallback = True
+    else:
+        fallback = True
+
+    if final_answer is None:
+        provider_name = "rule" if fallback else provider_name
+        final_answer = _rule_answer(message)
+
+    latency = int((time.monotonic() - started) * 1000)
+    db.add(AgentMessage(
+        session_id=session.id,
+        role="assistant",
+        content=final_answer[:4000],
+        provider=provider_name,
+        latency_ms=latency,
+    ))
+    db.commit()
+
+    return AgentTurnResult(
+        response=final_answer,
+        provider=provider_name,
+        disclaimer=_DISCLAIMER,
+        latency_ms=latency,
+        steps=steps,
+        fallback_used=fallback and provider_name == "rule",
+    )

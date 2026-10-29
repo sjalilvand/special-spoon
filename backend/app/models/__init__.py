@@ -101,6 +101,7 @@ from app.models.wallet import (
 )
 from app.models.user import ActivationToken, AuthSession, Role, User, UserStatus, user_roles_table
 from app.models.rbac import DATA_SCOPES, DATA_SCOPE_TITLES, Permission, effective_permissions
+from app.models.agent import AgentMessage, AgentSession
 from app.models.chat import (
     Conversation,
     ConversationKind,
@@ -138,4 +139,5 @@ __all__ = [
     "Permission", "DATA_SCOPES", "DATA_SCOPE_TITLES", "effective_permissions",
     "Conversation", "ConversationKind", "ConversationMember",
     "Message", "MessageKind", "TEXT_MAX_LEN", "VOICE_MAX_BYTES",
+    "AgentSession", "AgentMessage",
 ]
