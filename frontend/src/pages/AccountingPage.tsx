@@ -12,6 +12,7 @@ import {
   settleSettlement, Settlement, TrialBalanceRow,
 } from "../api/accounting";
 import { errDetail } from "../api/client";
+import JalaliDateField from "../components/JalaliDateField";
 
 // فاز ۳۱ - B22 سند جامع: کدینگ، سند حسابداری، تسویه، مغایرت و گزارش مالی
 // قواعد سند: «سند متوازن و قابل ردیابی به رویداد مالی» + «فروش گزارش با داده مالی تطبیق کند»
@@ -469,13 +470,12 @@ function SettlementsTab() {
               <MenuItem value="sandbox">شبیه‌ساز (sandbox)</MenuItem>
               <MenuItem value="zarinpal">زرین‌پال</MenuItem>
             </TextField>
-            <Stack direction="row" spacing={1.5}>
-              <TextField fullWidth type="date" label="از تاریخ" value={form.period_start}
-                onChange={(e) => setForm({ ...form, period_start: e.target.value })}
-                InputLabelProps={{ shrink: true }} />
-              <TextField fullWidth type="date" label="تا تاریخ" value={form.period_end}
-                onChange={(e) => setForm({ ...form, period_end: e.target.value })}
-                InputLabelProps={{ shrink: true }} />
+            {/* فاز ۵۹: تقویم شمسی */}
+            <Stack direction="row" spacing={1.5} alignItems="flex-start">
+              <JalaliDateField label="از تاریخ" value={form.period_start}
+                onChange={(iso) => setForm({ ...form, period_start: iso ?? form.period_start })} />
+              <JalaliDateField label="تا تاریخ" value={form.period_end}
+                onChange={(iso) => setForm({ ...form, period_end: iso ?? form.period_end })} />
             </Stack>
             <TextField label="یادداشت (اختیاری)" value={form.note}
               onChange={(e) => setForm({ ...form, note: e.target.value })} />

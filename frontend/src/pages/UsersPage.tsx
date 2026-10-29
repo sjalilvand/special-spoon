@@ -38,6 +38,7 @@ import {
 import { fetchRoles } from "../api/rbac";
 import type { UserRow } from "../api/auth";
 import { formatJalaliDateTime } from "../utils/jalali";
+import { useNavigate } from "react-router-dom";
 
 const STATUS_META: Record<string, { label: string; color: "success" | "warning" | "default" }> = {
   active: { label: "فعال", color: "success" },
@@ -47,6 +48,7 @@ const STATUS_META: Record<string, { label: string; color: "success" | "warning" 
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,11 @@ export default function UsersPage() {
                     {row.last_login_at ? formatJalaliDateTime(row.last_login_at) : "—"}
                   </TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      {/* فاز ۵۹: ورود مدیر به کارتابل این کاربر از نقطهٔ نظر خودش */}
+                      <Button size="small" color="primary" onClick={() => navigate(`/cartable/${row.id}`)}>
+                        کارتابل
+                      </Button>
                       <Button
                         size="small"
                         onClick={() => {

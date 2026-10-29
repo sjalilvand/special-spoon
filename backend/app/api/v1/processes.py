@@ -555,3 +555,264 @@ def transition_instance(
     record_audit(db, action=f"process.instance_{action}", actor_user_id=actor.id,
                  entity_type="process_instance", entity_id=str(i.id))
     return _instance_out(db, i, with_events=True)
+
+
+# ------------------------------------------------------------ فاز ۵۹: دیاگرام BPMN زنده
+# پارسر BPMN 2.0 + BPMNDI برای شبیه‌سازی بصری فرایند در مانیتورینگ:
+# هر عنصر (رویداد/فعالیت/گیت‌وی) روی نمودار با وضعیت واقعی نمونه رنگ می‌شود.
+
+_BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
+_BPMNDI_NS = "http://www.omg.org/spec/BPMN/20100524/DI"
+_DC_NS = "http://www.omg.org/spec/DD/20100524/DC"
+_DI_NS = "http://www.omg.org/spec/DD/20100524/DI"
+
+# نوع‌های عنصر که فرانت آن‌ها را شکل‌دار رندر می‌کند
+NODE_KINDS = {
+    "startEvent": "start",
+    "endEvent": "end",
+    "task": "task",
+    "userTask": "task",
+    "serviceTask": "task",
+    "manualTask": "task",
+    "scriptTask": "task",
+    "sendTask": "task",
+    "receiveTask": "task",
+    "businessRuleTask": "task",
+    "callActivity": "subprocess",
+    "subProcess": "subprocess",
+    "exclusiveGateway": "gateway_exclusive",
+    "parallelGateway": "gateway_parallel",
+    "inclusiveGateway": "gateway_inclusive",
+    "eventBasedGateway": "gateway_event",
+    "complexGateway": "gateway_exclusive",
+    "intermediateCatchEvent": "intermediate",
+    "intermediateThrowEvent": "intermediate",
+    "boundaryEvent": "intermediate",
+}
+
+GATEWAY_LABELS = {
+    "gateway_exclusive": "گیت‌وی انحصاری (XOR)",
+    "gateway_parallel": "گیت‌وی موازی (AND)",
+    "gateway_inclusive": "گیت‌وی شمول (OR)",
+    "gateway_event": "گیت‌وی رویدادمحور",
+}
+
+
+def parse_bpmn_diagram(xml: str) -> dict:
+    """پارس XML استاندارد BPMN: گره‌ها + یال‌ها + مختصات BPMNDI.
+
+    اگر XML مختصات DI نداشته باشد (XML دستی)، چیدمان خودکار لایه‌ای
+    (بالا-به-پایین توپولوژیک با انشعاب افقی) ساخته می‌شود.
+    """
+    root = ET.fromstring(xml)
+
+    def _local(tag: str) -> str:
+        return tag.rsplit("}", 1)[-1]
+
+    # --- گره‌ها و یال‌ها از <process> ---
+    nodes: dict[str, dict] = {}
+    edges: list[dict] = []
+    for process in root.iter():
+        if _local(process.tag) != "process":
+            continue
+        for el in process:
+            tag = _local(el.tag)
+            if tag == "sequenceFlow":
+                edges.append({
+                    "id": el.get("id") or "",
+                    "source": el.get("sourceRef") or "",
+                    "target": el.get("targetRef") or "",
+                    "name": el.get("name") or None,
+                    "waypoints": [],
+                })
+            elif tag in NODE_KINDS:
+                nid = el.get("id")
+                if not nid:
+                    continue
+                nodes[nid] = {
+                    "id": nid,
+                    "name": (el.get("name") or nid).strip(),
+                    "kind": NODE_KINDS[tag],
+                    "raw_type": tag,
+                    "x": 0, "y": 0, "w": 0, "h": 0,
+                }
+
+    # --- مختصات از BPMNDI ---
+    has_di = False
+    for shape in root.iter(f"{{{_BPMNDI_NS}}}BPMNShape"):
+        eid = shape.get("bpmnElement")
+        if eid not in nodes:
+            continue
+        for child in shape.iter():
+            if _local(child.tag) == "Bounds":
+                nodes[eid]["x"] = float(child.get("x") or 0)
+                nodes[eid]["y"] = float(child.get("y") or 0)
+                nodes[eid]["w"] = float(child.get("width") or 0)
+                nodes[eid]["h"] = float(child.get("height") or 0)
+                has_di = True
+    for edge_el in root.iter(f"{{{_BPMNDI_NS}}}BPMNEdge"):
+        eid = edge_el.get("bpmnElement")
+        for e in edges:
+            if e["id"] == eid:
+                pts = []
+                for child in edge_el.iter():
+                    if _local(child.tag) == "waypoint":
+                        pts.append([float(child.get("x") or 0), float(child.get("y") or 0)])
+                e["waypoints"] = pts
+
+    # --- چیدمان خودکار برای گره‌های بدون مختصات ---
+    missing = [n for n in nodes.values() if n["w"] == 0]
+    if missing:
+        has_di = _auto_layout(nodes, edges, missing) or has_di
+
+    # محدودهٔ کل بوم
+    if nodes:
+        min_x = min(n["x"] for n in nodes.values())
+        min_y = min(n["y"] for n in nodes.values())
+        max_x = max(n["x"] + n["w"] for n in nodes.values())
+        max_y = max(n["y"] + n["h"] for n in nodes.values())
+        bounds = {"x": min_x - 40, "y": min_y - 40, "width": (max_x - min_x) + 80,
+                  "height": (max_y - min_y) + 80}
+    else:
+        bounds = {"x": 0, "y": 0, "width": 800, "height": 400}
+    return {"nodes": list(nodes.values()), "edges": edges, "bounds": bounds, "has_di": has_di}
+
+
+def _auto_layout(nodes: dict, edges: list[dict], missing: list[dict]) -> bool:
+    """چیدمان لایه‌ای ساده: عمق توپولوژیک = ردیف، ترتیب برادرها = ستون."""
+    import math
+
+    succ: dict[str, list[str]] = {}
+    indeg: dict[str, int] = {nid: 0 for nid in nodes}
+    for e in edges:
+        s, t = e["source"], e["target"]
+        if s in nodes and t in nodes:
+            succ.setdefault(s, []).append(t)
+            indeg[t] = indeg.get(t, 0) + 1
+
+    depth: dict[str, int] = {}
+
+    def visit(nid: str, d: int, seen: set):
+        if nid in seen or nid not in nodes:
+            return
+        seen.add(nid)
+        if d > depth.get(nid, -1):
+            depth[nid] = d
+        for t in succ.get(nid, []):
+            visit(t, d + 1, seen)
+
+    roots = [nid for nid, dg in indeg.items() if dg == 0]
+    for r in (roots or list(nodes.keys())[:1]):
+        visit(r, 0, set())
+
+    layers: dict[int, list[str]] = {}
+    for nid, d in depth.items():
+        layers.setdefault(d, []).append(nid)
+    TW, TH, GX, GY = 160, 70, 60, 90
+    for d, layer in sorted(layers.items()):
+        row_w = len(layer) * (TW + GX)
+        x0 = 40
+        for k, nid in enumerate(sorted(layer)):
+            n = nodes[nid]
+            n["x"] = x0 + k * (TW + GX)
+            n["y"] = 40 + d * (TH + GY)
+            n["w"] = TW if n["kind"] not in ("start", "end") else 36
+            n["h"] = TH if n["kind"] not in ("start", "end") else 36
+    # یال‌های بدون waypoint: خط مستقیم مرکز-به-مرکز (فرانت خم می‌زند)
+    for e in edges:
+        if not e["waypoints"] and e["source"] in nodes and e["target"] in nodes:
+            s, t = nodes[e["source"]], nodes[e["target"]]
+            e["waypoints"] = [
+                [s["x"] + s["w"] / 2, s["y"] + s["h"] / 2],
+                [t["x"] + t["w"] / 2, t["y"] + t["h"] / 2],
+            ]
+    return True
+
+
+def _element_states(events: list, instance: ProcessInstance) -> dict:
+    """وضعیت هر عنصر از رخدادها + استنتاج گام‌های بعدی (pending).
+
+    قواعد:
+    - آخرین رخداد هر element_id ملاک است؛
+    - گامِ فعال = current_element_id (یا رخداد active اخیر)؛
+    - اگر نمونه completed باشد و رخداد end داشته باشیم، عنصر پایان done است؛
+    - عناصر لایه‌های بعد از گام فعال که رخداد ندارند pending در نظر گرفته
+      می‌شوند تا نمودار «فقط مسیر طی‌شده» را برجسته کند.
+    """
+    by_elem: dict[str, dict] = {}
+    active_id = instance.current_element_id
+    for e in events:
+        eid = e.element_id
+        if not eid:
+            continue
+        prev = by_elem.get(eid)
+        # مقایسهٔ زمانی با datetime خام (خروجی ISO فقط برای نمایش)
+        if (prev is None or e.occurred_at is None or prev["occurred_at"] is None
+                or e.occurred_at >= prev["occurred_at"]):
+            by_elem[eid] = {
+                "status": e.status,
+                "occurred_at": e.occurred_at,
+                "note": e.note,
+            }
+    if active_id and by_elem.get(active_id, {}).get("status") != "active":
+        by_elem.setdefault(active_id, {"status": "active", "occurred_at": None, "note": None})
+        by_elem[active_id]["status"] = "active"
+    # خروجی: زمان به ISO
+    for v in by_elem.values():
+        if v["occurred_at"] is not None:
+            v["occurred_at"] = v["occurred_at"].isoformat()
+    return by_elem
+
+
+@router.get("/process-instances/{instance_id}/diagram")
+def get_instance_diagram(
+    instance_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """دیاگرام BPMN نمونه + وضعیت هر عنصر برای شبیه‌سازی بصری مانیتورینگ."""
+    _require_read(actor)
+    i = db.get(ProcessInstance, instance_id)
+    if i is None:
+        raise HTTPException(status_code=404, detail="نمونه فرایند یافت نشد")
+    v = db.get(ProcessVersion, i.version_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="نسخه فرایند یافت نشد")
+    try:
+        diagram = parse_bpmn_diagram(v.bpmn_xml)
+    except ET.ParseError as e:
+        raise HTTPException(status_code=422, detail=f"XML BPMN این نسخه قابل پارس نیست: {e}")
+    events = db.scalars(
+        select(ProcessInstanceEvent)
+        .where(ProcessInstanceEvent.instance_id == i.id)
+        .order_by(ProcessInstanceEvent.occurred_at)
+    ).all()
+    states = _element_states(events, i)
+    # گره‌های بدون رخداد: pending مگر شروع/پایانِ نمونهٔ تمام‌شده
+    for n in diagram["nodes"]:
+        if n["id"] not in states:
+            if i.status == "completed" and n["kind"] == "end":
+                states[n["id"]] = {"status": "done", "occurred_at": None, "note": None}
+            else:
+                states[n["id"]] = {"status": "pending", "occurred_at": None, "note": None}
+    # یال‌های طی‌شده: مبدأ done و مقصد done/active → highlighted
+    flows = []
+    for e in diagram["edges"]:
+        s_state = states.get(e["source"], {}).get("status", "pending")
+        t_state = states.get(e["target"], {}).get("status", "pending")
+        passed = s_state in ("done", "skipped") and t_state in ("done", "active", "skipped")
+        active = s_state == "done" and t_state == "active"
+        flows.append({
+            "id": e["id"], "source": e["source"], "target": e["target"],
+            "name": e["name"], "waypoints": e["waypoints"],
+            "passed": passed, "active": active,
+        })
+    return {
+        "instance": _instance_out(db, i),
+        "nodes": diagram["nodes"],
+        "edges": flows,
+        "bounds": diagram["bounds"],
+        "states": states,
+        "has_di": diagram["has_di"],
+        "gateway_labels": GATEWAY_LABELS,
+    }

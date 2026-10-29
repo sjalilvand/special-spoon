@@ -60,6 +60,8 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: <DashboardRoundedIcon />,
     items: [
       { label: "داشبورد عملیاتی", path: "/dashboard", roles: ALL_STAFF, icon: <DashboardIcon /> },
+      // فاز ۵۹: کارتابل شخصی هر حساب — نقش‌ها، سطح دسترسی و کارهای در جریان
+      { label: "کارتابل من", path: "/cartable", roles: ALL_STAFF, icon: <Inbox /> },
       { label: "داشبورد مدیر", code: "B24", path: "/admin-dashboard", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], icon: <QueryStats /> },
       { label: "گزارش انطباق DPO", path: "/dpo-report", roles: ["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"], icon: <Gavel /> },
       // فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال (همکاران و متقاضیان)

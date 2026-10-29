@@ -48,6 +48,7 @@ import ChatPage from "../pages/ChatPage";
 import PublicChatsPage from "../pages/PublicChatsPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import WalletPage from "../pages/WalletPage";
+import CartablePage from "../pages/CartablePage";
 import ProtectedRoute from "./ProtectedRoute";
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
@@ -75,6 +76,13 @@ export default function AppRoutes() {
       <Route path="/change-password" element={<ProtectedRoute><Layout><ChangePasswordPage /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={
         <ProtectedRoute roles={STAFF_ROLES}><Layout><DashboardPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۵۹: کارتابل شخصی هر حساب + نمای مدیریتی کارتابل کاربر */}
+      <Route path="/cartable" element={
+        <ProtectedRoute roles={STAFF_ROLES}><Layout><CartablePage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/cartable/:userId" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><CartablePage /></Layout></ProtectedRoute>
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}><Layout><AdminDashboardPage /></Layout></ProtectedRoute>

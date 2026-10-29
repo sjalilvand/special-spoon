@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { errDetail } from "../api/client";
+import JalaliDateField from "../components/JalaliDateField";
 import {
   createService, createSpecialty, createTariff, fetchQuote, fetchServices, fetchSpecialties,
   fetchTariffs, updateService, updateTariff,
@@ -390,8 +391,11 @@ function QuoteChecker({ serviceId }: { serviceId: string }) {
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Typography variant="subtitle2" gutterBottom>استعلام قیمت (pricing/quote)</Typography>
       <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-        <TextField size="small" type="date" label="تاریخ (میلادی)" InputLabelProps={{ shrink: true }}
-          value={date} onChange={(e) => setDate(e.target.value)} sx={{ width: 200 }} />
+        {/* فاز ۵۹: تقویم شمسی به‌جای ورودی میلادی */}
+        <Box sx={{ width: 220 }}>
+          <JalaliDateField label="تاریخ استعلام" value={date}
+            onChange={(iso) => setDate(iso ?? new Date().toISOString().slice(0, 10))} />
+        </Box>
         <Button variant="outlined" onClick={check} disabled={busy}>استعلام</Button>
         {quote && (
           <Typography variant="body2">
@@ -447,11 +451,12 @@ function TariffCreateDialog({ open, onClose, serviceId }: {
             {formError && <Alert severity="error">{formError}</Alert>}
             <TextField size="small" required type="number" inputProps={{ min: 0 }} label="مبلغ" value={form.amount ?? ""} onChange={set("amount")} />
             <TextField size="small" label="ارز (پیش‌فرض IRR)" value={form.currency ?? ""} onChange={set("currency")} />
-            <TextField size="small" required type="date" label="اعتبار از" InputLabelProps={{ shrink: true }}
-              value={form.valid_from ?? ""} onChange={set("valid_from")} />
+            {/* فاز ۵۹: تقویم شمسی برای اعتبار تعرفه */}
+            <JalaliDateField label="اعتبار از" required value={form.valid_from ?? ""}
+              onChange={(iso) => setForm((p) => ({ ...p, valid_from: iso ?? "" }))} />
             {!openEnded && (
-              <TextField size="small" type="date" label="اعتبار تا (خالی = باز-پایان)" InputLabelProps={{ shrink: true }}
-                value={form.valid_to ?? ""} onChange={set("valid_to")} disabled={openEnded} />
+              <JalaliDateField label="اعتبار تا (خالی = باز-پایان)" value={form.valid_to ?? ""}
+                onChange={(iso) => setForm((p) => ({ ...p, valid_to: iso ?? "" }))} />
             )}
             <FormControlLabel control={<Switch checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} />}
               label="بدون تاریخ پایان (باز-پایان)" />

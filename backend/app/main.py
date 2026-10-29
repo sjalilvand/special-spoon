@@ -13,6 +13,7 @@ from app.api.v1.assessments import router as assessments_router
 from app.api.v1.accounting import router as accounting_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.branches import router as branches_router
+from app.api.v1.cartable import router as cartable_router
 from app.api.v1.cases import router as cases_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.chat import router as chat_router
@@ -104,6 +105,8 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (catalog_router, None),
     (verification_router, None),
     (branches_router, None),
+    # فاز ۵۹: کارتابل شخصی هر حساب + نمای مدیریتی سطح دسترسی
+    (cartable_router, None),
     (payments_router, None),
     (wallet_router, None),
     (discounts_router, None),

@@ -11,8 +11,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { errDetail } from "../api/client";
+import BpmnDiagram from "../components/BpmnDiagram";
 import {
-  ProcessDefinitionInfo, ProcessInstanceInfo, fetchProcessInstances, fetchProcesses,
+  ProcessDefinitionInfo, ProcessInstanceInfo, fetchProcessDiagram, fetchProcessInstances, fetchProcesses,
   recordProcessEvent, startProcessInstance, transitionProcessInstance,
 } from "../api/processes";
 import { fetchConsultationRequests } from "../api/siteops";
@@ -89,6 +90,9 @@ export default function ProcessMonitoringPage() {
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["process-instances"] });
+    // فاز ۵۹: به‌روزرسانی نمودار زنده و جزئیات پس از ثبت گام/انتقال
+    qc.invalidateQueries({ queryKey: ["process-instance"] });
+    qc.invalidateQueries({ queryKey: ["process-instance-diagram"] });
   };
 
   const selectedInstance = useMemo(
@@ -242,9 +246,15 @@ function InstanceDetail({ instance, onChanged, onError }: {
   onError: (m: string) => void;
 }) {
   const [eventOpen, setEventOpen] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
   const detail = useQuery({
     queryKey: ["process-instance", instance.id],
     queryFn: () => import("../api/processes").then((m) => m.fetchProcessInstance(instance.id)),
+  });
+  // فاز ۵۹: دیاگرام BPMN زنده — وضعیت روی خود نمودار فرایند
+  const diagram = useQuery({
+    queryKey: ["process-instance-diagram", instance.id],
+    queryFn: () => fetchProcessDiagram(instance.id),
   });
 
   const inst = detail.data ?? instance;
@@ -285,7 +295,38 @@ function InstanceDetail({ instance, onChanged, onError }: {
         {inst.note ? ` · یادداشت: ${inst.note}` : ""}
       </Typography>
 
-      {events.length > 0 && (
+      {/* فاز ۵۹: شبیه‌سازی بصری فرایند — وضعیت هر عنصر روی نمودار BPMN */}
+      {diagram.isLoading && (
+        <Box textAlign="center" py={3}><CircularProgress size={28} /></Box>
+      )}
+      {diagram.isError && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          نمایش نمودار فرایند ممکن نشد — {errDetail(diagram.error)}
+        </Alert>
+      )}
+      {diagram.data && diagram.data.nodes.length > 0 && (
+        <Box mb={2}>
+          <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+            <Typography variant="subtitle2" fontWeight={800}>نقشهٔ فرایند و وضعیت زنده</Typography>
+            {inst.current_element_name && (
+              <Chip size="small" color="warning" label={`گام فعلی: ${inst.current_element_name}`} />
+            )}
+            <Box flexGrow={1} />
+            {events.length > 0 && (
+              <Button size="small" onClick={() => setShowTimeline(!showTimeline)}>
+                {showTimeline ? "پنهان‌کردن خط‌زمانی" : "نمایش خط‌زمانی گام‌ها"}
+              </Button>
+            )}
+          </Stack>
+          <BpmnDiagram
+            nodes={diagram.data.nodes}
+            edges={diagram.data.edges}
+            states={diagram.data.states}
+          />
+        </Box>
+      )}
+
+      {showTimeline && events.length > 0 && (
         <Stepper
           nonLinear alternativeLabel
           activeStep={events.findIndex((e) => e.status === "active") === -1

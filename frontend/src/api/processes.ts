@@ -148,3 +148,40 @@ export async function transitionProcessInstance(instanceId: string, payload: {
 }): Promise<ProcessInstanceInfo> {
   return (await apiClient.post(`/process-instances/${instanceId}/transition`, payload)).data;
 }
+
+// ---------------------------------------------------------------- فاز ۵۹: دیاگرام BPMN زنده
+export interface ProcessDiagramNode {
+  id: string;
+  name: string;
+  kind: string;
+  raw_type?: string;
+  x: number; y: number; w: number; h: number;
+}
+export interface ProcessDiagramEdge {
+  id: string;
+  source: string;
+  target: string;
+  name: string | null;
+  waypoints: [number, number][];
+  passed: boolean;
+  active: boolean;
+}
+export interface ProcessDiagramState {
+  status: "done" | "active" | "pending" | "skipped" | "failed";
+  occurred_at: string | null;
+  note: string | null;
+}
+export interface ProcessDiagram {
+  instance: ProcessInstanceInfo;
+  nodes: ProcessDiagramNode[];
+  edges: ProcessDiagramEdge[];
+  bounds: { x: number; y: number; width: number; height: number };
+  states: Record<string, ProcessDiagramState>;
+  has_di: boolean;
+  gateway_labels: Record<string, string>;
+}
+
+/** دیاگرام BPMN نمونه + وضعیت هر عنصر (پارس سمت سرور از XML نسخه) */
+export async function fetchProcessDiagram(instanceId: string): Promise<ProcessDiagram> {
+  return (await apiClient.get<ProcessDiagram>(`/process-instances/${instanceId}/diagram`)).data;
+}

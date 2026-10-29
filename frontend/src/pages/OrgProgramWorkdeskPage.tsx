@@ -26,6 +26,7 @@ import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineR
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import { errDetail } from "../api/client";
+import JalaliDateField from "../components/JalaliDateField";
 import { useAuth } from "../auth/AuthContext";
 import { startConversation } from "../api/chat";
 import { fetchChatDirectory } from "../api/chat";
@@ -569,10 +570,11 @@ function ManageTab({
                   <MenuItem value="closed">پایان‌یافته</MenuItem>
                 </Select>
               </FormControl>
-              <TextField
-                size="small" type="date" label="مهلت انجام" InputLabelProps={{ shrink: true }}
-                value={dueDate} onChange={(e) => setDueDate(e.target.value)} sx={{ flex: 1 }}
-              />
+              {/* فاز ۵۹: تقویم شمسی */}
+              <Box sx={{ flex: 1 }}>
+                <JalaliDateField label="مهلت انجام" value={dueDate}
+                  onChange={(iso) => setDueDate(iso ?? "")} />
+              </Box>
             </Stack>
             <TextField
               size="small" label="متن راهنمای پروژه (نمایش در تب راهنما)"

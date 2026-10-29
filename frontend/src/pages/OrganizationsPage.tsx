@@ -7,6 +7,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { errDetail } from "../api/client";
+import JalaliDateField from "../components/JalaliDateField";
+import { formatJalali } from "../utils/jalali";
 import { fetchAllServices } from "../api/branches";
 import {
   Contract, Organization, ReceivablesReport, createContract, createOrganization,
@@ -239,8 +241,9 @@ function ContractRow({ c, onStatus }: { c: Contract; onStatus: (s: string) => vo
       <TableCell>{c.title}</TableCell>
       <TableCell>{fa(c.coverage_percent)}٪</TableCell>
       <TableCell>{c.coverage_cap_amount ? fa(c.coverage_cap_amount) : "—"}</TableCell>
-      <TableCell dir="ltr" sx={{ fontSize: 12 }}>
-        {c.valid_from} ← {c.valid_to ?? "∞"}
+      {/* فاز ۵۹: نمایش شمسی بازهٔ اعتبار قرارداد */}
+      <TableCell sx={{ fontSize: 12 }}>
+        {formatJalali(c.valid_from)} ← {c.valid_to ? formatJalali(c.valid_to) : "∞"}
       </TableCell>
       <TableCell>{scope}</TableCell>
       <TableCell><Chip size="small" color={st.color} label={st.label} /></TableCell>
@@ -344,11 +347,12 @@ function CreateContractDialog({ org, services, loading, onClose, onSubmit }: {
                        onChange={(e) => setPercent(Number(e.target.value))} />
             <TextField label="سقف سهم به‌ازای هر سفارش (اختیاری)" type="number" dir="ltr"
                        value={cap} onChange={(e) => setCap(e.target.value)} />
-            <Stack direction="row" spacing={2}>
-              <TextField label="شروع اعتبار" type="date" required value={validFrom}
-                         onChange={(e) => setValidFrom(e.target.value)} fullWidth />
-              <TextField label="پایان اعتبار (اختیاری)" type="date" value={validTo}
-                         onChange={(e) => setValidTo(e.target.value)} fullWidth />
+            {/* فاز ۵۹: تقویم شمسی به‌جای ورودی میلادی */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <JalaliDateField label="شروع اعتبار" required value={validFrom}
+                               onChange={(iso) => setValidFrom(iso ?? "")} />
+              <JalaliDateField label="پایان اعتبار (اختیاری)" value={validTo}
+                               onChange={(iso) => setValidTo(iso ?? "")} />
             </Stack>
             <FormControl size="small">
               <InputLabel>دامنه خدمات (خالی = همه خدمات)</InputLabel>
@@ -427,11 +431,12 @@ function ReceivablesDialog({ orgId, report, orgName, loading, onClose, onChanged
               <Typography variant="subtitle2" fontWeight={700} mb={1}>
                 صورتحساب دوره‌ای سازمان (B21-plus) — تسویه سند می‌زند: بانک ۱۱۰۱ / دریافتنی سازمان ۱۱۰۴
               </Typography>
-              <Stack direction="row" spacing={1} mb={1}>
-                <TextField size="small" label="از تاریخ" type="date" value={stFrom}
-                  onChange={(e) => setStFrom(e.target.value)} />
-                <TextField size="small" label="تا تاریخ" type="date" value={stTo}
-                  onChange={(e) => setStTo(e.target.value)} />
+              {/* فاز ۵۹: بازهٔ صورتحساب با تقویم شمسی */}
+              <Stack direction="row" spacing={1} mb={1} alignItems="flex-start">
+                <JalaliDateField label="از تاریخ" value={stFrom}
+                  onChange={(iso) => setStFrom(iso ?? stFrom)} />
+                <JalaliDateField label="تا تاریخ" value={stTo}
+                  onChange={(iso) => setStTo(iso ?? stTo)} />
                 <Button variant="contained" onClick={() => createStMut.mutate()}
                   disabled={createStMut.isPending}>صدور صورتحساب</Button>
               </Stack>
