@@ -38,6 +38,7 @@ from app.api.v1.organizations import router as organizations_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.public import router as public_router
 from app.api.v1.public_chat import router as public_chat_router
+from app.api.v1.public_chat_admin import router as public_chat_admin_router
 from app.api.v1.psych_tests import router as psych_tests_router
 from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.referrals import router as referrals_router
@@ -93,6 +94,8 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (referrals_router, None),
     (public_router, None),
     (public_chat_router, ["public-chat"]),
+    # فاز ۵۵: پنل پذیرش/مدیر — مشاهدهٔ گفتگوهای عمومی و امتیازها
+    (public_chat_admin_router, ["public-chat-admin"]),
     (staff_site_router, None),
     (compliance_router, None),
     (email_outbox_router, None),

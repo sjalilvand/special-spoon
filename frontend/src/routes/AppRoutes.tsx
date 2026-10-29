@@ -43,6 +43,7 @@ import TopicsPage from "../pages/TopicsPage";
 import UsersPage from "../pages/UsersPage";
 import RolesPermissionsPage from "../pages/RolesPermissionsPage";
 import ChatPage from "../pages/ChatPage";
+import PublicChatsPage from "../pages/PublicChatsPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import WalletPage from "../pages/WalletPage";
 import ProtectedRoute from "./ProtectedRoute";
@@ -92,6 +93,12 @@ export default function AppRoutes() {
       {/* فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال */}
       <Route path="/chat" element={
         <ProtectedRoute><Layout><ChatPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۵۵: پنل پذیرش/مدیر — گفتگوهای عمومی سایت و امتیازها */}
+      <Route path="/public-chats" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"]}>
+          <Layout><PublicChatsPage /></Layout>
+        </ProtectedRoute>
       } />
       <Route path="/counselors" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>

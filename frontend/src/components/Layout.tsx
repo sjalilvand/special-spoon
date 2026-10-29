@@ -83,6 +83,8 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: <PeopleAltRoundedIcon />,
     items: [
       { label: "متقاضیان", path: "/applicants", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"], icon: <PersonSearch /> },
+      // فاز ۵۵: پنل مشاهدهٔ گفتگوهای عمومی و امتیازها — پذیرش/مدیر
+      { label: "گفتگوهای عمومی سایت", path: "/public-chats", roles: ["ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"], icon: <Forum /> },
       { label: "ورود اکسل", path: "/imports", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"], icon: <UploadFile /> },
     ],
   },

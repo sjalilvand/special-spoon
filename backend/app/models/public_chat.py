@@ -50,6 +50,12 @@ class PublicChatSession(Base):
     # نظر کاربر دربارهٔ خودِ گفتگو (فاز ۵۴ - بازخورد چت)
     rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     rating_comment: Mapped[str | None] = mapped_column(String(RATING_COMMENT_MAX), nullable=True)
+    # فاز ۵۵ - پیگیری پذیرش/مدیر: یادداشت + آخرین همکارِ رسیدگی‌کننده
+    staff_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    handled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     message_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
