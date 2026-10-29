@@ -17,6 +17,8 @@ from app.api.v1.cartable import router as cartable_router
 from app.api.v1.cases import router as cases_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.chat import router as chat_router
+from app.api.v1.calls import router as calls_router
+from app.api.v1.forms import router as forms_router
 from app.api.v1.rbac import router as rbac_router
 from app.api.v1.consents import router as consents_router
 from app.api.v1.files import router as files_router
@@ -123,6 +125,9 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     # tags صریح و rbac را معمولی اضافه کردیم و هر دو زیر v1 و v2 سرو می‌شوند.
     (rbac_router, None),
     (chat_router, ["chat"]),
+    # فاز ۶۱: فرم‌ساز و نظرسنجی + تماس تلفنی مدیریت‌شده
+    (forms_router, None),
+    (calls_router, None),
 ]
 
 for _router, _tags in _ROUTERS:

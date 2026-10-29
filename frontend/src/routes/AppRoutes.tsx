@@ -46,6 +46,11 @@ import UsersPage from "../pages/UsersPage";
 import RolesPermissionsPage from "../pages/RolesPermissionsPage";
 import ChatPage from "../pages/ChatPage";
 import PublicChatsPage from "../pages/PublicChatsPage";
+// فاز ۶۱: فرم‌ساز و نظرسنجی + تماس تلفنی
+import FormBuilderPage from "../pages/FormBuilderPage";
+import FormResponsesPage from "../pages/FormResponsesPage";
+import MyFormsPage from "../pages/MyFormsPage";
+import FormFillPage from "../pages/FormFillPage";
 import VerificationReviewsPage from "../pages/VerificationReviewsPage";
 import WalletPage from "../pages/WalletPage";
 import CartablePage from "../pages/CartablePage";
@@ -109,6 +114,29 @@ export default function AppRoutes() {
         <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"]}>
           <Layout><PublicChatsPage /></Layout>
         </ProtectedRoute>
+      } />
+      {/* فاز ۶۱: فرم‌ساز و نظرسنجی — ساخت/مدیریت فرم‌ها توسط مدیر */}
+      <Route path="/form-builder" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}>
+          <Layout><FormBuilderPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/form-responses" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}>
+          <Layout><FormResponsesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/form-responses/:templateId" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN"]}>
+          <Layout><FormResponsesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۶۱: فرم‌های من (نظرسنجی‌های در انتظار) + تکمیل فرم با لینک مستقیم */}
+      <Route path="/my-forms" element={
+        <ProtectedRoute><Layout><MyFormsPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/forms/:templateId/fill" element={
+        <ProtectedRoute><Layout><FormFillPage /></Layout></ProtectedRoute>
       } />
       <Route path="/counselors" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"]}>

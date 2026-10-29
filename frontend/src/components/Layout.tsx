@@ -23,11 +23,11 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
 import PersonPanelRoundedIcon from "@mui/icons-material/PersonRounded";
 import {
-  Badge, ChatBubbleRounded, Dashboard as DashboardIcon, Description, Diversity3, EventNote,
-  Folder, Forum, Gavel, GroupAdd, HealthAndSafety, HelpOutline, HistoryEdu,
-  Inbox, Insights, Map, MenuBook, Paid, PersonSearch, Psychology, QueryStats,
-  Receipt, RequestQuote, Rule, ShieldRounded, SupportAgent, TrackChanges, UploadFile, Warning,
-  Wallet, Web, VerifiedUser,
+  Assignment, Badge, ChatBubbleRounded, Dashboard as DashboardIcon, Description, Diversity3,
+  DynamicForm, EventNote, FactCheck, Folder, Forum, Gavel, GroupAdd, HealthAndSafety,
+  HelpOutline, HistoryEdu, Inbox, Insights, Map, MenuBook, Paid, PersonSearch, Psychology,
+  QueryStats, Receipt, RequestQuote, Rule, ShieldRounded, SupportAgent, TrackChanges,
+  UploadFile, Warning, Wallet, Web, VerifiedUser,
 } from "@mui/icons-material";
 
 // آیکون ویرایشگر تخصصی: VerifiedUser بدون ایمپورت وسط فایل
@@ -68,6 +68,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "گزارش انطباق DPO", path: "/dpo-report", roles: ["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"], icon: <Gavel /> },
       // فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال (همکاران و متقاضیان)
       { label: "گفتگوی آنلاین", path: "/chat", roles: ["*"], icon: <ChatBubbleRounded /> },
+      // فاز ۶۱: فرم‌ساز و نظرسنجی — فرم‌های من برای همهٔ حساب‌ها
+      { label: "فرم‌های من (نظرسنجی‌ها)", path: "/my-forms", roles: ["*"], icon: <Assignment /> },
     ],
   },
   {
@@ -130,6 +132,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "فرایندها (BPMN)", path: "/processes", roles: ALL_STAFF, icon: <Insights /> },
       { label: "مانیتورینگ فرایندها", code: "B42", path: "/process-monitoring", roles: ALL_STAFF, icon: <TrackChanges /> },
+      // فاز ۶۱: فرم‌ساز و پاسخ‌ها — مدیر سازمان/سامانه
+      { label: "فرم‌ساز و نظرسنجی", path: "/form-builder", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], icon: <DynamicForm /> },
+      { label: "پاسخ‌های فرم‌ها", path: "/form-responses", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], icon: <FactCheck /> },
       { label: "پشتیبانی", code: "B23", path: "/support", roles: [...ALL_STAFF, "APPLICANT"], icon: <SupportAgent /> },
       { label: "دستیار هوشمند", path: "/assistant", roles: [...ALL_STAFF, "APPLICANT"], icon: <Forum /> },
       { label: "یکپارچه‌سازی‌ها", code: "B28", path: "/integrations", roles: ["SYSTEM_ADMIN", "ORG_MANAGER"], icon: <Web /> },

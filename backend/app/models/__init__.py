@@ -119,6 +119,7 @@ from app.models.chat import (
     VOICE_MAX_BYTES,
 )
 from app.models.public_chat import PublicChatMessage, PublicChatSession
+from app.models.forms import FormTemplate, FormResponse, CallSession, FIELD_TYPES, FORM_KINDS
 
 __all__ = [
     "Account", "AccountType", "ActivationToken", "Applicant", "Appointment", "AppointmentStatus",
@@ -149,4 +150,5 @@ __all__ = [
     "Message", "MessageKind", "TEXT_MAX_LEN", "VOICE_MAX_BYTES",
     "AgentSession", "AgentMessage",
     "PublicChatSession", "PublicChatMessage",
+    "FormTemplate", "FormResponse", "CallSession", "FIELD_TYPES", "FORM_KINDS",
 ]

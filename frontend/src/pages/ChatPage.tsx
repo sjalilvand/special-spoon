@@ -19,8 +19,11 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AudioFileRoundedIcon from "@mui/icons-material/AudioFileRounded";
+import CallEndRoundedIcon from "@mui/icons-material/CallEndRounded";
 import GroupAddIcon from "@mui/icons-material/GroupAdd";
 import MicIcon from "@mui/icons-material/Mic";
+import PhoneRoundedIcon from "@mui/icons-material/PhoneRounded";
 import SearchIcon from "@mui/icons-material/Search";
 import SendIcon from "@mui/icons-material/Send";
 import StopIcon from "@mui/icons-material/Stop";
@@ -43,17 +46,66 @@ import {
   sendVoiceMessage,
   startConversation,
 } from "../api/chat";
+import {
+  type CallSessionDto,
+  answerCall,
+  cancelCall,
+  declineCall,
+  endCall,
+  fetchActiveCall,
+  startCall,
+} from "../api/calls";
+import {
+  fetchFormTemplateForFill,
+  submitFormResponse,
+} from "../api/forms";
+import FormRenderer, { validateFormValues, type FormValues } from "../components/FormRenderer";
 import { formatJalaliDateTime } from "../utils/jalali";
 
 /**
- * فاز ۵۲ - چت آنلاین:
+ * فاز ۵۲ - چت آنلاین + فاز ۶۱ (پیام صوتی پایدار + تماس تلفنی + نظرسنجی پس از تماس):
  * - گفتگوی دو نفره (get-or-create) + «دعوت به مشاوره» (تبدیل dm به گروه)؛
- * - پیام متنی و صوتی (MediaRecorder → آپلود → ذخیرهٔ دائمی در DB)؛
+ * - پیام صوتی: MediaRecorder (در بستر امن) با پیش‌نمایش پیش از ارسال؛
+ *   در سایت HTTP (زمینهٔ ناامن) راهنمای فعال‌سازی میکروفون + بارگذاری فایل صوتی؛
+ * - تماس تلفنی مدیریت‌شده: زنگ → پاسخ/رد → پایان → نظرسنجی خودکار برای گیرنده؛
  * - زنده‌رسانی با WebSocket + همگام‌سازی دوره‌ای (fail-open)؛
  * - آهنگ وضعیت: منبع حقیقت = سرور؛ WS فقط اعلان تازگی است.
  */
 
 const POLL_MS = 15000;
+
+/** آیا مرورگر امکان ضبط صدا دارد؟ در HTTP غیر localhost رسانه‌ها بسته است */
+export function canRecordAudio(): boolean {
+  return typeof navigator !== "undefined"
+    && !!navigator.mediaDevices
+    && typeof navigator.mediaDevices.getUserMedia === "function"
+    && typeof window.MediaRecorder !== "undefined";
+}
+
+/** زنگ کوتاه تماس ورودی — بدون نیاز به فایل صوتی (Web Audio) */
+function playIncomingBeep() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const beep = (at: number) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = 880;
+      o.type = "sine";
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.18, at + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(at); o.stop(at + 0.5);
+    };
+    const t = ctx.currentTime;
+    beep(t); beep(t + 0.6); beep(t + 1.2);
+    setTimeout(() => ctx.close().catch(() => undefined), 2500);
+  } catch {
+    /* بی‌صدا نادیده گرفته می‌شود */
+  }
+}
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -63,6 +115,17 @@ export default function ChatPage() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [live, setLive] = useState(false);
+  // فاز ۶۱: تماس فعال + نظرسنجی پس از تماس (شناسهٔ قالب + شناسهٔ تماس برای پیوند پاسخ)
+  const [call, setCall] = useState<CallSessionDto | null>(null);
+  const [surveyCtx, setSurveyCtx] = useState<{ templateId: string; callId: string | null } | null>(null);
+  const meId = user?.id ?? "";
+
+  // بازسازی تماس فعال پس از رفرش صفحه
+  useEffect(() => {
+    fetchActiveCall()
+      .then((c) => setCall(c))
+      .catch(() => undefined);
+  }, []);
 
   const convs = useQuery({
     queryKey: ["chat-conversations"],
@@ -105,6 +168,28 @@ export default function ChatPage() {
             }
           } else if (data.type === "conversation-updated") {
             queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+          } else if (data.type === "call") {
+            // فاز ۶۱: رخدادهای تماس — incoming/answered/declined/cancelled/ended/survey_pending
+            const c = data.call as CallSessionDto | undefined;
+            const event = String(data.event || "");
+            const openSurvey = (tplId: unknown, callObj: CallSessionDto | undefined) => {
+              if (callObj?.callee_id === meId && tplId) {
+                setSurveyCtx({ templateId: String(tplId), callId: callObj?.id ?? null });
+              }
+            };
+            if (event === "incoming") {
+              setCall(c ?? null);
+              playIncomingBeep();
+            } else if (event === "survey_pending") {
+              setCall(c ?? null);
+              openSurvey(data.template_id, c);
+            } else if (event === "ended") {
+              setCall(c ?? null);
+              openSurvey(data.survey_template_id, c);
+              setTimeout(() => setCall((cur) => (cur && c && cur.id === c.id ? null : cur)), 6000);
+            } else if (c) {
+              setCall(c);
+            }
           } else if (data.type === "read" || data.type === "typing") {
             window.dispatchEvent(new CustomEvent("rosepsy-chat-event", { detail: data }));
           }
@@ -129,7 +214,7 @@ export default function ChatPage() {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [queryClient, activeId]);
+  }, [queryClient, activeId, meId]);
 
   // ارسال typing از Composer (از طریق رویداد پنجره → WS فعال)
   useEffect(() => {
@@ -165,6 +250,13 @@ export default function ChatPage() {
     onError: (e) => setError(errDetail(e)),
   });
 
+  // فاز ۶۱: آغاز تماس از سربرگ گفتگو (فقط گفتگوی دو نفره)
+  const startCallMut = useMutation({
+    mutationFn: (p: { cid: string }) => startCall(p.cid),
+    onSuccess: (c) => setCall(c),
+    onError: (e) => setError(errDetail(e)),
+  });
+
   return (
     <Stack spacing={2} sx={{ height: "calc(100vh - 140px)", minHeight: 480 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" gap={2}>
@@ -185,6 +277,16 @@ export default function ChatPage() {
       </Box>
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+
+      {/* فاز ۶۱: نوار وضعیت تماس — بالای صفحه همیشه نمایان است */}
+      <CallBanner
+        call={call}
+        meId={meId}
+        onChanged={(c) => setCall(c)}
+        onClosed={() => setCall(null)}
+        onError={setError}
+        onSurvey={(tplId, callId) => setSurveyCtx({ templateId: tplId, callId })}
+      />
 
       <Stack direction="row" spacing={2} sx={{ flex: 1, minHeight: 0 }}>
         {/* لیست گفتگوها */}
@@ -232,12 +334,14 @@ export default function ChatPage() {
           <Thread
             key={active.id}
             conversation={active}
-            meId={user?.id ?? ""}
+            meId={meId}
             busy={sendText.isPending || sendVoice.isPending}
             onBack={() => setActiveId(null)}
             onSendText={(body) => sendText.mutate({ cid: active.id, body })}
             onSendVoice={(blob, ms, mime) => sendVoice.mutate({ cid: active.id, blob, durationMs: ms, mime })}
             onInvite={() => setInviteOpen(true)}
+            onCallStart={() => startCallMut.mutate({ cid: active.id })}
+            callStarting={startCallMut.isPending}
           />
         ) : (
           <Paper variant="outlined" sx={{ flex: 1, display: "grid", placeItems: "center" }}>
@@ -273,6 +377,13 @@ export default function ChatPage() {
           onError={setError}
         />
       )}
+
+      {/* فاز ۶۱: نظرسنجی پس از پایان تماس */}
+      <PostCallSurveyDialog
+        templateId={surveyCtx?.templateId ?? null}
+        callId={surveyCtx?.callId ?? null}
+        onClose={() => setSurveyCtx(null)}
+      />
     </Stack>
   );
 }
@@ -285,6 +396,8 @@ function Thread({
   onSendText,
   onSendVoice,
   onInvite,
+  onCallStart,
+  callStarting,
   busy,
 }: {
   conversation: Conversation;
@@ -293,6 +406,8 @@ function Thread({
   onSendText: (body: string) => void;
   onSendVoice: (blob: Blob, durationMs: number, mime: string) => void;
   onInvite: () => void;
+  onCallStart: () => void;
+  callStarting: boolean;
   busy: boolean;
 }) {
   const [text, setText] = useState("");
@@ -375,6 +490,16 @@ function Thread({
           </Typography>
         </Box>
         <Box sx={{ flex: 1 }} />
+        {/* فاز ۶۱: تماس تلفنی — فقط در گفتگوی دو نفره */}
+        {conversation.kind === "dm" && (
+          <Tooltip title="تماس تلفنی (پس از پایان تماس، نظرسنجی برای مراجع فعال می‌شود)">
+            <span>
+              <IconButton color="success" onClick={onCallStart} disabled={callStarting}>
+                <PhoneRoundedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Button size="small" startIcon={<GroupAddIcon />} onClick={onInvite}>
           دعوت به مشاوره
         </Button>
@@ -467,14 +592,24 @@ const Composer = ({
   onTyping: () => void;
   disabled: boolean;
 }) => {
+  // فاز ۶۱: ضبط با پیش‌نمایش (ارسال/حذف) + بارگذاری فایل صوتی + راهنمای میکروفون
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [previewBlob, setPreviewBlob] = useState<{ blob: Blob; ms: number; mime: string } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAt = useRef(0);
   const lastTypingSent = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canRecord = canRecordAudio();
 
   const startRec = async () => {
+    if (!canRecord) {
+      setHelpOpen(true);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
@@ -487,14 +622,25 @@ const Composer = ({
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         const ms = Date.now() - startedAt.current;
         setRecording(false);
-        if (blob.size > 1024) onVoice(blob, ms, blob.type);
+        // فاز ۶۱: پیش از ارسال، پیش‌نمایش و امکان حذف
+        if (blob.size > 1024) setPreviewBlob({ blob, ms, mime: blob.type || "audio/webm" });
       };
       recorderRef.current = rec;
       startedAt.current = Date.now();
       setSeconds(0);
+      setMicError(null);
       rec.start();
       setRecording(true);
-    } catch {
+    } catch (err) {
+      // خطاها دیگر بی‌صدا نیستند — پیام روشن به کاربر
+      const name = (err as { name?: string })?.name ?? "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setMicError("دسترسی به میکروفون داده نشد. از تنظیمات مرورگر اجازهٔ میکروفون را برای این سایت فعال کنید.");
+      } else if (name === "NotFoundError") {
+        setMicError("میکروفونی پیدا نشد. اتصال میکروفون را بررسی کنید.");
+      } else {
+        setMicError("ضبط صدا ممکن نشد. می‌توانید فایل صوتی ضبط‌شده را بارگذاری کنید.");
+      }
       setRecording(false);
     }
   };
@@ -502,6 +648,35 @@ const Composer = ({
   const stopRec = () => {
     recorderRef.current?.stop();
     recorderRef.current = null;
+  };
+
+  const cancelRec = () => {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      rec.onstop = null;
+      rec.stop();
+      rec.stream?.getTracks().forEach((t) => t.stop());
+    }
+    recorderRef.current = null;
+    setRecording(false);
+  };
+
+  const sendPreview = () => {
+    if (previewBlob) onVoice(previewBlob.blob, previewBlob.ms, previewBlob.mime);
+    setPreviewBlob(null);
+  };
+
+  const onPickFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("audio")) {
+      setMicError("فقط فایل صوتی (mp3، wav، m4a، ogg، webm) قابل ارسال است.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMicError("حجم فایل صوتی بیش از ۵ مگابایت است.");
+      return;
+    }
+    onVoice(file, 0, file.type || "audio/mpeg");
   };
 
   useEffect(() => {
@@ -512,6 +687,42 @@ const Composer = ({
 
   return (
     <Box sx={{ p: 1.5, borderTop: 1, borderColor: "divider" }}>
+      {/* پیش‌نمایش پیام صوتی پیش از ارسال */}
+      {previewBlob ? (
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1, p: 1, bgcolor: "#f6faf6", borderRadius: 1.5, border: "1px solid #dcedc8" }}>
+          <Typography variant="caption" color="text.secondary">
+            پیش‌نمایش پیام صوتی ({Math.max(1, Math.round(previewBlob.ms / 1000))} ثانیه)
+          </Typography>
+          <audio controls src={URL.createObjectURL(previewBlob.blob)} style={{ height: 34, flex: 1, maxWidth: 320 }} />
+          <Button size="small" color="error" onClick={() => setPreviewBlob(null)}>حذف</Button>
+          <Button size="small" variant="contained" startIcon={<SendIcon />} onClick={sendPreview}>
+            ارسال
+          </Button>
+        </Stack>
+      ) : null}
+
+      {/* حالت ضبط زنده */}
+      {recording ? (
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1, p: 1, bgcolor: "#fff5f5", borderRadius: 1.5, border: "1px solid #f3c1c1" }}>
+          <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "error.main", animation: "pulse 1s infinite", "@keyframes pulse": { "50%": { opacity: 0.3 } } }} />
+          <Typography variant="body2" color="error.main" fontWeight={700}>
+            در حال ضبط… {seconds}s
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Button size="small" onClick={cancelRec}>لغو</Button>
+          <Button size="small" variant="contained" color="error" startIcon={<StopIcon />} onClick={stopRec}>
+            پایان ضبط
+          </Button>
+        </Stack>
+      ) : null}
+
+      {micError ? (
+        <Alert severity="warning" onClose={() => setMicError(null)} sx={{ mb: 1 }}>
+          {micError}{" "}
+          <Button size="small" onClick={() => setHelpOpen(true)}>راهنمای فعال‌سازی</Button>
+        </Alert>
+      ) : null}
+
       <TextField
         fullWidth
         multiline
@@ -537,7 +748,15 @@ const Composer = ({
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
-              <Tooltip title={recording ? `توقف و ارسال (${seconds}s)` : "ضبط پیام صوتی"}>
+              <Tooltip title="بارگذاری فایل صوتی (همیشه کار می‌کند)">
+                <IconButton
+                  disabled={disabled}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <AudioFileRoundedIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={recording ? "پایان ضبط" : "ضبط پیام صوتی"}>
                 <IconButton
                   color={recording ? "error" : "default"}
                   onClick={() => (recording ? stopRec() : startRec())}
@@ -553,6 +772,17 @@ const Composer = ({
           ),
         }}
       />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+        hidden
+        onChange={(e) => {
+          onPickFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <MicHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </Box>
   );
 };
@@ -774,6 +1004,238 @@ function InviteDialog({
           onClick={() => invite.mutate()}
         >
           {invite.isPending ? "در حال دعوت…" : `دعوت ${selected.length} نفر`}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۶۱ - راهنمای فعال‌سازی میکروفون در سایت HTTP (زمینهٔ ناامن)
+// مرورگرها getUserMedia را فقط در HTTPS/localhost می‌دهند؛ تا زمانی که ۴۴۳
+// باز نشده، این راهنما + بارگذاری فایل صوتی جایگزین کاربردی است.
+function MicHelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const addr = window.location.origin;
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>فعال‌سازی میکروفون برای ضبط پیام صوتی</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            مرورگرها ضبط صدا را فقط در نشانی امن (HTTPS یا localhost) مجاز می‌کنند.
+            تا زمانی که گواهی HTTPS فعال نشده، از یکی از دو راه زیر استفاده کنید.
+          </Alert>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Typography fontWeight={700} variant="body2" sx={{ mb: 0.5 }}>
+              راه ۱ — همیشه کار می‌کند: بارگذاری فایل صوتی
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              صدا را با «ضبط صوت ویندوز» یا گوشی ضبط کنید و با دکمهٔ کلیپ صوتی
+              (کنار میکروفون در نوار نوشتن) فایل را ارسال کنید. mp3/wav/m4a/ogg تا ۵ مگابایت.
+            </Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Typography fontWeight={700} variant="body2" sx={{ mb: 0.5 }}>
+              راه ۲ — فعال‌سازی میکروفون در کروم (یک بار برای همیشه)
+            </Typography>
+            <Typography variant="body2" color="text.secondary" component="div">
+              ۱) در نوار آدرس کروم این را باز کنید: <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code><br />
+              ۲) در کادر بازشده این نشانی را وارد کنید: <code>{addr}</code><br />
+              ۳) گزینه را روی <b>Enabled</b> بگذارید و دکمهٔ <b>Relaunch</b> را بزنید.<br />
+              ۴) پس از باز شدن دوبارهٔ مرورگر، دکمهٔ میکروفون کار خواهد کرد.
+            </Typography>
+          </Paper>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>متوجه شدم</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۶۱ - نوار وضعیت تماس تلفنی (زنگ/گفتگو/پایان) — همیشه بالای چت نمایان است
+function fmtDur(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function CallBanner({
+  call,
+  meId,
+  onChanged,
+  onClosed,
+  onError,
+  onSurvey,
+}: {
+  call: CallSessionDto | null;
+  meId: string;
+  onChanged: (c: CallSessionDto) => void;
+  onClosed: () => void;
+  onError: (msg: string) => void;
+  onSurvey: (templateId: string, callId: string | null) => void;
+}) {
+  const [, forceTick] = useState(0);
+  const isCallee = call?.callee_id === meId;
+
+  // تیک‌تایمر برای نمایش مدت تماس جاری
+  useEffect(() => {
+    if (call?.status !== "ongoing") return;
+    const t = setInterval(() => forceTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [call?.status]);
+
+  const act = useMutation({
+    mutationFn: async (p: { action: "answer" | "decline" | "cancel" | "end" }) => {
+      if (!call) throw new Error("تماسی فعال نیست");
+      if (p.action === "answer") return answerCall(call.id);
+      if (p.action === "decline") return declineCall(call.id);
+      if (p.action === "cancel") return cancelCall(call.id);
+      return endCall(call.id);
+    },
+    onSuccess: (c) => {
+      if (c.status === "ended") {
+        onClosed();
+        if (isCallee && c.survey_template_id) onSurvey(c.survey_template_id, c.id);
+      } else {
+        onChanged(c);
+      }
+    },
+    onError: (e) => onError(errDetail(e)),
+  });
+
+  if (!call) return null;
+
+  const other = call.caller_id === meId ? call.callee_name : call.caller_name;
+  const elapsed = call.answered_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(call.answered_at).getTime()) / 1000))
+    : 0;
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        display: "flex",
+        alignItems: "center",
+        gap: 1.5,
+        bgcolor: call.status === "ringing" ? "#fff8e6" : "#f2faf2",
+        borderColor: call.status === "ringing" ? "#f0d090" : "#bfe3bf",
+      }}
+    >
+      {call.status === "ringing" && !isCallee && (
+        <>
+          <Typography variant="body2" fontWeight={700}>
+            📞 در حال زنگ زدن به {call.callee_name}…
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Button size="small" color="error" variant="contained" startIcon={<CallEndRoundedIcon />} disabled={act.isPending} onClick={() => act.mutate({ action: "cancel" })}>
+            لغو تماس
+          </Button>
+        </>
+      )}
+      {call.status === "ringing" && isCallee && (
+        <>
+          <Typography variant="body2" fontWeight={700}>
+            📞 تماس ورودی از {call.caller_name}
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            size="small" color="success" variant="contained"
+            disabled={act.isPending}
+            onClick={() => act.mutate({ action: "answer" })}
+          >
+            پاسخ به تماس
+          </Button>
+          <Button size="small" color="error" variant="outlined" disabled={act.isPending} onClick={() => act.mutate({ action: "decline" })}>
+            رد
+          </Button>
+        </>
+      )}
+      {call.status === "ongoing" && (
+        <>
+          <Typography variant="body2" fontWeight={700}>
+            🎧 در حال تماس با {other} — مدت {fmtDur(elapsed)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            (گفتگوی تلفنی از بستر تلفن انجام می‌شود؛ مدت و نظرسنجی اینجا ثبت می‌شود)
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Button size="small" color="error" variant="contained" startIcon={<CallEndRoundedIcon />} disabled={act.isPending} onClick={() => act.mutate({ action: "end" })}>
+            پایان تماس
+          </Button>
+        </>
+      )}
+      {call.status === "ended" && (
+        <Typography variant="body2" color="text.secondary">
+          تماس پایان یافت — مدت {fmtDur(call.duration_sec)}
+        </Typography>
+      )}
+    </Paper>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۶۱ - نظرسنجی خودکار پس از پایان تماس (برای گیرندهٔ تماس)
+function PostCallSurveyDialog({
+  templateId,
+  callId,
+  onClose,
+}: {
+  templateId: string | null;
+  callId: string | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [values, setValues] = useState<FormValues>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: template } = useQuery({
+    queryKey: ["post-call-survey", templateId],
+    queryFn: () => fetchFormTemplateForFill(templateId!),
+    enabled: !!templateId,
+  });
+
+  const submit = useMutation({
+    mutationFn: async () => {
+      if (!template) throw new Error("فرم بارگذاری نشده است");
+      const err = validateFormValues(template.fields ?? [], values);
+      if (err) throw new Error(err);
+      return submitFormResponse(template.id, values, callId ?? undefined);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-forms"] });
+      onClose();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : errDetail(e)),
+  });
+
+  return (
+    <Dialog open={!!templateId} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>نظرسنجی پس از تماس</DialogTitle>
+      <DialogContent>
+        {template ? (
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {template.description || "نظر شما به بهتر شدن خدمات مشاوره کمک می‌کند."}
+            </Typography>
+            <FormRenderer
+              template={template}
+              values={values}
+              onChange={(id, v) => setValues((s) => ({ ...s, [id]: v }))}
+            />
+            {error ? <Alert severity="error">{error}</Alert> : null}
+          </Stack>
+        ) : (
+          <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>در حال بارگذاری نظرسنجی…</Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>بعداً</Button>
+        <Button variant="contained" disabled={submit.isPending} onClick={() => submit.mutate()}>
+          {submit.isPending ? "در حال ارسال…" : "ثبت نظر"}
         </Button>
       </DialogActions>
     </Dialog>

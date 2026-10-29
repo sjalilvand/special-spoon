@@ -47,8 +47,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-# mime مجاز برای پیام صوتی
-VOICE_MIMES = ("audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav")
+# mime مجاز برای پیام صوتی (فاز ۶۱: بارگذاری فایل صوتی هم مسیر همین پایان‌گاه است)
+VOICE_MIMES = ("audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/x-m4a", "audio/aac", "audio/3gpp")
 
 
 # ---------------------------------------------------------------------------
