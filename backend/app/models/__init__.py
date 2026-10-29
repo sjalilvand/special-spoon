@@ -44,6 +44,13 @@ from app.models.integration import SmsOutbox, SmsOutboxStatus
 from app.models.intake import IntakeQuestionnaire
 from app.models.notification import Notification
 from app.models.org_contract import Contract, ContractService, Organization
+from app.models.org_program import (
+    OrgProgram,
+    OrgProgramCounselor,
+    OrgProgramFaq,
+    OrgProgramMember,
+    OrgProgramTest,
+)
 from app.models.payment import (
     Invoice,
     InvoiceItem,

@@ -13,6 +13,7 @@ import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
 import CorporateFareRoundedIcon from "@mui/icons-material/CorporateFareRounded";
+import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
 import SettingsSuggestRoundedIcon from "@mui/icons-material/SettingsSuggestRounded";
 import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
 import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
@@ -112,6 +113,8 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: <CorporateFareRoundedIcon />,
     items: [
       { label: "سازمان‌ها", code: "B21", path: "/organizations", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"], icon: <CorporateFareRoundedIcon /> },
+      // فاز ۵۸: پنل آزمون‌های سازمانی — برنامهٔ ارزیابی + کارتابل سازمان
+      { label: "آزمون‌های سازمانی", path: "/org-programs", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"], icon: <AssignmentTurnedInRoundedIcon /> },
       { label: "مشاوران", path: "/counselors", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"], icon: <Diversity3 /> },
       { label: "بازبینی صلاحیت", path: "/verification-reviews", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR"], icon: <VerifiedUserIconSafe /> },
       { label: "شعب", code: "B31", path: "/branches", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"], icon: <Map /> },

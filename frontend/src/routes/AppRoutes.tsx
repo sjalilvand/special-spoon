@@ -29,6 +29,8 @@ import PsychTestCenterPage from "../pages/PsychTestCenterPage";
 import PsychTestRunPage from "../pages/PsychTestRunPage";
 import AssistantPage from "../pages/AssistantPage";
 import OrganizationsPage from "../pages/OrganizationsPage";
+import OrgProgramsPage from "../pages/OrgProgramsPage";
+import OrgProgramWorkdeskPage from "../pages/OrgProgramWorkdeskPage";
 import LearningPage from "../pages/LearningPage";
 import IntegrationsPage from "../pages/IntegrationsPage";
 import MyAssessmentsPage from "../pages/MyAssessmentsPage";
@@ -120,6 +122,17 @@ export default function AppRoutes() {
       <Route path="/organizations" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]}>
           <Layout><OrganizationsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۵۸ - پنل آزمون‌های سازمانی: فهرست برنامه‌ها + کارتابل */}
+      <Route path="/org-programs" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"]}>
+          <Layout><OrgProgramsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/org-programs/:id" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "APPLICANT"]}>
+          <Layout><OrgProgramWorkdeskPage /></Layout>
         </ProtectedRoute>
       } />
       {/* فاز ۳۴ - B33–B36: محتوا/دوره/آزمون/گواهی */}
