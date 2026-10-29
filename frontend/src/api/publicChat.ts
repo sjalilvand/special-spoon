@@ -21,6 +21,7 @@ export interface PublicChatSessionRow {
   message_count: number;
   first_question: string | null;
   last_message: string | null;
+  last_role: "user" | "assistant" | "operator" | null;
   last_message_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -39,8 +40,9 @@ export interface PublicChatStats {
 
 export interface PublicChatMessageRow {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "operator";
   content: string;
+  sender_name: string | null;
   actions: { label: string; url: string; kind?: string }[] | null;
   quick_replies: string[] | null;
   intent: string | null;
@@ -91,5 +93,14 @@ export async function updatePublicChatSession(
   payload: { staff_note?: string | null; status?: "open" | "closed" },
 ): Promise<{ status: string; session_status: string; staff_note: string | null }> {
   const res = await apiClient.put(`/public-chat/admin/sessions/${sessionId}`, payload);
+  return res.data;
+}
+
+/** فاز ۵۶ - پاسخ زندهٔ پذیرش — مستقیم در ویجت بازدیدکننده نمایش داده می‌شود */
+export async function replyToPublicChatSession(
+  sessionId: string,
+  content: string,
+): Promise<{ message: PublicChatMessageRow }> {
+  const res = await apiClient.post(`/public-chat/admin/sessions/${sessionId}/reply`, { content });
   return res.data;
 }

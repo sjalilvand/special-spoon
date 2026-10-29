@@ -128,24 +128,32 @@ def send_message(
     if session.status != "open":
         raise HTTPException(status_code=409, detail="این گفتگو بسته شده است؛ گفتگوی جدیدی شروع کنید")
 
-    db.add(PublicChatMessage(session_id=session.id, role="user", content=content[:CONTENT_MAX_LEN]))
-
-    reply = engine.build_reply(db, content)
-    assistant_row = PublicChatMessage(
-        session_id=session.id,
-        role="assistant",
-        content=reply.content,
-        actions=reply.actions or None,
-        quick_replies=reply.quick_replies or None,
-        intent=reply.intent,
+    user_row = PublicChatMessage(
+        session_id=session.id, role="user", content=content[:CONTENT_MAX_LEN]
     )
-    db.add(assistant_row)
-    session.message_count = (session.message_count or 0) + 2
+    db.add(user_row)
+
+    # فاز ۵۶: اگر اپراتور پذیرش اخیراً پاسخ داده، دستیار خودکار ساکت می‌ماند
+    # (پاسخ انسانی در حال جریان است)؛ در غیر این صورت پاسخ قاعده‌محور برمی‌گردد.
+    assistant_row: PublicChatMessage | None = None
+    if not engine.operator_engaged(db, session):
+        reply = engine.build_reply(db, content)
+        assistant_row = PublicChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=reply.content,
+            actions=reply.actions or None,
+            quick_replies=reply.quick_replies or None,
+            intent=reply.intent,
+        )
+        db.add(assistant_row)
+    session.message_count = (session.message_count or 0) + (2 if assistant_row else 1)
     db.commit()
-    db.refresh(assistant_row)
+    if assistant_row is not None:
+        db.refresh(assistant_row)
 
     return {
-        "message": engine.message_out(assistant_row),
+        "message": engine.message_out(assistant_row) if assistant_row else None,
         "session": engine.session_out(db, session, actor),
     }
 

@@ -22,6 +22,9 @@ SESSION_TOKEN_MAX = 64
 VISITOR_NAME_MAX = 100
 RATING_COMMENT_MAX = 500
 CONTENT_MAX_LEN = 1000
+OPERATOR_NAME_MAX = 120
+# فاز ۵۶ - تا این چند دقیقه پس از آخرین پاسخ اپراتور، دستیار خودکار پیامی نمی‌فرستد
+OPERATOR_TAKEOVER_MINUTES = 15
 
 
 class PublicChatSession(Base):
@@ -75,8 +78,10 @@ class PublicChatMessage(Base):
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("public_chat_sessions.id", ondelete="CASCADE"), nullable=False
     )
-    role: Mapped[str] = mapped_column(String(12))  # user / assistant
+    role: Mapped[str] = mapped_column(String(12))  # user / assistant / operator (فاز ۵۶)
     content: Mapped[str] = mapped_column(Text, default="")
+    # نام نمایشی فرستنده — برای پیام اپراتور (پذیرش/مدیر) پر می‌شود (فاز ۵۶)
+    sender_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # کارت‌های اقدام (دکمهٔ انتقال به صفحهٔ مرتبط) — فقط برای assistant
     actions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # پاسخ‌های پیشنهادی بعد از این پیام

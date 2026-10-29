@@ -11,12 +11,13 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { errDetail } from "../api/client";
 import {
   fetchPublicChatMessages, fetchPublicChatSessions, fetchPublicChatStats,
-  updatePublicChatSession,
+  replyToPublicChatSession, updatePublicChatSession,
 } from "../api/publicChat";
 import type { PublicChatMessageRow } from "../api/publicChat";
 import { formatJalaliDateTime } from "../utils/jalali";
@@ -64,6 +65,8 @@ export default function PublicChatsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["public-chat-sessions", page, filters],
     queryFn: () => fetchPublicChatSessions({ ...filters, page: page + 1, page_size: 20 }),
+    // فاز ۵۶: بازآوری خودکار هر ۱۵ ثانیه — پذیرش گفتگوهای تازه را زنده می‌بیند
+    refetchInterval: 15000,
   });
   const { data: stats } = useQuery({
     queryKey: ["public-chat-stats"],
@@ -211,6 +214,10 @@ export default function PublicChatsPage() {
                   <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 200 }}>
                     {row.last_message ?? "—"}
                   </Typography>
+                  {/* فاز ۵۶: آخرین پیام از بازدیدکننده است و هنوز پاسخی نیامده */}
+                  {row.status === "open" && row.last_role === "user" && (
+                    <Chip size="small" color="warning" sx={{ height: 17, fontSize: 10, mt: 0.3 }} label="در انتظار پاسخ" />
+                  )}
                 </TableCell>
                 <TableCell align="center">{(row.message_count ?? 0).toLocaleString("fa-IR")}</TableCell>
                 <TableCell>
@@ -268,21 +275,42 @@ function TranscriptDialog({ sessionId, onClose, onChanged, onError }: {
   onChanged: () => void;
   onError: (m: string) => void;
 }) {
+  const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
 
+  // فاز ۵۶: بازآوری زندهٔ ترنسکریپت هر ۵ ثانیه — پاسخ بازدیدکننده فوری دیده می‌شود
   const { data, isLoading } = useQuery({
     queryKey: ["public-chat-messages", sessionId],
     queryFn: () => fetchPublicChatMessages(sessionId as string),
     enabled: sessionId != null,
+    refetchInterval: sessionId != null ? 5000 : false,
   });
 
   // هر بار گفتگوی تازه‌ای باز شد، یادداشت از سرور پر شود
   if (sessionId && sessionId !== loadedKey && data?.session) {
     setLoadedKey(sessionId);
     setNote(data.session.staff_note ?? "");
+    setReply("");
   }
+
+  const sendReply = async () => {
+    if (!sessionId || !reply.trim()) return;
+    setReplyBusy(true);
+    try {
+      await replyToPublicChatSession(sessionId, reply.trim());
+      setReply("");
+      onChanged();
+      await qc.invalidateQueries({ queryKey: ["public-chat-messages", sessionId] });
+    } catch (err) {
+      onError(errDetail(err));
+    } finally {
+      setReplyBusy(false);
+    }
+  };
 
   const save = async (status?: "open" | "closed") => {
     if (!sessionId) return;
@@ -350,6 +378,34 @@ function TranscriptDialog({ sessionId, onClose, onChanged, onError }: {
               {data?.messages.map((m) => <Bubble key={m.id} m={m} />)}
             </Stack>
 
+            {/* فاز ۵۶: جعبهٔ پاسخ زندهٔ اپراتور — مستقیم در ویجت بازدیدکننده می‌افتد */}
+            <Paper variant="outlined" sx={{ p: 1.25, mb: 2, bgcolor: "#f4faf5", borderColor: "#cfe8d6" }}>
+              <Stack direction="row" spacing={1} alignItems="flex-end">
+                <TextField
+                  label="پاسخ زندهٔ پذیرش (در ویجت سایت نمایش داده می‌شود)"
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); }
+                  }}
+                  multiline maxRows={3} fullWidth size="small"
+                  inputProps={{ maxLength: 1000 }}
+                />
+                <Button
+                  variant="contained" color="success"
+                  startIcon={<SendRoundedIcon />}
+                  disabled={replyBusy || !reply.trim()}
+                  onClick={sendReply}
+                  sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                >
+                  {replyBusy ? "…" : "ارسال"}
+                </Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                پس از ارسال، تا ۱۵ دقیقه دستیار خودکار برای این گفتگو پیامی نمی‌فرستد.
+              </Typography>
+            </Paper>
+
             {/* یادداشت پذیرش + کنترل وضعیت */}
             <TextField
               label="یادداشت پذیرش/مدیر (پیگیری: تماس گرفتیم، نوبت ثبت شد و…)"
@@ -386,15 +442,22 @@ function TranscriptDialog({ sessionId, onClose, onChanged, onError }: {
 
 function Bubble({ m }: { m: PublicChatMessageRow }) {
   const isUser = m.role === "user";
+  const isOperator = m.role === "operator"; // فاز ۵۶
   return (
     <Box sx={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
       <Box sx={{ maxWidth: "78%" }}>
+        {isOperator && (
+          <Typography variant="caption" sx={{ px: 0.5, fontWeight: 800, color: "#2e7d46" }} component="div">
+            پذیرش{m.sender_name ? ` — ${m.sender_name}` : ""}
+          </Typography>
+        )}
         <Paper
           elevation={0}
           sx={{
             px: 1.25, py: 0.75,
-            bgcolor: isUser ? "primary.main" : "action.hover",
+            bgcolor: isUser ? "primary.main" : isOperator ? "#e8f5ec" : "action.hover",
             color: isUser ? "primary.contrastText" : "text.primary",
+            border: isOperator ? "1px solid #cfe8d6" : "none",
             borderRadius: 2, borderBottomRightRadius: isUser ? 0.5 : 2,
             borderBottomLeftRadius: isUser ? 2 : 0.5,
             whiteSpace: "pre-wrap", wordBreak: "break-word",
@@ -410,8 +473,8 @@ function Bubble({ m }: { m: PublicChatMessageRow }) {
           )}
         </Paper>
         <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }} component="div">
-          {isUser ? "بازدیدکننده" : "دستیار"}
-          {m.intent && m.intent !== "fallback" && INTENT_TITLES[m.intent] ? ` • ${INTENT_TITLES[m.intent]}` : ""}
+          {isUser ? "بازدیدکننده" : isOperator ? "پذیرش" : "دستیار"}
+          {!isOperator && m.intent && m.intent !== "fallback" && INTENT_TITLES[m.intent] ? ` • ${INTENT_TITLES[m.intent]}` : ""}
           {" • "}
           {formatJalaliDateTime(m.created_at)}
         </Typography>

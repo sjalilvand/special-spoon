@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -296,11 +297,46 @@ def message_out(r: PublicChatMessage) -> dict:
         "id": str(r.id),
         "role": r.role,
         "content": r.content,
+        "sender_name": r.sender_name,
         "actions": r.actions,
         "quick_replies": r.quick_replies,
         "intent": r.intent,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
+
+
+# ---------------------------------------------------------------- فاز ۵۶ - حضور اپراتور
+def operator_engaged(db: Session, session: PublicChatSession) -> bool:
+    """True اگر اپراتور اخیراً در گفتگو پاسخ داده باشد — دستیار خودکار ساکت می‌شود
+    تا پاسخ انسانی پذیرش با پیام قاعده‌محور دوباره‌گویی نشود."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=OPERATOR_TAKEOVER_MINUTES)
+    row = db.scalar(
+        select(PublicChatMessage.id)
+        .where(
+            PublicChatMessage.session_id == session.id,
+            PublicChatMessage.role == "operator",
+            PublicChatMessage.created_at >= cutoff,
+        )
+        .limit(1)
+    )
+    return row is not None
+
+
+def operator_reply(
+    db: Session, session: PublicChatSession, content: str, sender_name: str
+) -> PublicChatMessage:
+    """ثبت پاسخ زندهٔ اپراتور پذیرش/مدیر در گفتگوی عمومی (فاز ۵۶)."""
+    msg = PublicChatMessage(
+        session_id=session.id,
+        role="operator",
+        content=content[:CONTENT_MAX_LEN],
+        sender_name=(sender_name or "پذیرش")[:OPERATOR_NAME_MAX],
+    )
+    db.add(msg)
+    session.message_count = (session.message_count or 0) + 1
+    db.commit()
+    db.refresh(msg)
+    return msg
 
 
 def session_out(db: Session, session: PublicChatSession, user) -> dict:

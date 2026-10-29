@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_perm
 from app.db.session import get_db
-from app.models.public_chat import PublicChatMessage, PublicChatSession
+from app.models.public_chat import CONTENT_MAX_LEN, PublicChatMessage, PublicChatSession
 from app.models.user import User
 from app.services import public_chat as engine
 from app.services.audit import record_audit
@@ -70,6 +70,7 @@ def _session_row(db: Session, s: PublicChatSession, user: User | None,
         "message_count": s.message_count,
         "first_question": _preview(first_q),
         "last_message": _preview(last_msg.content) if last_msg else None,
+        "last_role": last_msg.role if last_msg else None,
         "last_message_at": last_msg.created_at.isoformat() if last_msg else None,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
@@ -286,3 +287,41 @@ def update_session(
             entity_type="public_chat_session", entity_id=str(s.id), detail=changed,
         )
     return {"status": "ok", "session_status": s.status, "staff_note": s.staff_note}
+
+
+# ------------------------------------------------------------------ فاز ۵۶ - پاسخ زندهٔ اپراتور
+class OperatorReply(BaseModel):
+    content: str = Field(min_length=1, max_length=CONTENT_MAX_LEN)
+
+
+@router.post("/sessions/{session_id}/reply", status_code=201)
+def reply_to_session(
+    session_id: str,
+    payload: OperatorReply,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_perm("chat.public_reply")),
+) -> dict:
+    """پاسخ زندهٔ پذیرش/مدیر — مستقیم در ویجت عمومی بازدیدکننده نمایش داده می‌شود.
+    تا ۱۵ دقیقه پس از پاسخ اپراتور، دستیار خودکار پیام خودکار نمی‌فرستد."""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="شناسهٔ نشست نامعتبر است")
+    s = db.get(PublicChatSession, sid)
+    if s is None:
+        raise HTTPException(status_code=404, detail="گفتگو یافت نشد")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="متن پیام خالی است")
+
+    sender = (actor.display_name or actor.username or "پذیرش").strip()
+    msg = engine.operator_reply(db, s, content, sender)
+    if s.status != "open":
+        # پاسخ اپراتور به گفتگوی بسته، آن را برای ادامهٔ مکالمه باز می‌کند
+        s.status = "open"
+        db.commit()
+    record_audit(
+        db, action="public_chat.operator_reply", actor_user_id=actor.id,
+        entity_type="public_chat_session", entity_id=str(s.id),
+    )
+    return {"message": engine.message_out(msg)}

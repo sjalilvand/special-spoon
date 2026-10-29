@@ -1,9 +1,13 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۶ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۱۷ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.17 - همگام با فاز ۵۶: اتصال زندهٔ پذیرش به گفتگوی عمومی (پاسخ اپراتور
+#             از پنل مستقیم در ویجت سایت؛ دستیار تا ۱۵ دقیقه ساکت می‌ماند) +
+#             دسترسی chat.public_reply + فیکس «نگه‌داشت منقضی» اولین رزرو +
+#             بازطراحی زیبای صفحهٔ رزرو نوبت. مایگریشن 0034 اعمال می‌شود.
 #    1.0.16 - همگام با فاز ۵۵: پنل پذیرش/مدیر برای گفتگوهای عمومی سایت —
 #             مشاهدهٔ هویت گوینده (کاربر/مهمان/IP) + ترنسکریپت + امتیازها،
 #             دسترسی جدید chat.public_monitor در ماتریس RBAC (پیش‌فرض:
@@ -1418,7 +1422,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.16 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.17 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛

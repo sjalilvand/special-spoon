@@ -21,8 +21,9 @@ const NAME_KEY = "rosepsy_livechat_name";
 interface ChatAction { label: string; url: string; kind?: string }
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "operator"; // فاز ۵۶: operator = پاسخ زندهٔ پذیرش
   content: string;
+  sender_name?: string | null;
   actions?: ChatAction[] | null;
   quick_replies?: string[] | null;
   created_at?: string | null;
@@ -85,6 +86,7 @@ export default function PublicChatWidget() {
   const [showNameField, setShowNameField] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const tokenRef = useRef<string>("");
+  const busyRef = useRef(false); // برای جلوگیری از تداخل polling با ارسال در جریان
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
       if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -141,6 +143,29 @@ export default function PublicChatWidget() {
     if (open) scrollToBottom();
   }, [messages, open, scrollToBottom]);
 
+  // فاز ۵۶ - polling زنده: پیام‌های جدید (از جمله پاسخ اپراتور پذیرش) هر ۴ ثانیه
+  // از سرور خوانده می‌شود؛ هنگام ارسال در جریان، polling رد می‌شود تا optimistic
+  // دوباره‌نویسی نشود؛ پیام موفق جایگزین optimistic می‌شود و تداخلی نیست.
+  useEffect(() => {
+    if (!open || !tokenRef.current) return;
+    const iv = setInterval(async () => {
+      if (busyRef.current) return;
+      try {
+        const r = await fetch(`/api/v1/public/chat/${encodeURIComponent(tokenRef.current)}/messages`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const items: ChatMessage[] = d.items || [];
+        setMessages((prev) => {
+          if (items.length > 0) return items;
+          // گفتگو هنوز خالی است: پیام خوش‌آمد محلی و optimisticهای در راه حفظ شوند
+          const locals = prev.filter((m) => m.id.startsWith("local-") || m.id === "welcome");
+          return locals.length ? locals : items;
+        });
+      } catch { /* بی‌صدا - بار بعد */ }
+    }, 4000);
+    return () => clearInterval(iv);
+  }, [open]);
+
   const send = useCallback(async (raw: string) => {
     const content = raw.trim();
     if (!content || busy || !tokenRef.current) return;
@@ -148,6 +173,7 @@ export default function PublicChatWidget() {
     setError(null);
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, role: "user", content };
     setMessages((m) => [...m, optimistic]);
+    busyRef.current = true;
     setBusy(true);
     try {
       const r = await fetch(`/api/v1/public/chat/${encodeURIComponent(tokenRef.current)}/messages`, {
@@ -160,11 +186,14 @@ export default function PublicChatWidget() {
         throw new Error(d?.detail || "خطا در ارسال پیام");
       }
       const d = await r.json();
-      setMessages((m) => [...m.filter((x) => x.id !== optimistic.id), optimistic, d.message]);
+      // فاز ۵۶: وقتی اپراتور پذیرش در گفتگو فعال است، دستیار خودکار پاسخ نمی‌دهد
+      // و message می‌تواند null باشد — فقط پیام خود کاربر روی سرور تثبیت می‌شود.
+      setMessages((m) => [...m.filter((x) => x.id !== optimistic.id), optimistic, ...(d.message ? [d.message] : [])]);
       if (d.session) setSession(d.session);
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, [busy]);
@@ -292,47 +321,55 @@ export default function PublicChatWidget() {
                 در حال بازکردن گفتگو…
               </Typography>
             )}
-            {messages.map((m) => (
-              <Stack
-                key={m.id}
-                alignItems={m.role === "user" ? "flex-end" : "flex-start"}
-                sx={{ mb: 1.2 }}
-              >
-                <Box
-                  sx={{
-                    maxWidth: "86%", px: 1.6, py: 1.1, borderRadius: 2.5,
-                    borderBottomRightRadius: m.role === "user" ? 0.8 : 2.5,
-                    borderBottomLeftRadius: m.role === "user" ? 2.5 : 0.8,
-                    bgcolor: m.role === "user" ? "primary.main" : "#fff",
-                    color: m.role === "user" ? "#fff" : "text.primary",
-                    border: m.role === "user" ? "none" : "1px solid #f0dde2",
-                    whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.9,
-                    boxShadow: "0 1px 2px rgba(124,39,64,.08)",
-                  }}
+            {messages.map((m) => {
+              const isOperator = m.role === "operator"; // فاز ۵۶ - پاسخ زندهٔ پذیرش
+              return (
+                <Stack
+                  key={m.id}
+                  alignItems={m.role === "user" ? "flex-end" : "flex-start"}
+                  sx={{ mb: 1.2 }}
                 >
-                  {m.content}
-                </Box>
-                {/* کارت‌های اقدام */}
-                {m.actions && m.actions.length > 0 && (
-                  <Stack sx={{ maxWidth: "92%", mt: 0.8 }} spacing={0.8} alignItems="flex-start">
-                    {m.actions.map((a, i) => (
-                      <Button
-                        key={`${m.id}-a-${i}`}
-                        href={a.url}
-                        size="small"
-                        variant={a.kind === "primary" ? "contained" : "outlined"}
-                        sx={{
-                          textTransform: "none", fontSize: 12.5, py: 0.4, borderRadius: 2,
-                          minWidth: 0, px: 1.4,
-                        }}
-                      >
-                        {a.label}
-                      </Button>
-                    ))}
-                  </Stack>
-                )}
-              </Stack>
-            ))}
+                  {isOperator && (
+                    <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: "#2e7d46", px: 0.5, mb: 0.3 }}>
+                      پذیرش{m.sender_name ? ` — ${m.sender_name}` : ""}
+                    </Typography>
+                  )}
+                  <Box
+                    sx={{
+                      maxWidth: "86%", px: 1.6, py: 1.1, borderRadius: 2.5,
+                      borderBottomRightRadius: m.role === "user" ? 0.8 : 2.5,
+                      borderBottomLeftRadius: m.role === "user" ? 2.5 : 0.8,
+                      bgcolor: m.role === "user" ? "primary.main" : isOperator ? "#eef7f0" : "#fff",
+                      color: m.role === "user" ? "#fff" : "text.primary",
+                      border: m.role === "user" ? "none" : isOperator ? "1px solid #cfe8d6" : "1px solid #f0dde2",
+                      whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.9,
+                      boxShadow: "0 1px 2px rgba(124,39,64,.08)",
+                    }}
+                  >
+                    {m.content}
+                  </Box>
+                  {/* کارت‌های اقدام */}
+                  {m.actions && m.actions.length > 0 && (
+                    <Stack sx={{ maxWidth: "92%", mt: 0.8 }} spacing={0.8} alignItems="flex-start">
+                      {m.actions.map((a, i) => (
+                        <Button
+                          key={`${m.id}-a-${i}`}
+                          href={a.url}
+                          size="small"
+                          variant={a.kind === "primary" ? "contained" : "outlined"}
+                          sx={{
+                            textTransform: "none", fontSize: 12.5, py: 0.4, borderRadius: 2,
+                            minWidth: 0, px: 1.4,
+                          }}
+                        >
+                          {a.label}
+                        </Button>
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+              );
+            })}
             {busy && (
               <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
                 در حال نوشتن…
