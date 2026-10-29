@@ -109,6 +109,7 @@ function FieldEditorDialog({
             control={<Switch checked={required} onChange={(e) => setRequired(e.target.checked)} />}
             label="پاسخ به این فیلد الزامی است"
           />
+          {error ? <Alert severity="warning">{error}</Alert> : null}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -132,12 +133,12 @@ function FieldEditorDialog({
           ذخیرهٔ فیلد
         </Button>
       </DialogActions>
-      {error ? <Alert severity="warning" sx={{ mx: 2, mb: 2 }}>{error}</Alert> : null}
     </Dialog>
   );
 }
 
-function TemplateDialog({
+// export برای تست بصری ایزوله (uitest) — استفادهٔ محصولی ندارد
+export function TemplateDialog({
   open, initial, onClose, onSaved,
 }: {
   open: boolean;
@@ -204,9 +205,11 @@ function TemplateDialog({
     <>
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
         <DialogTitle>{initial ? `ویرایش فرم: ${initial.title}` : "فرم جدید"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+        {/* overflowX hidden محافظ است تا هیچ فرزند پهنی اسکرول افقی نسازد */}
+        <DialogContent dividers sx={{ overflowX: "hidden" }}>
+          <Stack spacing={2} sx={{ mt: 1, minWidth: 0 }}>
+            {/* ردیف ۱: عنوان + کد — با CSS Grid تا عرض‌ها هیچ‌وقت صفر نشوند */}
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1.2fr 1fr" }, gap: 2 }}>
               <TextField
                 fullWidth size="small" label="عنوان فرم *" value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -215,8 +218,16 @@ function TemplateDialog({
                 fullWidth size="small" label="کد فرم (اختیاری — خودکار ساخته می‌شود)" value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
-            </Stack>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            </Box>
+            {/* ردیف ۲: نوع فرم + کلید فعال */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "minmax(240px, 1fr) auto" },
+                gap: 2,
+                alignItems: "center",
+              }}
+            >
               <TextField
                 select fullWidth size="small" label="نوع فرم" value={kind}
                 onChange={(e) => setKind(e.target.value as FormTemplate["kind"])}
@@ -225,30 +236,49 @@ function TemplateDialog({
                 <MenuItem value="intake">پذیرش / ارزیابی</MenuItem>
                 <MenuItem value="custom">سفارشی</MenuItem>
               </TextField>
-              <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
-                <FormControlLabel
-                  control={<Switch checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />}
-                  label="فعال"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={isDefaultCallSurvey}
-                      disabled={kind !== "survey"}
-                      onChange={(e) => setIsDefaultCallSurvey(e.target.checked)}
-                    />
-                  }
-                  label="نظرسنجی پیش‌فرض پس از تماس"
-                />
-              </Box>
-            </Stack>
+              <FormControlLabel
+                sx={{ justifySelf: "start", px: 1 }}
+                control={<Switch checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />}
+                label="فعال"
+              />
+            </Box>
+            {/* ردیف ۳: نظرسنجی پیش‌فرض پس از تماس — سطر کامل خودش */}
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 2, py: 0.5,
+                bgcolor: isDefaultCallSurvey && kind === "survey" ? "rgba(178, 36, 53, 0.04)" : "transparent",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isDefaultCallSurvey}
+                    disabled={kind !== "survey"}
+                    onChange={(e) => setIsDefaultCallSurvey(e.target.checked)}
+                  />
+                }
+                label={
+                  kind === "survey"
+                    ? "نظرسنجی پیش‌فرض پس از پایان تماس تلفنی"
+                    : "نظرسنجی پیش‌فرض پس از پایان تماس تلفنی (فقط برای نوع نظرسنجی)"
+                }
+              />
+            </Paper>
             <TextField
               fullWidth size="small" multiline minRows={2} label="توضیح" value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
 
             <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                flexWrap="wrap"
+                useFlexGap
+                sx={{ mb: 1, rowGap: 1 }}
+              >
                 <Typography variant="subtitle2">فیلدهای فرم ({fields.length})</Typography>
                 <Stack direction="row" spacing={1}>
                   <Button size="small" startIcon={<VisibilityRoundedIcon />} disabled={!fields.length} onClick={() => setPreview(true)}>
