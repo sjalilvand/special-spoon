@@ -28,13 +28,18 @@ def verify_password(password_hash: str | None, password: str) -> bool:
         return False
 
 
-def create_access_token(*, user_id: str, auth_version: int) -> str:
+def create_access_token(
+    *, user_id: str, auth_version: int, expires_minutes: int | None = None
+) -> str:
+    """توکن دسترسی — به‌طور پیش‌فرض با انقضای استاندارد settings؛
+    فاز ۶۰: impersonation با ``expires_minutes`` طولانی‌تر صادر می‌شود."""
     now = datetime.now(timezone.utc)
+    minutes = expires_minutes if expires_minutes is not None else settings.access_token_expire_minutes
     payload = {
         "sub": user_id,
         "ver": auth_version,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+        "exp": now + timedelta(minutes=minutes),
         "typ": "access",
     }
     return jwt.encode(payload, settings.auth_secret_key, algorithm="HS256")

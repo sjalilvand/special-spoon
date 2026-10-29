@@ -20,16 +20,20 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { errDetail } from "../api/client";
+import { startImpersonation } from "../auth/impersonation";
+import { useAuth } from "../auth/AuthContext";
 import {
   ROLE_OPTIONS,
   createActivationToken,
   createUser,
   fetchUsers,
+  impersonateUser,
   resetUserPassword,
   roleTitle,
   setUserRoles,
@@ -38,7 +42,7 @@ import {
 import { fetchRoles } from "../api/rbac";
 import type { UserRow } from "../api/auth";
 import { formatJalaliDateTime } from "../utils/jalali";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const STATUS_META: Record<string, { label: string; color: "success" | "warning" | "default" }> = {
   active: { label: "فعال", color: "success" },
@@ -49,6 +53,8 @@ const STATUS_META: Record<string, { label: string; color: "success" | "warning" 
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: me } = useAuth();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,26 @@ export default function UsersPage() {
     mutationFn: (row: UserRow) => createActivationToken(row.id),
     onSuccess: (res, row) =>
       setTokenInfo({ username: row.username, token: res.token, expires_at: res.expires_at }),
+    onError: (e) => setError(errDetail(e)),
+  });
+
+  // فاز ۶۰: «ورود به کارتابل» = ورود واقعی با هویت کاربر (impersonation) —
+  // کل پنل با نقش و دسترسی‌های همان کاربر بالا می‌آید؛ منوها، داده‌ها، همه‌چیز.
+  const impersonate = useMutation({
+    mutationFn: (row: UserRow) => impersonateUser(row.id),
+    onSuccess: (res, row) => {
+      startImpersonation({
+        token: res.access_token,
+        userId: row.id,
+        username: row.username,
+        displayName: row.display_name,
+        returnPath: location.pathname + location.search,
+        startedAt: new Date().toISOString(),
+      });
+      // reload کامل — AuthContext با توکن جدید /auth/me همان کاربر را می‌گیرد
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      window.location.assign(`${base}/`);
+    },
     onError: (e) => setError(errDetail(e)),
   });
 
@@ -142,9 +168,27 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {/* فاز ۵۹: ورود مدیر به کارتابل این کاربر از نقطهٔ نظر خودش */}
-                      <Button size="small" color="primary" onClick={() => navigate(`/cartable/${row.id}`)}>
-                        کارتابل
+                      {/* فاز ۶۰: ورود واقعی با هویت این کاربر — کل پنل از نقطهٔ نظر او */}
+                      <Tooltip title="ورود با هویت این کاربر — همهٔ بخش‌ها از نقطهٔ نظر خودش">
+                        <span>
+                          <Button
+                            size="small"
+                            color="primary"
+                            variant="contained"
+                            disabled={
+                              impersonate.isPending ||
+                              row.status !== "active" ||
+                              row.id === me?.id
+                            }
+                            onClick={() => impersonate.mutate(row)}
+                          >
+                            {impersonate.isPending ? "در حال ورود…" : "ورود به کارتابل"}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      {/* نمای خلاصهٔ فقط-مشاهده (نسخهٔ قبل) همچنان در دسترس است */}
+                      <Button size="small" onClick={() => navigate(`/cartable/${row.id}`)}>
+                        خلاصه
                       </Button>
                       <Button
                         size="small"

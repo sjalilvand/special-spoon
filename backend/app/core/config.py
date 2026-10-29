@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     auth_secret_key: str = "dev-only-insecure-key-change-me"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 14
+    # فاز ۶۰ - ورود مدیر با هویت کاربر (impersonation): توکن مستقل با انقضای طولانی‌تر
+    # (نشست refresh مدیر دست‌نخورده می‌ماند؛ هیچ AuthSession برای کاربر ساخته نمی‌شود)
+    impersonation_token_expire_minutes: int = 480
     activation_token_expire_hours: int = 24
     login_max_attempts: int = 5
     login_attempt_window_minutes: int = 15

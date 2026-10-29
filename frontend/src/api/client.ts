@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { tokenStore } from "../auth/tokenStore";
+import { endImpersonation, readImpersonation } from "../auth/impersonation";
 
 /**
  * فاز ۳۹ - مهاجرت فرانت‌اند به قرارداد ADR-03 (/api/v2):
@@ -104,15 +105,40 @@ async function callRefresh(): Promise<string | null> {
 
 /** فاز ۵۲: توضمن وجود access token (برای WebSocket چت) — در صورت نبود، refresh می‌زند */
 export async function ensureAccessToken(): Promise<string | null> {
+  if (!tokenStore.accessToken) {
+    // فاز ۶۰: بازگردانی توکن مشاهده (impersonation) پس از reload ماژول
+    const imp = readImpersonation();
+    if (imp) tokenStore.accessToken = imp.token;
+  }
   if (tokenStore.accessToken) return tokenStore.accessToken;
+  // فاز ۶۰: در حالت مشاهده هرگز refresh نمی‌زنیم — کوکی refresh متعلق به
+  // مدیر است و refresh زدن ناخواسته مدیر را به داخل نشست مشاهده می‌آورد.
+  if (readImpersonation()) return null;
   const fresh = await callRefresh();
   if (fresh) tokenStore.accessToken = fresh;
   return fresh;
 }
 
+/** فاز ۶۰: خروج خودکار از حالت مشاهده در 401 (انقضای توکن/تغییر حساس حساب) */
+function exitImpersonationAndReload(): void {
+  const info = readImpersonation();
+  endImpersonation();
+  tokenStore.accessToken = null;
+  window.location.href = info?.returnPath ?? `${ROUTER_BASE}/users`;
+}
+
 apiClient.interceptors.response.use(unwrapEnvelope, async (error: AxiosError) => {
   const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
   const url = original?.url ?? "";
+
+  // فاز ۶۰: در حالت مشاهده (impersonation) با 401 هرگز refresh نمی‌زنیم —
+  // کوکی refresh متعلق به مدیر است؛ خروج تمیز از حالت مشاهده به حساب مدیر.
+  const impersonating = !!readImpersonation();
+  if (error.response?.status === 401 && impersonating) {
+    exitImpersonationAndReload();
+    return Promise.reject(error);
+  }
+
   const shouldTryRefresh =
     error.response?.status === 401 &&
     original &&

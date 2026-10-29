@@ -6,6 +6,8 @@ import {
   AppBar, Box, Button, Chip, Container, Divider, IconButton, ListItemIcon,
   ListItemText, Menu, MenuItem, Stack, Toolbar, Tooltip, Typography,
 } from "@mui/material";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FolderSharedRoundedIcon from "@mui/icons-material/FolderSharedRounded";
@@ -149,7 +151,7 @@ function useNavVisibility(has: (rs: Roles) => boolean) {
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, impersonation, exitImpersonation } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const roles = user?.roles ?? [];
@@ -183,6 +185,41 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <Box minHeight="100vh" bgcolor="#fffafb">
+      {/* فاز ۶۰: نوار «ورود با هویت کاربر» — بالاتر از همه تا در همهٔ صفحات دیده شود */}
+      {impersonation && (
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{
+            px: { xs: 1.5, md: 2.5 }, py: 0.75,
+            bgcolor: "#ff6d00", color: "#fff",
+            boxShadow: "inset 0 -2px 0 rgba(0,0,0,.12)",
+          }}
+        >
+          <VisibilityRoundedIcon fontSize="small" />
+          <Typography variant="body2" fontWeight={800}>
+            حالت مشاهده — وارد شده با هویت {impersonation.displayName} (@{impersonation.username})
+          </Typography>
+          <Typography variant="caption" sx={{ opacity: 0.92, display: { xs: "none", md: "block" } }}>
+            همهٔ منوها و داده‌ها دقیقاً از نقطهٔ نظر این کاربر است؛ هر تغییری با نام او ثبت می‌شود.
+          </Typography>
+          <Box flexGrow={1} />
+          <Button
+            size="small"
+            startIcon={<SwapHorizRoundedIcon />}
+            onClick={exitImpersonation}
+            sx={{
+              bgcolor: "#fff", color: "#e65100", fontWeight: 800,
+              "&:hover": { bgcolor: "#fff3e0" }, flexShrink: 0,
+            }}
+          >
+            بازگشت به حساب مدیر
+          </Button>
+        </Stack>
+      )}
       <AppBar position="static" elevation={1}>
         <Toolbar
           disableGutters
@@ -243,21 +280,39 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NotificationsNoneRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="تغییر رمز عبور">
-            <IconButton color="inherit" size="small" onClick={() => navigate("/change-password")}>
-              <LockResetRoundedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {/* فاز ۶۰: در حالت مشاهده تغییر رمز پنهان می‌شود تا رمز کاربر هدف اشتباهاً عوض نشود */}
+          {!impersonation && (
+            <Tooltip title="تغییر رمز عبور">
+              <IconButton color="inherit" size="small" onClick={() => navigate("/change-password")}>
+                <LockResetRoundedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {user && (
             <Chip
               size="small"
-              sx={{ bgcolor: "rgba(255,255,255,.22)", color: "#fff", fontWeight: 700, flexShrink: 0 }}
+              sx={{
+                bgcolor: impersonation ? "#ff6d00" : "rgba(255,255,255,.22)",
+                color: "#fff", fontWeight: 700, flexShrink: 0,
+              }}
               label={user.display_name}
             />
           )}
-          <Tooltip title="خروج از حساب">
-            <IconButton color="inherit" size="small"
-              onClick={async () => { await logout(); navigate("/login"); }}>
+          {/* فاز ۶۰: در حالت مشاهده دکمهٔ خروج = بازگشت به حساب مدیر؛
+              فراخوانی logout واقعی نشست refresh «مدیر» را ابطال می‌کرد (کوکی سرجاست). */}
+          <Tooltip title={impersonation ? "بازگشت به حساب مدیر" : "خروج از حساب"}>
+            <IconButton
+              color="inherit"
+              size="small"
+              onClick={async () => {
+                if (impersonation) {
+                  exitImpersonation();
+                  return;
+                }
+                await logout();
+                navigate("/login");
+              }}
+            >
               <LogoutRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>

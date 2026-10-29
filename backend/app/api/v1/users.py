@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.core.config import get_settings
-from app.core.security import generate_activation_token
+from app.core.security import create_access_token, generate_activation_token
 from app.db.session import get_db
 from app.models.user import ROLE_CODES, ActivationToken, AuthSession, Role, User, UserStatus
 from app.schemas.user import ActivationTokenOut, ResetPasswordRequest, RolesUpdate, UserCreate, UserUpdate
@@ -210,6 +210,50 @@ def reset_password(
         entity_type="user", entity_id=str(user.id),
     )
     return {"ok": True, "username": user.username}
+
+
+# ---------------------------------------------------------------------------
+# فاز ۶۰ - ورود مدیر با هویت کاربر (impersonation):
+# «وقتی کارتابل را می‌زنم انگار با یوزر طرف مقابل وارد شوم و همهٔ بخش‌ها را ببینم»
+# - توکن دسترسی مستقل برای کاربر هدف با انقضای طولانی صادر می‌شود؛
+# - هیچ AuthSession/کوکی refresh برای کاربر ساخته نمی‌شود → نشست refresh مدیر
+#   دست‌نخورده می‌ماند و خروج از حالت مشاهده بدون ورود مجدد ممکن است؛
+# - توکن با همان ``auth_version`` کاربر صادر می‌شود → تغییر نقش/رمز توسط مدیر
+#   به‌طور خودکار توکن مشاهده را هم باطل می‌کند؛
+# - کل عمل در audit ثبت می‌شود (user.impersonate)؛
+# - کاربر هدف باید ACTIVE باشد (غیرفعال/در انتظار مجاز نیست).
+# ---------------------------------------------------------------------------
+@router.post("/{user_id}/impersonate")
+def impersonate_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("SYSTEM_ADMIN")),
+) -> dict:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="کاربر یافت نشد")
+    if user.id == actor.id:
+        raise HTTPException(status_code=400, detail="شما اکنون با همین حساب وارد شده‌اید")
+    if user.status == UserStatus.DISABLED:
+        raise HTTPException(status_code=400, detail="حساب غیرفعال قابل مشاهده نیست")
+    if user.status == UserStatus.PENDING:
+        raise HTTPException(status_code=400, detail="حساب هنوز فعال‌سازی نشده است")
+
+    minutes = settings.impersonation_token_expire_minutes
+    token = create_access_token(
+        user_id=str(user.id), auth_version=user.auth_version, expires_minutes=minutes,
+    )
+    record_audit(
+        db, action="user.impersonate", actor_user_id=actor.id,
+        entity_type="user", entity_id=str(user.id),
+        detail={"username": user.username, "expires_in_minutes": minutes},
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in_minutes": minutes,
+        "user": _user_out(user),
+    }
 
 
 @router.get("/directory")

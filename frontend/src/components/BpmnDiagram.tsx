@@ -6,7 +6,7 @@
 // - کلیک روی هر عنصر: جزئیات رخداد (زمان، یادداشت)
 // منبع مختصات: BPMNDI واقعی XML (اگر باشد)؛ در غیر این صورت چیدمان خودکار بک‌اند
 import { useMemo, useState } from "react";
-import { Box, Chip, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Chip, IconButton, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import CenterFocusStrongIcon from "@mui/icons-material/CenterFocusStrong";
@@ -32,12 +32,15 @@ export interface BpmnState {
   note?: string | null;
 }
 
-const STATUS_COLORS: Record<string, { fill: string; stroke: string; label: string }> = {
-  done: { fill: "#e3f4e4", stroke: "#2e7d32", label: "انجام‌شده" },
-  active: { fill: "#ffeacc", stroke: "#ed8c37", label: "گام فعال" },
-  pending: { fill: "#f4f4f4", stroke: "#9e9e9e", label: "در انتظار" },
-  skipped: { fill: "#eeeeee", stroke: "#8a8a8a", label: "ردشده" },
-  failed: { fill: "#fde2e1", stroke: "#c62828", label: "ناموفق" },
+// فاز ۶۰: رنگ‌های پررنگ و اشباع — وضعیت هر عنصر یک‌نگاه از روی رنگ خود شکل
+// خوانده می‌شود (سبز پررنگ = انجام‌شده، نارنجی پررنگ + پالس = گام فعال،
+// قرمز پررنگ = ناموفق، طوسی روشن = در انتظار، طوسی تیره = ردشده)
+const STATUS_COLORS: Record<string, { fill: string; stroke: string; label: string; text: string }> = {
+  done: { fill: "#2e9e44", stroke: "#1b5e20", label: "انجام‌شده", text: "#ffffff" },
+  active: { fill: "#ff9800", stroke: "#e65100", label: "گام فعال", text: "#ffffff" },
+  pending: { fill: "#f1f3f5", stroke: "#90a4ae", label: "در انتظار", text: "#455a64" },
+  skipped: { fill: "#cfd8dc", stroke: "#607d8b", label: "ردشده", text: "#37474f" },
+  failed: { fill: "#e53935", stroke: "#b71c1c", label: "ناموفق", text: "#ffffff" },
 };
 
 const KIND_TITLES: Record<string, string> = {
@@ -98,6 +101,15 @@ export default function BpmnDiagram({
     ? edges.filter((e) => e.source === selected || e.target === selected)
     : [];
 
+  // فاز ۶۰: نوار پیشرفت — چند گام انجام شده، گام فعال کدام است
+  const total = nodes.length;
+  const doneCount = (summary["done"] ?? 0) + (summary["skipped"] ?? 0);
+  const activeCount = summary["active"] ?? 0;
+  const failedCount = summary["failed"] ?? 0;
+  const activeNode = activeCount > 0
+    ? nodes.find((n) => states[n.id]?.status === "active") ?? null
+    : null;
+
   const vb = {
     x: bounds.x + (bounds.width * (1 - 1 / zoom)) / 2,
     y: bounds.y + (bounds.height * (1 - 1 / zoom)) / 2,
@@ -107,16 +119,34 @@ export default function BpmnDiagram({
 
   return (
     <Box>
-      {/* نوار ابزار: راهنمای وضعیت + بزرگ‌نمایی */}
+      {/* نوار ابزار: راهنمای وضعیت + پیشرفت + بزرگ‌نمایی */}
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap mb={1}>
         {Object.entries(STATUS_COLORS).map(([k, v]) => (
           <Chip
-            key={k} size="small" variant="outlined"
+            key={k} size="small"
             label={`${v.label}${summary[k] ? ` (${summary[k].toLocaleString("fa-IR")})` : ""}`}
-            sx={{ borderColor: v.stroke, color: v.stroke, bgcolor: v.fill }}
+            sx={{
+              bgcolor: v.fill, color: v.text, borderColor: v.stroke,
+              fontWeight: 800, border: "1.5px solid",
+              boxShadow: k === "active" ? "0 0 8px rgba(255,152,0,.65)" : undefined,
+            }}
           />
         ))}
         <Box flexGrow={1} />
+        {total > 0 && (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="caption" fontWeight={800} color="text.secondary">
+              پیشرفت: {doneCount.toLocaleString("fa-IR")} از {total.toLocaleString("fa-IR")} گام
+              {activeNode?.name ? ` — اکنون: ${activeNode.name}` : ""}
+              {failedCount > 0 ? ` — ${failedCount.toLocaleString("fa-IR")} ناموفق` : ""}
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={total ? Math.round((doneCount / total) * 100) : 0}
+              sx={{ width: 130, height: 9, borderRadius: 5, bgcolor: "#e8eef1" }}
+            />
+          </Stack>
+        )}
         <Tooltip title="بزرگ‌نمایی">
           <IconButton size="small" onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))}>
             <AddIcon fontSize="small" />
@@ -141,10 +171,21 @@ export default function BpmnDiagram({
         sx={{
           border: "1px solid #e5c9cf", borderRadius: 2, overflow: "auto",
           bgcolor: "#fffdfb", direction: "ltr",
-          "& .bpmn-active-node": { animation: "bpmnPulse 1.6s ease-in-out infinite" },
+          // فاز ۶۰: پالس قوی‌تر گام فعال + جریان متحرک روی یال فعال
+          "& .bpmn-active-node": {
+            animation: "bpmnPulse 1.3s ease-in-out infinite",
+            "& rect, & circle, & polygon": { strokeWidth: 3.5 },
+          },
           "@keyframes bpmnPulse": {
-            "0%, 100%": { filter: "drop-shadow(0 0 2px rgba(237,140,55,.55))" },
-            "50%": { filter: "drop-shadow(0 0 9px rgba(237,140,55,.95))" },
+            "0%, 100%": { filter: "drop-shadow(0 0 3px rgba(230,81,0,.55))" },
+            "50%": { filter: "drop-shadow(0 0 14px rgba(230,81,0,1))" },
+          },
+          "& .bpmn-edge-active": {
+            strokeDasharray: "9 5",
+            animation: "bpmnDash 0.8s linear infinite",
+          },
+          "@keyframes bpmnDash": {
+            to: { strokeDashoffset: -14 },
           },
         }}
       >
@@ -160,10 +201,10 @@ export default function BpmnDiagram({
               <path d="M0,0 L10,4 L0,8 Z" fill="#8a8a8a" />
             </marker>
             <marker id="bpmn-arrow-passed" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M0,0 L10,4 L0,8 Z" fill="#2e7d32" />
+              <path d="M0,0 L10,4 L0,8 Z" fill="#2e9e44" />
             </marker>
             <marker id="bpmn-arrow-active" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M0,0 L10,4 L0,8 Z" fill="#ed8c37" />
+              <path d="M0,0 L10,4 L0,8 Z" fill="#e65100" />
             </marker>
           </defs>
 
@@ -172,13 +213,15 @@ export default function BpmnDiagram({
             const pts = e.waypoints.length >= 2
               ? e.waypoints
               : orthogonalFallback(e, nodes);
-            const color = e.active ? "#ed8c37" : e.passed ? "#2e7d32" : "#b9b9b9";
+            const color = e.active ? "#e65100" : e.passed ? "#2e9e44" : "#b9b9b9";
             const marker = e.active ? "url(#bpmn-arrow-active)" : e.passed ? "url(#bpmn-arrow-passed)" : "url(#bpmn-arrow)";
             return (
               <g key={`e-${e.id}`}>
                 <polyline
+                  className={e.active ? "bpmn-edge-active" : undefined}
                   points={pts.map((p) => p.join(",")).join(" ")}
-                  fill="none" stroke={color} strokeWidth={e.active || e.passed ? 2.4 : 1.6}
+                  fill="none" stroke={color} strokeWidth={e.active ? 3 : e.passed ? 2.6 : 1.6}
+                  strokeLinecap="round"
                   markerEnd={marker}
                 />
                 {e.name && pts.length >= 2 && (
@@ -201,22 +244,24 @@ export default function BpmnDiagram({
             const st = states[n.id] ?? { status: "pending" };
             const c = STATUS_COLORS[st.status] ?? STATUS_COLORS.pending;
             const isSel = selected === n.id;
+            const isActive = st.status === "active";
             return (
               <g
                 key={`n-${n.id}`}
                 onClick={() => setSelected(isSel ? null : n.id)}
                 style={{ cursor: "pointer" }}
-                className={st.status === "active" ? "bpmn-active-node" : undefined}
+                className={isActive ? "bpmn-active-node" : undefined}
               >
-                <NodeShape node={n} fill={c.fill} stroke={c.stroke} selected={isSel} />
+                <NodeShape node={n} fill={c.fill} stroke={c.stroke} symbolColor={c.text} selected={isSel} />
                 {/* برچسب */}
                 {n.name && n.kind !== "start" && n.kind !== "end" && (
-                  <NodeLabel node={n} />
+                  <NodeLabel node={n} color={c.text} />
                 )}
                 {(n.kind === "start" || n.kind === "end") && n.name && (
                   <text
                     x={n.x + n.w / 2} y={n.y + n.h + 16}
                     fontSize={11} textAnchor="middle" fill="#555"
+                    style={{ fontWeight: isActive ? 800 : 400 }}
                   >
                     {n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name}
                   </text>
@@ -272,19 +317,19 @@ export default function BpmnDiagram({
 }
 
 /* ------------------------------ شکل‌های BPMN ------------------------------ */
-function NodeShape({ node, fill, stroke, selected }: {
-  node: BpmnNode; fill: string; stroke: string; selected: boolean;
+function NodeShape({ node, fill, stroke, symbolColor, selected }: {
+  node: BpmnNode; fill: string; stroke: string; symbolColor: string; selected: boolean;
 }) {
   const cx = node.x + node.w / 2;
   const cy = node.y + node.h / 2;
-  const sw = selected ? 3 : 2;
+  const sw = selected ? 3.5 : 2.2;
   if (node.kind === "start" || node.kind === "end" || node.kind === "intermediate") {
     const r = Math.max(node.w, node.h) / 2 || 18;
     return (
       <>
         <circle cx={cx} cy={cy} r={r} fill={fill} stroke={stroke} strokeWidth={sw} />
-        {node.kind === "end" && <circle cx={cx} cy={cy} r={r - 5} fill="none" stroke={stroke} strokeWidth={2.5} />}
-        {node.kind === "intermediate" && <circle cx={cx} cy={cy} r={r - 4} fill="none" stroke={stroke} strokeWidth={1.5} />}
+        {node.kind === "end" && <circle cx={cx} cy={cy} r={r - 5} fill="none" stroke={symbolColor} strokeWidth={2.5} />}
+        {node.kind === "intermediate" && <circle cx={cx} cy={cy} r={r - 4} fill="none" stroke={symbolColor} strokeWidth={1.5} />}
       </>
     );
   }
@@ -296,20 +341,20 @@ function NodeShape({ node, fill, stroke, selected }: {
           points={`${cx},${cy - s} ${cx + s},${cy} ${cx},${cy + s} ${cx - s},${cy}`}
           fill={fill} stroke={stroke} strokeWidth={sw}
         />
-        {/* نماد داخل گیت‌وی */}
+        {/* نماد داخل گیت‌وی — فاز ۶۰: با رنگ متن (سفید روی رنگ پررنگ) برای کنتراست */}
         {node.kind === "gateway_exclusive" && (
           <path
             d={`M${cx - s * 0.35},${cy - s * 0.35} L${cx + s * 0.35},${cy + s * 0.35} M${cx + s * 0.35},${cy - s * 0.35} L${cx - s * 0.35},${cy + s * 0.35}`}
-            stroke={stroke} strokeWidth={2.4} fill="none"
+            stroke={symbolColor} strokeWidth={2.8} fill="none"
           />
         )}
         {node.kind === "gateway_parallel" && (
           <path
             d={`M${cx},${cy - s * 0.42} L${cx},${cy + s * 0.42} M${cx - s * 0.42},${cy} L${cx + s * 0.42},${cy}`}
-            stroke={stroke} strokeWidth={2.6} fill="none"
+            stroke={symbolColor} strokeWidth={3} fill="none"
           />
         )}
-        {node.kind === "gateway_inclusive" && <circle cx={cx} cy={cy} r={s * 0.35} fill="none" stroke={stroke} strokeWidth={2.2} />}
+        {node.kind === "gateway_inclusive" && <circle cx={cx} cy={cy} r={s * 0.35} fill="none" stroke={symbolColor} strokeWidth={2.4} />}
       </>
     );
   }
@@ -323,7 +368,7 @@ function NodeShape({ node, fill, stroke, selected }: {
   );
 }
 
-function NodeLabel({ node }: { node: BpmnNode }) {
+function NodeLabel({ node, color }: { node: BpmnNode; color: string }) {
   const lines = wrapText(node.name, Math.max(12, Math.floor(node.w / 9)));
   const startY = node.y + node.h / 2 - (lines.length - 1) * 7 + 4;
   return (
@@ -331,8 +376,8 @@ function NodeLabel({ node }: { node: BpmnNode }) {
       {lines.map((ln, i) => (
         <text
           key={i} x={node.x + node.w / 2} y={startY + i * 14}
-          fontSize={11.5} textAnchor="middle" fill="#333"
-          style={{ fontWeight: 600, pointerEvents: "none" }}
+          fontSize={11.5} textAnchor="middle" fill={color}
+          style={{ fontWeight: 700, pointerEvents: "none" }}
         >
           {ln}
         </text>
@@ -343,10 +388,10 @@ function NodeLabel({ node }: { node: BpmnNode }) {
 
 function StatusBadge({ node, status }: { node: BpmnNode; status: string }) {
   const meta: Record<string, { ch: string; color: string }> = {
-    done: { ch: "✓", color: "#2e7d32" },
-    active: { ch: "●", color: "#ed8c37" },
-    failed: { ch: "✕", color: "#c62828" },
-    skipped: { ch: "»", color: "#8a8a8a" },
+    done: { ch: "✓", color: "#1b5e20" },
+    active: { ch: "●", color: "#e65100" },
+    failed: { ch: "✕", color: "#b71c1c" },
+    skipped: { ch: "»", color: "#455a64" },
     pending: { ch: "", color: "transparent" },
   };
   const m = meta[status] ?? meta.pending;

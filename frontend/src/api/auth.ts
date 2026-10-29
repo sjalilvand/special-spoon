@@ -134,3 +134,11 @@ export async function resetUserPassword(
   });
   return res.data;
 }
+
+/** فاز ۶۰: ورود مدیر با هویت کاربر (impersonation) — توکن مستقل برای کاربر هدف */
+export async function impersonateUser(
+  id: string
+): Promise<{ access_token: string; token_type: string; expires_in_minutes: number; user: UserRow }> {
+  const res = await apiClient.post(`/users/${id}/impersonate`, {});
+  return res.data;
+}
