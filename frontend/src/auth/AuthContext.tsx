@@ -12,6 +12,8 @@ interface AuthContextValue {
   user: Me | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<Me>;
+  /** فاز ۶۴: ورود دو عاملی با کد پیامکی (موبایل + کد یک‌بارمصرف) */
+  loginOtp: (mobile: string, code: string) => Promise<Me>;
   logout: () => Promise<void>;
   /** فاز ۶۰: اطلاعات حالت «ورود با هویت کاربر» (در غیر این صورت null) */
   impersonation: ImpersonationInfo | null;
@@ -51,6 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return me;
   }, []);
 
+  // فاز ۶۴: ورود دو عاملی — کد تأیید شد، نشست کامل با access_token باز می‌شود
+  const loginOtp = useCallback(async (mobile: string, code: string) => {
+    const res = await authApi.verifyOtp(mobile, code);
+    tokenStore.accessToken = res.access_token;
+    const me = await authApi.fetchMe();
+    setUser(me);
+    return me;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -72,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, impersonation, exitImpersonation }),
-    [user, loading, login, logout, impersonation, exitImpersonation]
+    () => ({ user, loading, login, loginOtp, logout, impersonation, exitImpersonation }),
+    [user, loading, login, loginOtp, logout, impersonation, exitImpersonation]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

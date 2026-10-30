@@ -4,10 +4,13 @@ import {
   TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { errDetail } from "../api/client";
-import { createCounselor, fetchCounselors, fetchServiceLocations, updateCounselor } from "../api/people";
-import type { Counselor } from "../api/people";
+import {
+  createCounselor, downloadCounselorsTemplate, fetchCounselors, fetchProvinces,
+  fetchServiceLocations, importCounselors, updateCounselor,
+} from "../api/people";
+import type { Counselor, CounselorImportResult } from "../api/people";
 import { addCredential, fetchCredentials } from "../api/catalog";
 import type { CounselorCredential } from "../api/catalog";
 import { uploadCounselorPhoto } from "../api/siteops";
@@ -43,11 +46,31 @@ export default function CounselorsPage() {
   const [open, setOpen] = useState(false);
   const [credentialsFor, setCredentialsFor] = useState<Counselor | null>(null);
   const [photoFor, setPhotoFor] = useState<Counselor | null>(null);
+  const [importResult, setImportResult] = useState<CounselorImportResult | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["counselors", page, search],
     queryFn: () => fetchCounselors({ page: page + 1, search: search || undefined }),
   });
+
+  const doImport = useMutation({
+    mutationFn: (file: File) => importCounselors(file),
+    onSuccess: (res) => {
+      setImportResult(res);
+      queryClient.invalidateQueries({ queryKey: ["counselors"] });
+    },
+    onError: (e) => setError(errDetail(e)),
+  });
+
+  const onPickFile = (f: File | null) => {
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".xlsx")) {
+      setError("فقط فایل اکسل (xlsx.) پذیرفته می‌شود");
+      return;
+    }
+    doImport.mutate(f);
+  };
 
   const toggleStatus = useMutation({
     mutationFn: (row: Counselor) =>
@@ -62,7 +85,18 @@ export default function CounselorsPage() {
         <Typography variant="h6" fontWeight={700}>مشاوران</Typography>
         <TextField size="small" label="جست‌وجو (کد یا نام)" value={search}
           onChange={(e) => { setPage(0); setSearch(e.target.value); }} sx={{ width: 280 }} />
-        <Button variant="contained" onClick={() => setOpen(true)}>مشاور جدید</Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button variant="outlined" onClick={() => downloadCounselorsTemplate().catch((e) => setError(errDetail(e)))}>
+            دریافت قالب اکسل
+          </Button>
+          <Button variant="outlined" color="secondary" disabled={doImport.isPending}
+            onClick={() => fileRef.current?.click()}>
+            {doImport.isPending ? "در حال بارگذاری…" : "بارگذاری فایل مشاوران"}
+          </Button>
+          <input ref={fileRef} type="file" accept=".xlsx" hidden
+            onChange={(e) => { onPickFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+          <Button variant="contained" onClick={() => setOpen(true)}>مشاور جدید</Button>
+        </Stack>
       </Box>
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -74,6 +108,7 @@ export default function CounselorsPage() {
               <TableCell>عکس</TableCell>
               <TableCell>کد</TableCell>
               <TableCell>نام</TableCell>
+              <TableCell>استان</TableCell>
               <TableCell>تخصص</TableCell>
               <TableCell>شماره مجوز</TableCell>
               <TableCell>محل خدمت</TableCell>
@@ -86,7 +121,7 @@ export default function CounselorsPage() {
           </TableHead>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={11} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} align="center"><CircularProgress size={24} /></TableCell></TableRow>
             )}
             {data?.items.map((row) => {
               const st = STATUS[row.status] ?? { label: row.status, color: "default" as const };
@@ -103,6 +138,7 @@ export default function CounselorsPage() {
                   </TableCell>
                   <TableCell>{row.counselor_code}</TableCell>
                   <TableCell>{row.first_name} {row.last_name}</TableCell>
+                  <TableCell>{row.province_name ?? "—"}</TableCell>
                   <TableCell>{row.specialty ?? "—"}</TableCell>
                   <TableCell>{row.license_number ?? "—"}</TableCell>
                   <TableCell>{row.service_location_title ?? "—"}</TableCell>
@@ -143,6 +179,7 @@ export default function CounselorsPage() {
       </TableContainer>
 
       <CreateDialog open={open} onClose={() => setOpen(false)} onError={setError} />
+      <ImportResultDialog result={importResult} onClose={() => setImportResult(null)} />
       {credentialsFor && (
         <CredentialsDialog counselor={credentialsFor} onClose={() => setCredentialsFor(null)} />
       )}
@@ -161,6 +198,7 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: locations } = useQuery({ queryKey: ["locations"], queryFn: fetchServiceLocations, enabled: open });
+  const { data: provinces } = useQuery({ queryKey: ["provinces"], queryFn: fetchProvinces, enabled: open });
 
   useEffect(() => {
     if (open) { setForm({}); setCreateAccount(false); setFormError(null); setLicenseExpiry(undefined); }
@@ -187,6 +225,11 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
         email: form.email?.trim() || undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
         service_location_id: form.service_location_id || undefined,
+        province_code: form.province_code || undefined,
+        professional_rank: form.professional_rank?.trim() || undefined,
+        contract_number: form.contract_number?.trim() || undefined,
+        sheba_number: form.sheba_number?.trim() || undefined,
+        detailed_code: form.detailed_code?.trim() || undefined,
         create_account: createAccount,
         username: createAccount ? form.username?.trim() : undefined,
       });
@@ -230,6 +273,18 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
                   {locations?.map((l) => <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>)}
                 </Select>
               </FormControl>
+              <FormControl fullWidth size="small">
+                <InputLabel>استان</InputLabel>
+                <Select value={form.province_code ?? ""} onChange={set("province_code")} label="استان">
+                  <MenuItem value="">—</MenuItem>
+                  {provinces?.map((p) => <MenuItem key={p.code} value={p.code}>{p.code} - {p.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <TextField label="رتبه حرفه‌ای" value={form.professional_rank ?? ""} onChange={set("professional_rank")} />
+              <TextField label="شماره قرارداد" value={form.contract_number ?? ""} onChange={set("contract_number")} />
+              <TextField label="کد تفضیلی شخص" value={form.detailed_code ?? ""} onChange={set("detailed_code")} />
+              <TextField label="شماره شبا (IR...)" value={form.sheba_number ?? ""} onChange={set("sheba_number")}
+                slotProps={{ htmlInput: { dir: "ltr" } }} />
             </FormGrid>
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} />
@@ -245,6 +300,53 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
           <Button type="submit" variant="contained" disabled={busy}>{busy ? "در حال ثبت…" : "ایجاد"}</Button>
         </DialogActions>
       </form>
+    </Dialog>
+  );
+}
+
+/* فاز ۶۴: نتیجهٔ بارگذاری فایل مشاوران — خلاصهٔ ایجاد/به‌روزرسانی و خطای ردیف‌ها */
+function ImportResultDialog({ result, onClose }: { result: CounselorImportResult | null; onClose: () => void }) {
+  return (
+    <Dialog open={result !== null} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>نتیجهٔ بارگذاری فایل مشاوران</DialogTitle>
+      <DialogContent>
+        {result && (
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip label={`مجموع ردیف‌ها: ${result.total}`} variant="outlined" />
+              <Chip color="success" label={`ایجاد: ${result.created}`} />
+              <Chip color="info" label={`به‌روزرسانی: ${result.updated}`} />
+              <Chip color={result.failed ? "error" : "default"} label={`خطا: ${result.failed}`} />
+            </Stack>
+            {result.errors.length > 0 && (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: 70 }}>ردیف</TableCell>
+                    <TableCell>خطا</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {result.errors.map((e) => (
+                    <TableRow key={e.row}>
+                      <TableCell>{e.row}</TableCell>
+                      <TableCell>{e.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {result.created > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                برای مشاوران جدید، حساب ورود فعال شد: نام کاربری = کد ملی، رمز عبور اولیه = شماره تماس (موبایل) درج‌شده در فایل.
+              </Typography>
+            )}
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={onClose}>بستن</Button>
+      </DialogActions>
     </Dialog>
   );
 }

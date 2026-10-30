@@ -22,6 +22,13 @@ export interface Counselor {
   email: string | null;
   capacity: number | null;
   service_location_title: string | null;
+  // فاز ۶۴: فیلدهای فایل ورود مشاوران شرکت رز
+  province_code?: string | null;
+  province_name?: string | null;
+  professional_rank?: string | null;
+  contract_number?: string | null;
+  sheba_number?: string | null;
+  detailed_code?: string | null;
   status: string;
   has_account: boolean;
   // فاز ۲۸ - B05: وضعیت صلاحیت برای فهرست قابل رزرو
@@ -84,4 +91,46 @@ export async function fetchApplicants(params: { search?: string; page: number })
 
 export async function createApplicant(payload: Record<string, unknown>): Promise<Applicant> {
   return (await apiClient.post("/applicants", payload)).data;
+}
+
+// ---------------- فاز ۶۴: استان‌های پایه (کد رسمی ۰۱..۳۱) + ورود گروهی مشاوران ----------------
+
+export interface Province {
+  code: string;
+  name: string;
+  capital: string | null;
+  area_code: string | null;
+  is_active: boolean;
+}
+
+export async function fetchProvinces(): Promise<Province[]> {
+  return (await apiClient.get("/provinces")).data.items;
+}
+
+export interface CounselorImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  failed: number;
+  errors: { row: number; message: string }[];
+}
+
+/** دانلود قالب اکسل ورود مشاوران (همان ستون‌های فایل «اسامی مشاورین») */
+export async function downloadCounselorsTemplate(): Promise<void> {
+  const res = await apiClient.get("/counselors/import-template", { responseType: "blob" });
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rosepsy-counselors-import-template.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function importCounselors(file: File): Promise<CounselorImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiClient.post("/counselors/import", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
 }

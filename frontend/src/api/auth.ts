@@ -57,6 +57,31 @@ export async function login(username: string, password: string): Promise<LoginRe
   return res.data;
 }
 
+// فاز ۶۴: ورود دو عاملی پیامکی — تا اتصال درگاه پیامک، کد در dev_code برمی‌گردد
+export interface OtpRequestResponse {
+  status: string;
+  expires_in: number;
+  dev_code?: string;
+  dev_notice?: string;
+}
+
+export async function requestOtp(mobile: string): Promise<OtpRequestResponse> {
+  const res = await apiClient.post<OtpRequestResponse>("/auth/otp/request", {
+    mobile,
+    purpose: "login",
+  });
+  return res.data;
+}
+
+export async function verifyOtp(mobile: string, code: string): Promise<LoginResponse> {
+  const res = await apiClient.post<LoginResponse>("/auth/otp/verify", {
+    mobile,
+    code,
+    purpose: "login",
+  });
+  return res.data;
+}
+
 export async function fetchMe(): Promise<Me> {
   const res = await apiClient.get<Me>("/auth/me");
   return res.data;

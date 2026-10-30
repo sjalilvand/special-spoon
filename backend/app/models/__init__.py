@@ -30,6 +30,7 @@ from app.models.catalog import (
     Specialty,
     TariffVersion,
 )
+from app.models.location import Province
 from app.models.otp import OtpChallenge, OtpPurpose
 from app.models.case import CASE_STATUSES, Case, CaseAssignment, CaseStatus, Consent
 from app.models.clinical import Diagnosis, TreatmentPlan

@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -13,9 +13,11 @@ from app.models.catalog import (
     CredentialKind,
     CredentialVerificationStatus,
 )
+from app.models.location import Province
 from app.models.people import Counselor, ServiceLocation
 from app.models.user import Role, User, UserStatus
 from app.schemas.people import CounselorCreate, CounselorUpdate
+from app.services import counselor_import as ci
 from app.services.audit import record_audit
 from app.services.qualification import is_counselor_bookable
 
@@ -30,6 +32,11 @@ def _out(c: Counselor, db: Session) -> dict:
     if c.service_location_id:
         loc = db.get(ServiceLocation, c.service_location_id)
         loc_title = loc.title if loc else None
+    # فاز ۶۴: نام استان از جدول پایه
+    province_name = None
+    if c.province_code:
+        prov = db.scalar(select(Province).where(Province.code == c.province_code))
+        province_name = prov.name if prov else None
     # فاز ۲۸ - B05: وضعیت صلاحیت برای فهرست قابل رزرو
     bookable = is_counselor_bookable(db, c)
     approved_count = db.scalar(
@@ -60,6 +67,12 @@ def _out(c: Counselor, db: Session) -> dict:
         "email": c.email,
         "capacity": c.capacity,
         "service_location_title": loc_title,
+        "province_code": c.province_code,
+        "province_name": province_name,
+        "professional_rank": c.professional_rank,
+        "contract_number": c.contract_number,
+        "sheba_number": c.sheba_number,
+        "detailed_code": c.detailed_code,
         "status": c.status,
         "has_account": c.user_id is not None,
         "bookable": bookable,
@@ -85,6 +98,12 @@ def list_counselors(
     return {"items": [_out(c, db) for c in items], "total": total, "page": page, "page_size": page_size}
 
 
+def _validate_province(db: Session, code: str | None) -> None:
+    """فاز ۶۴: اگر کد استان داده شده باشد باید در جدول پایه باشد."""
+    if code and db.scalar(select(Province).where(Province.code == code)) is None:
+        raise HTTPException(status_code=422, detail="کد استان معتبر نیست (۰۱ تا ۳۱)")
+
+
 @router.post("", status_code=201)
 def create_counselor(payload: CounselorCreate, db: Session = Depends(get_db), actor=Depends(require_roles(*MANAGE_ROLES))) -> dict:
     code = payload.counselor_code.strip()
@@ -94,6 +113,7 @@ def create_counselor(payload: CounselorCreate, db: Session = Depends(get_db), ac
         raise HTTPException(status_code=409, detail="این کد ملی قبلاً ثبت شده است")
     if payload.service_location_id and db.get(ServiceLocation, payload.service_location_id) is None:
         raise HTTPException(status_code=422, detail="محل خدمت نامعتبر است")
+    _validate_province(db, payload.province_code)
 
     c = Counselor(
         counselor_code=code,
@@ -109,6 +129,11 @@ def create_counselor(payload: CounselorCreate, db: Session = Depends(get_db), ac
         email=payload.email,
         service_location_id=payload.service_location_id,
         capacity=payload.capacity,
+        province_code=payload.province_code or None,
+        professional_rank=payload.professional_rank or None,
+        contract_number=payload.contract_number or None,
+        sheba_number=payload.sheba_number or None,
+        detailed_code=payload.detailed_code or None,
         status="active",
     )
     db.add(c)
@@ -127,6 +152,43 @@ def create_counselor(payload: CounselorCreate, db: Session = Depends(get_db), ac
     db.commit()
     record_audit(db, action="counselor.created", actor_user_id=actor.id, entity_type="counselor", entity_id=str(c.id))
     return _out(c, db)
+
+
+# ---------------- فاز ۶۴ - ورود گروهی مشاوران از فایل اکسل شرکت رز ----------------
+
+@router.get("/import-template")
+def download_import_template(
+    db: Session = Depends(get_db),
+    _actor=Depends(require_roles(*MANAGE_ROLES)),
+):
+    """دانلود قالب اکسل ورود مشاوران (همان ستون‌های فایل «اسامی مشاورین»)."""
+    data = ci.build_template()
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="rosepsy-counselors-import-template.xlsx"'},
+    )
+
+
+@router.post("/import")
+async def import_counselors(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    actor=Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """بارگذاری فایل اکسل مشاوران؛ کلید یکتایی کد ملی است.
+
+    مشاور جدید: ایجاد + حساب فعال (نام کاربری = کد ملی، رمز اولیه = شماره تماس).
+    مشاور موجود: به‌روزرسانی اطلاعات. ردیف‌های خطادار پردازش نمی‌شوند و بقیه
+    ردیف‌ها ادامه می‌یابند (خلاصه و خطای هر ردیف در پاسخ برمی‌گردد).
+    """
+    data = await file.read()
+    rows, file_error = ci.parse_file(data)
+    if file_error:
+        raise HTTPException(status_code=422, detail=file_error)
+    if not rows:
+        raise HTTPException(status_code=422, detail="ردیف داده‌ای در فایل یافت نشد")
+    return ci.validate_and_upsert(db, rows, actor, upload_name=file.filename)
 
 
 @router.get("/{counselor_id}")
@@ -149,7 +211,10 @@ def update_counselor(counselor_id: uuid.UUID, payload: CounselorUpdate, db: Sess
             raise HTTPException(status_code=422, detail="وضعیت نامعتبر است")
         c.status = data["status"]
         changed.append("status")
-    for f in ("professional_title", "degree", "specialty", "license_number", "work_mobile", "email", "capacity", "license_expiry_date", "service_location_id"):
+    if data.get("province_code") is not None:
+        _validate_province(db, data["province_code"])
+    for f in ("professional_title", "degree", "specialty", "license_number", "work_mobile", "email", "capacity", "license_expiry_date", "service_location_id",
+              "province_code", "professional_rank", "contract_number", "sheba_number", "detailed_code"):
         if f in data and data[f] is not None:
             setattr(c, f, data[f])
             changed.append(f)

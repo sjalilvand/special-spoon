@@ -18,6 +18,12 @@ class CounselorCreate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     service_location_id: uuid.UUID | None = None
     capacity: int | None = Field(default=None, gt=0)
+    # فاز ۶۴: فیلدهای فایل ورود مشاوران شرکت رز
+    province_code: str | None = Field(default=None, max_length=2)
+    professional_rank: str | None = Field(default=None, max_length=100)
+    contract_number: str | None = Field(default=None, max_length=100)
+    sheba_number: str | None = Field(default=None, max_length=34)
+    detailed_code: str | None = Field(default=None, max_length=50)
     create_account: bool = False
     username: str | None = Field(default=None, max_length=100)
 
@@ -32,6 +38,12 @@ class CounselorUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     service_location_id: uuid.UUID | None = None
     capacity: int | None = Field(default=None, gt=0)
+    # فاز ۶۴: فیلدهای فایل ورود مشاوران شرکت رز
+    province_code: str | None = Field(default=None, max_length=2)
+    professional_rank: str | None = Field(default=None, max_length=100)
+    contract_number: str | None = Field(default=None, max_length=100)
+    sheba_number: str | None = Field(default=None, max_length=34)
+    detailed_code: str | None = Field(default=None, max_length=50)
     status: str | None = Field(default=None, max_length=30)
 
 

@@ -301,8 +301,18 @@ def otp_request(payload: OtpRequestPayload, request: Request, db: Session = Depe
 
 
 @router.post("/otp/verify")
-def otp_verify(payload: OtpVerifyPayload, db: Session = Depends(get_db)) -> dict:
-    """بررسی کد؛ در موفقیت توکن اثبات تأیید موبایل (یک‌بارمصرف) برمی‌گردد."""
+def otp_verify(
+    payload: OtpVerifyPayload,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
+    """بررسی کد؛ در موفقیت توکن اثبات تأیید موبایل (یک‌بارمصرف) برمی‌گردد.
+
+    فاز ۶۴: برای purpose=login نشست کامل صادر می‌شود (ورود دو عاملی پیامکی) —
+    کد تأیید شد → کاربرِ دارای این موبایل پیدا و نشست (access + refresh cookie)
+    باز می‌شود؛ همان مسیر امن login.
+    """
     from app.services.otp import is_valid_mobile, normalize_mobile, verify_otp
 
     mobile = normalize_mobile(payload.mobile)
@@ -313,6 +323,40 @@ def otp_verify(payload: OtpVerifyPayload, db: Session = Depends(get_db)) -> dict
         raise HTTPException(status_code=429, detail="تلاش‌های ناموفق زیاد است؛ کد جدید درخواست کنید")
     if not res["ok"]:
         raise HTTPException(status_code=400, detail="کد وارد شده نادرست یا منقضی است")
+
+    if payload.purpose == "login":
+        user = db.scalar(
+            select(User).where(User.mobile == mobile).order_by(User.created_at)
+        )
+        if user is None:
+            record_audit(db, action="auth.otp_login_failed", detail={"reason": "no_user", "ip": _client_ip(request)})
+            raise HTTPException(status_code=404, detail="حسابی با این شماره موبایل یافت نشد")
+        if user.status == UserStatus.DISABLED:
+            record_audit(db, action="auth.otp_login_failed", actor_user_id=user.id,
+                         detail={"reason": "disabled", "ip": _client_ip(request)})
+            raise HTTPException(status_code=403, detail="حساب غیرفعال است")
+        if user.status == UserStatus.PENDING:
+            raise HTTPException(status_code=403, detail="حساب در انتظار فعال‌سازی است")
+
+        ip = _client_ip(request)
+        token, token_hash = generate_refresh_token()
+        session = AuthSession(
+            user_id=user.id,
+            refresh_token_hash=token_hash,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+            ip=ip,
+            user_agent=(request.headers.get("user-agent") or "")[:400],
+        )
+        db.add(session)
+        user.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+        record_audit(db, action="auth.login_otp", actor_user_id=user.id, detail={"ip": ip})
+        _set_refresh_cookie(response, token, request)
+        return TokenResponse(
+            access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+            must_change_password=user.must_change_password,
+        ).model_dump()
+
     return {
         "status": "verified",
         "verify_token": res["verify_token"],

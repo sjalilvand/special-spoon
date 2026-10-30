@@ -76,6 +76,14 @@ class Counselor(Base):
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     photo_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="active")
+    # فاز ۶۴: فیلدهای پروندهٔ مشاور مطابق فایل ورود شرکت رز (قالب اکسل)
+    province_code: Mapped[str | None] = mapped_column(
+        String(2), ForeignKey("provinces.code", ondelete="SET NULL"), nullable=True
+    )
+    professional_rank: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contract_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sheba_number: Mapped[str | None] = mapped_column(String(34), nullable=True)
+    detailed_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True
     )

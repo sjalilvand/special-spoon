@@ -41,6 +41,7 @@ from app.api.v1.org import router as org_router
 from app.api.v1.organizations import router as organizations_router
 from app.api.v1.org_programs import router as org_programs_router
 from app.api.v1.payments import router as payments_router
+from app.api.v1.provinces import router as provinces_router
 from app.api.v1.public import router as public_router
 from app.api.v1.public_chat import router as public_chat_router
 from app.api.v1.public_chat_admin import router as public_chat_admin_router
@@ -118,6 +119,7 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (refunds_router, None),
     (learning_router, None),
     (support_router, None),
+    (provinces_router, None),
     (psych_tests_router, None),
     (ai_router, None),
     (integrations_router, None),
