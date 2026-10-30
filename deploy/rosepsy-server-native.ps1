@@ -1,9 +1,15 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۱ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۲ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.22 - ری‌استارت سخت caddy در پایان upgrade: کشف میدانی نشان داد حتی با
+#             Caddyfile درست، فرایند یتیمی caddy که پورت ۸۰ را نگه داشته
+#             Restart-Service را بی‌اثر می‌کند (پاسخ /panel همان پاسخ قدیمی
+#             می‌ماند). پس از ری‌استارت، رفتار زندهٔ /panel با curl تست می‌شود؛
+#             اگر ۳۰۱ نبود، Stop-Service + kill همهٔ caddy.exe + Start-Service
+#             تا ۳ بار تکرار و نتیجهٔ نهایی چاپ می‌شود.
 #    1.0.21 - رفع قطعی «صفحهٔ سفید پنل» وقتی پنل با /panel بدون اسلش باز می‌شود:
 #             عامل باگ: Caddyfile زندهٔ سرور از قالب قدیمیِ روز setup بود و برای
 #             /panel پاسخ «200 با بدنهٔ خالی» می‌داد (هیچ اسکریپتی لود نمی‌شد).
@@ -1506,7 +1512,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.21 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.22 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
@@ -1552,15 +1558,33 @@ function Invoke-Upgrade {
             Write-Ok "سرویس $s ری‌استارت شد"
         }
     }
-    # ۱.۰.۲۱: اثبات رفع صفحهٔ سفید پنل - /panel باید ۳۰۱ بدهد و /panel/ باید ۲۰۰ بدهد
+    # ۱.۰.۲۲: تست وب + ری‌استارت سخت caddy - اگر فرایند کهنه‌ای پورت وب را نگه داشته
+    # باشد، Restart-Service پیکربندی جدید را بار نمی‌کند (پاسخ /panel همان پاسخ
+    # قدیمی می‌ماند)؛ پس در صورت نبودن ۳۰۱، فرایندهای caddy به‌زور بسته و سرویس
+    # دوباره استارت می‌شود (تا ۳ بار) و در پایان نتیجه چاپ می‌گردد.
     $curlExe = Join-Path $env:SystemRoot 'System32\curl.exe'
     if (Test-Path $curlExe) {
-        $cNoSlash = & $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel" -f $WebHttpPort)
-        $cSlash   = & $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel/" -f $WebHttpPort)
+        $cNoSlash = ''
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Start-Sleep 2
+            $cNoSlash = (& $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel" -f $WebHttpPort) 2>$null)
+            if ("$cNoSlash" -eq '301') { break }
+            if ($attempt -lt 3) {
+                Write-Warn2 ("تلاش {0}: /panel هنوز {1} می‌دهد (به‌جای ۳۰۱) - ری‌استارت سخت caddy (فرایند یتیم؟)..." -f $attempt, $cNoSlash)
+                Stop-Service rosepsy-caddy -Force -ErrorAction SilentlyContinue
+                Start-Sleep 2
+                Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep 1
+                Start-Service rosepsy-caddy -ErrorAction SilentlyContinue
+            }
+        }
+        Start-Sleep 1
+        $cNoSlash = (& $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel" -f $WebHttpPort) 2>$null)
+        $cSlash   = (& $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel/" -f $WebHttpPort) 2>$null)
         if ("$cNoSlash" -eq '301' -and "$cSlash" -eq '200') {
             Write-Ok 'تست وب: /panel → ۳۰۱ به /panel/ ✓ و /panel/ → ۲۰۰ ✓ (صفحهٔ سفید بدون اسلش رفع شد)'
         } else {
-            Write-Warn2 ("تست وب: /panel={0} (انتظار ۳۰۱) | /panel/={1} (انتظار ۲۰۰)" -f $cNoSlash, $cSlash)
+            Write-Warn2 ("تست وب: /panel={0} (انتظار ۳۰۱) | /panel/={1} (انتظار ۲۰۰) - لاگ caddy: C:\rosepsy\logs\rosepsy-caddy" -f $cNoSlash, $cSlash)
         }
     } else {
         Write-Warn2 'curl.exe یافت نشد - تست ۳۰۱ رد شد (دستی بررسی کنید: http://<سرور>/panel)'
