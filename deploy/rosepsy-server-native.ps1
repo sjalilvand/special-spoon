@@ -1,9 +1,18 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۰ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۱ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.21 - رفع قطعی «صفحهٔ سفید پنل» وقتی پنل با /panel بدون اسلش باز می‌شود:
+#             عامل باگ: Caddyfile زندهٔ سرور از قالب قدیمیِ روز setup بود و برای
+#             /panel پاسخ «200 با بدنهٔ خالی» می‌داد (هیچ اسکریپتی لود نمی‌شد).
+#             قالب Caddyfile حالا یک‌بار در New-CaddyfileContent تعریف می‌شود و
+#             حالت upgrade با Update-CaddyfileFromTemplate فایل سرور را هم‌راستا
+#             می‌کند (خودترمیمی): پشتیبان Caddyfile.bak-* + اعتبارسنجی caddy
+#             validate قبل از جایگزینی + تست curl ۳۰۱/۲۰۰ پس از ری‌استارت.
+#             آدرس سایت در هم‌راستاسازی روی :80 می‌ماند تا دسترسی با IP برهنه
+#             (همان‌طور که اکنون کار می‌کند) حفظ شود.
 #    1.0.20 - همگام با فاز ۵۹: سه قابلیت جدید — (۱) تقویم شمسی در همهٔ فرم‌های
 #             تاریخ‌دار (قرارداد B21، صورتحساب، حسابداری، تعرفه‌ها، مهلت پروژه)
 #             با رفع باگ تبدیل دوطرفهٔ JalaliDateField + مایگریشن 0036 برای
@@ -1076,6 +1085,126 @@ function Install-NodeAndBuildFrontend {
 }
 
 # ---------- گام ۸: Caddy (وب + ریورس‌پروکسی، TLS خودکار sslip.io) ----------
+# ---------- قالب Caddyfile (مشترک میان setup و upgrade) ----------
+# ۱.۰.۲۱: قالب یک‌بار در یک تابع تعریف می‌شود تا حالت upgrade هم بتواند
+# Caddyfile سرور را با آخرین قالب هم‌راستا کند (خودترمیمی فیکس‌های وب‌سرور).
+function New-CaddyfileContent([string]$siteAddr, [string]$tlsNote) {
+    $siteDist  = "$AppDir\site\dist"
+    $panelDist = "$AppDir\frontend\dist"
+    $c = @"
+# Rosepsy - معادل دقیق deploy/nginx.conf در compose
+# $tlsNote
+# برای اجرای «برنامه‌های دیگر» روی همین سرور، بلوک‌های جدید با زیردامنهٔ sslip.io اضافه کنید؛ مثال:
+#   app2.130.185.73.157.sslip.io {  root * C:\apps2  file_server  }
+{
+        admin off
+}
+
+$siteAddr {
+        encode gzip zstd
+        request_body {
+                max_size 15MB
+        }
+        header {
+                X-Content-Type-Options "nosniff"
+                X-Frame-Options "DENY"
+                Referrer-Policy "strict-origin-when-cross-origin"
+                -Server
+        }
+
+        handle /api/* {
+                reverse_proxy 127.0.0.1:$ApiPort {
+                        header_up Host {host}
+                        header_up X-Real-IP {remote_host}
+                        header_up X-Forwarded-For {remote_host}
+                }
+                @apinostore path /api/*
+                header @apinostore Cache-Control "no-store"
+        }
+
+        handle /panel {
+                redir /panel/ 301
+        }
+
+        # رفع اشکال ۱.۰.۱۲: handle_path خودش پیشوند /panel/assets را حذف می‌کند و try_files {path}
+        # مسیرِ «بدون پیشوند» را جست‌وجو می‌کند؛ پس روت باید مستقیماً به dist\assets اشاره کند.
+        # (اشکال ۱.۰.۱۱: روت dist بود → جست‌وجوی index-*.js در ریشهٔ dist → 404 با وجود فایل)
+        # ترتیب هم درست است: Caddy مسیر مشخص‌تر /panel/assets/* را قبل از /panel/* ارزیابی می‌کند
+        handle_path /panel/assets/* {
+                root * "$panelDist\assets"
+                try_files {path} =404
+                header Cache-Control "public, max-age=2592000, immutable"
+                file_server
+        }
+
+        handle_path /panel/* {
+                root * "$panelDist"
+                try_files {path} /index.html
+                header Cache-Control "no-cache"
+                header X-Content-Type-Options "nosniff"
+                header X-Frame-Options "DENY"
+                header Referrer-Policy "strict-origin-when-cross-origin"
+                file_server
+        }
+
+        handle /assets/* {
+                root * "$siteDist"
+                try_files {path} =404
+                header Cache-Control "public, max-age=2592000, immutable"
+                file_server
+        }
+
+        handle {
+                root * "$siteDist"
+                try_files {path} /index.html
+                header Cache-Control "no-cache"
+                file_server
+        }
+}
+"@
+    return $c
+}
+
+# ---------- هم‌راستاسازی Caddyfile سرور با قالب فعلی (حالت upgrade) ----------
+function Update-CaddyfileFromTemplate {
+    # آدرس سایت = :80 (هر هاستی روی پورت وب) - دقیقاً همان رفتار زندهٔ سرور؛
+    # دسترسی با IP برهنه و دامنهٔ sslip.io هر دو حفظ می‌شود. اگر این خط به
+    # «فقط دامنه» تغییر کند، درخواست با Host دیگر (مثل IP برهنه) پاسخِ
+    # «200 با بدنهٔ خالی» می‌گیرد - یعنی همان صفحهٔ سفید.
+    $siteAddr = ":$WebHttpPort"
+    $tlsNote  = '# بدون TLS: این استقرار فقط HTTP است (پورت 443 بسته است)'
+    $content  = New-CaddyfileContent -siteAddr $siteAddr -tlsNote $tlsNote
+    $caddyPath = "$EtcDir\Caddyfile"
+    New-Item -ItemType Directory -Force -Path $EtcDir | Out-Null
+    if (Test-Path $caddyPath) {
+        $current = [System.IO.File]::ReadAllText($caddyPath)
+        if ($current.Trim() -eq $content.Trim()) {
+            Write-Ok 'Caddyfile از قبل با قالب فعلی هم‌راستاست (بدون تغییر)'
+            return
+        }
+        $bak = "$caddyPath.bak-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
+        Copy-Item $caddyPath $bak -Force
+        Write-Ok ("پشتیبان Caddyfile قبلی: {0}" -f $bak)
+    }
+    # اعتبارسنجی با caddy validate قبل از جایگزینی - پیکربندی بد هرگز نباید بنشیند
+    $caddyExe = "$BaseDir\runtime\caddy\caddy.exe"
+    $tmpCfg   = "$EtcDir\Caddyfile.new"
+    [System.IO.File]::WriteAllText($tmpCfg, $content, (New-Object System.Text.UTF8Encoding($false)))
+    if (Test-Path $caddyExe) {
+        & $caddyExe validate --config $tmpCfg --adapter caddyfile | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item $tmpCfg -Force -ErrorAction SilentlyContinue
+            throw 'اعتبارسنجی caddy validate برای پیکربندی جدید ناموفق بود - Caddyfile قبلی دست‌نخورده ماند'
+        }
+        Write-Ok 'اعتبارسنجی caddy validate: پیکربندی جدید سالم است'
+    } else {
+        Write-Warn2 'caddy.exe یافت نشد - پیکربندی جدید بدون اعتبارسنجی نوشته شد'
+    }
+    Move-Item $tmpCfg $caddyPath -Force
+    Write-Ok ("Caddyfile با قالب فعلی هم‌راستا شد: {0} (بلوک redir /panel اکنون فعال است)" -f $caddyPath)
+}
+
+
 function Install-Caddy {
     Write-Step 'گام ۸: Caddy - تنها پورت‌های عمومی همین سرور (80/443)'
     $caddyDir = "$BaseDir\runtime\caddy"
@@ -1117,8 +1246,6 @@ function Install-Caddy {
     }
     if ((Get-Item "$caddyDir\caddy.exe").Length -lt 5MB) { throw 'caddy.exe ناقص/خراب است (کمتر از ۵MB)' }
     Write-Ok 'caddy.exe آماده است'
-    $siteDist  = "$AppDir\site\dist"
-    $panelDist = "$AppDir\frontend\dist"
     if ($Domain) {
         $siteAddr = $Domain
         $tlsNote = '# TLS خودکار Let''s Encrypt برای دامنهٔ sslip.io'
@@ -1126,79 +1253,7 @@ function Install-Caddy {
         $siteAddr = ":$WebHttpPort"
         $tlsNote = '# بدون دامنه: فقط HTTP برای تست داخلی'
     }
-    $caddyfile = @"
-# Rosepsy - معادل دقیق deploy/nginx.conf در compose
-# $tlsNote
-# برای اجرای «برنامه‌های دیگر» روی همین سرور، بلوک‌های جدید با زیردامنهٔ sslip.io اضافه کنید؛ مثال:
-#   app2.130.185.73.157.sslip.io {  root * C:\apps2  file_server  }
-{
-        admin off
-}
-
-$siteAddr {
-        encode gzip zstd
-        request_body {
-                max_size 15MB
-        }
-        header {
-                X-Content-Type-Options "nosniff"
-                X-Frame-Options "DENY"
-                Referrer-Policy "strict-origin-when-cross-origin"
-                -Server
-        }
-
-        handle /api/* {
-                reverse_proxy 127.0.0.1:$ApiPort {
-                        header_up Host {host}
-                        header_up X-Real-IP {remote_host}
-                        header_up X-Forwarded-For {remote_host}
-                }
-                @apinostore path /api/*
-                header @apinostore Cache-Control "no-store"
-        }
-
-        handle /panel {
-                redir /panel/ 301
-        }
-
-                # رفع اشکال ۱.۰.۱۲: handle_path خودش پیشوند /panel/assets را حذف می‌کند و try_files {path}
-        # مسیرِ «بدون پیشوند» را جست‌وجو می‌کند؛ پس روت باید مستقیماً به distssets اشاره کند.
-        # (اشکال ۱.۰.۱۱: روت dist بود → جست‌وجوی index-*.js در ریشهٔ dist → 404 با وجود فایل)
-        # ترتیب هم درست است: Caddy مسیر مشخص‌تر /panel/assets/* را قبل از /panel/* ارزیابی می‌کند
-        handle_path /panel/assets/* {
-                root * "$panelDist\assets"
-                try_files {path} =404
-                header Cache-Control "public, max-age=2592000, immutable"
-                file_server
-        }
-
-        handle_path /panel/* {
-                root * "$panelDist"
-                try_files {path} /index.html
-                header Cache-Control "no-cache"
-                header X-Content-Type-Options "nosniff"
-                header X-Frame-Options "DENY"
-                header Referrer-Policy "strict-origin-when-cross-origin"
-                file_server
-        }
-
-
-        handle /assets/* {
-                root * "$siteDist"
-                try_files {path} =404
-                header Cache-Control "public, max-age=2592000, immutable"
-                file_server
-        }
-
-        handle {
-                root * "$siteDist"
-                try_files {path} /index.html
-                header Cache-Control "no-cache"
-                file_server
-        }
-}
-"@
-    [System.IO.File]::WriteAllText("$EtcDir\Caddyfile", $caddyfile, (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText("$EtcDir\Caddyfile", (New-CaddyfileContent -siteAddr $siteAddr -tlsNote $tlsNote), (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok ("Caddyfile نوشته شد: $EtcDir\Caddyfile")
     New-WinSvc -Name 'rosepsy-caddy' -DisplayName 'Rosepsy Web (Caddy)' `
         -Description 'وب‌سرور + ریورس‌پروکسی API + TLS خودکار' `
@@ -1451,7 +1506,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.17 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.21 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛
@@ -1489,11 +1544,26 @@ function Invoke-Upgrade {
     Push-Location "$AppDir\backend"
     try { & $VenvPy -m alembic upgrade head; if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق' } } finally { Pop-Location }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+    # ۱.۰.۲۱: هم‌راستاسازی Caddyfile با قالب فعلی (خودترمیمی؛ شامل redir /panel)
+    Update-CaddyfileFromTemplate
     foreach ($s in 'rosepsy-api','rosepsy-caddy') {
         if (Get-Service -Name $s -ErrorAction SilentlyContinue) {
             Restart-Service $s
             Write-Ok "سرویس $s ری‌استارت شد"
         }
+    }
+    # ۱.۰.۲۱: اثبات رفع صفحهٔ سفید پنل - /panel باید ۳۰۱ بدهد و /panel/ باید ۲۰۰ بدهد
+    $curlExe = Join-Path $env:SystemRoot 'System32\curl.exe'
+    if (Test-Path $curlExe) {
+        $cNoSlash = & $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel" -f $WebHttpPort)
+        $cSlash   = & $curlExe -s -o NUL -w '%{http_code}' ("http://127.0.0.1:{0}/panel/" -f $WebHttpPort)
+        if ("$cNoSlash" -eq '301' -and "$cSlash" -eq '200') {
+            Write-Ok 'تست وب: /panel → ۳۰۱ به /panel/ ✓ و /panel/ → ۲۰۰ ✓ (صفحهٔ سفید بدون اسلش رفع شد)'
+        } else {
+            Write-Warn2 ("تست وب: /panel={0} (انتظار ۳۰۱) | /panel/={1} (انتظار ۲۰۰)" -f $cNoSlash, $cSlash)
+        }
+    } else {
+        Write-Warn2 'curl.exe یافت نشد - تست ۳۰۱ رد شد (دستی بررسی کنید: http://<سرور>/panel)'
     }
     Invoke-HealthAndSummary
 }
