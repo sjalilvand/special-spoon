@@ -5,3 +5,5 @@ postcss.config.mjs
 # فاز ۳۸ - آثار آزمون E2E (Playwright)
 test-results/
 playwright-report/
+frontend/bun.lock
+bun.lock
