@@ -24,6 +24,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -133,6 +134,42 @@ class PsychInterpretation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PsychScale(Base):
+    """فاز ۶۳ - مقیاسِ هر ابزار با سلسله‌مراتب اختیاری و تفسیرِ سطح‌بندی‌شده.
+
+    - leaf (بدون فرزند): با ``match_names`` به سؤال‌های دارای ``subscale`` هم‌نام
+      وصل می‌شود؛ نمره = جمع امتیاز گزینه‌های انتخابی آن سؤال‌ها؛
+    - domain (دارای فرزند): نمره = جمع نمرهٔ فرزندها (مثل بعد نوروتیسم نئو = جمع ۸ وجه)؛
+    - ``levels``: بازه‌های تفسیر سطح‌ها — اولین بازهٔ شامل نمره انتخاب می‌شود؛
+    - ``direction``: رنگ‌بندی گزارش (higher_worse: بالینی؛ higher_better: توانمندی؛
+      balanced: صفات شخصیتی که بالا/پایین هر دو معنا دارند).
+    """
+
+    __tablename__ = "psych_scales"
+    __table_args__ = (
+        UniqueConstraint("test_id", "key", name="uq_psych_scale_key"),
+        Index("ix_psych_scales_test", "test_id"),
+        Index("ix_psych_scales_parent", "parent_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    test_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("psych_tests.id", ondelete="RESTRICT"), nullable=False
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("psych_scales.id", ondelete="SET NULL"), nullable=True
+    )
+    key: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    match_names: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    levels: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    direction: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PsychAttempt(Base):
     """B37 - اجرای تست توسط کاربر؛ نمره/تفسیر سمت سرور محاسبه و snapshot می‌شود."""
 
@@ -159,4 +196,6 @@ class PsychAttempt(Base):
     # فاز ۵۰ - مشخصات اولیه برگزارکننده (فرم مرجع): {"gender": "...", "age": "...",
     # "education": "...", "marital": "..."}
     demographics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # فاز ۶۳ - snapshot ساخت‌یافتهٔ گزارش تحلیلی (مقیاس‌ها/سطح‌ها/متن تفسیر)
+    result_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -82,6 +82,7 @@ from app.models.psych_test import (
     PsychAttempt,
     PsychInterpretation,
     PsychQuestion,
+    PsychScale,
     PsychStatus,
     PsychTest,
 )

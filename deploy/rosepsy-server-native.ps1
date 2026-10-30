@@ -1359,6 +1359,13 @@ function Invoke-Migration {
         & $VenvPy -m alembic upgrade head
         if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق بود' }
         Write-Ok 'بانک داده در آخرین نسخه است'
+        # فاز ۶۳ - مقیاس‌ها و تفسیر سطح‌بندی‌شدهٔ آزمون‌ها (idempotent)
+        if (Test-Path "$AppDir\backend\seed_psych_scales.py") {
+            Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — فاز ۶۳)'
+            & $VenvPy seed_psych_scales.py
+            if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
+            else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد' }
+        }
     } finally { Pop-Location }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 }

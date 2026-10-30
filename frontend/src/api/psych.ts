@@ -53,8 +53,31 @@ export interface PsychAttempt {
   interpretation_guidance: string | null;
   subscale_scores?: Record<string, number> | null;
   demographics?: Record<string, string> | null;
+  // فاز ۶۳ - گزارش تحلیلی چندلایه (snapshot)
+  result_payload?: ReportPayload | null;
   test_title?: string | null;
   created_at: string | null;
+}
+
+// فاز ۶۳ - ساختار گزارش تحلیلی (مدل مرجع ای‌سنج)
+export interface ReportScale {
+  key: string;
+  title: string;
+  description?: string | null;
+  color?: string | null;
+  direction: "higher_worse" | "higher_better" | "balanced";
+  score: number;
+  max: number;
+  percent: number;
+  level: { label: string; text: string | null; guidance: string | null } | null;
+  children: ReportScale[] | null;
+}
+
+export interface ReportPayload {
+  version: number;
+  total: { score: number; max: number; label: string | null; guidance: string | null };
+  dominant: { key: string; title: string; percent: number } | null;
+  scales: ReportScale[];
 }
 
 // فاز ۵۰ - مشخصات اولیه برگزارکننده (فرم مرجع)

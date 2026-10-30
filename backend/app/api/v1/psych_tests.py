@@ -34,6 +34,7 @@ from app.models.psych_test import (
 )
 from app.models.topics import Topic
 from app.models.user import User
+from app.services.psych_report import build_report_payload
 
 router = APIRouter(tags=["psych-tests"])
 
@@ -123,6 +124,8 @@ def _attempt_out(a: PsychAttempt) -> dict:
         "interpretation_guidance": a.interpretation_guidance,
         "subscale_scores": a.subscale_scores,
         "demographics": a.demographics,
+        # فاز ۶۳ - گزارش تحلیلی چندلایه (snapshot)
+        "result_payload": a.result_payload,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
 
@@ -594,6 +597,12 @@ def take_test(
         answers=answers,
         subscale_scores=subscale_scores or None,
         demographics=payload.demographics or None,
+    )
+    # فاز ۶۳ - گزارش تحلیلی چندلایه (مقیاس‌ها/سطح‌ها) — snapshot
+    a.result_payload = build_report_payload(
+        db, t, questions, answers, total_score=score,
+        total_max=sum(max(int(o.get("score", 0)) for o in (q.options or [{}])) for q in questions),
+        total_label=interp.label, total_guidance=interp.guidance,
     )
     db.add(a)
     db.commit()

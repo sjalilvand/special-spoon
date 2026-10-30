@@ -2,6 +2,7 @@
 // صفحه نتیجه با گیج نمره و نمودار ریزنمره زیرمقیاس‌ها
 // فاز ۵۰ - مرحله «مشخصات اولیه» مطابق فرم مرجع (جنسیت/سن/تحصیلات/تأهل)
 // و نمایش عکس پیوست سؤال‌های تصویری (ریون)
+// فاز ۶۳ - صفحه نتیجه: گزارش تحلیلی چندلایه (رادار + منحنی جایگاه + وجه‌ها + تفسیر سطح‌بندی‌شده)
 import {
   Alert, Box, Button, Chip, CircularProgress, FormControl, LinearProgress, MenuItem,
   Paper, Stack, TextField, Typography,
@@ -13,40 +14,13 @@ import { errDetail } from "../api/client";
 import {
   AttemptResult, TestDemographics, fetchPublicPaper, submitPsychAttempt,
 } from "../api/psych";
+import PsychResultReport, { ScoreGauge } from "../components/PsychResultReport";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CircleRoundedIcon from "@mui/icons-material/CircleRounded";
 import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import ListAltRoundedIcon from "@mui/icons-material/ListAltRounded";
-
-/** گیج نمره نیم‌دایره SVG — بدون وابستگی جدید */
-function ScoreGauge({ score, max, label }: { score: number; max: number; label: string }) {
-  const pct = max > 0 ? Math.min(1, score / max) : 0;
-  const R = 78;
-  const CX = 100, CY = 96;
-  const arc = (p: number) => {
-    const a = Math.PI * (1 - p);
-    return { x: CX + R * Math.cos(a), y: CY - R * Math.sin(a) };
-  };
-  const end = arc(pct);
-  const color = pct < 0.34 ? "#2e7d32" : pct < 0.67 ? "#ed8c37" : "#c62828";
-  return (
-    <Box sx={{ position: "relative", width: 200, height: 118 }}>
-      <svg viewBox="0 0 200 118" width={200} height={118}>
-        <path d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`} fill="none" stroke="#f0e4e6" strokeWidth={16} strokeLinecap="round" />
-        <path d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y}`} fill="none" stroke={color} strokeWidth={16} strokeLinecap="round" />
-        <text x={CX} y={CY - 12} textAnchor="middle" fontSize={34} fontWeight={800} fill={color}>
-          {score.toLocaleString("fa-IR")}
-        </text>
-        <text x={CX} y={CY + 12} textAnchor="middle" fontSize={12} fill="#8a757c">
-          از {max.toLocaleString("fa-IR")}
-        </text>
-      </svg>
-      <Chip size="small" label={label} sx={{ position: "absolute", bottom: -6, left: "50%", transform: "translateX(-50%)", bgcolor: color, color: "#fff", fontWeight: 700 }} />
-    </Box>
-  );
-}
 
 export default function PsychTestRunPage() {
   const { slug = "" } = useParams<{ slug: string }>();
@@ -90,51 +64,60 @@ export default function PsychTestRunPage() {
   if (result) {
     const a = result.attempt;
     const subs = Object.entries(a.subscale_scores ?? {});
+    const report = a.result_payload ?? null;
     return (
-      <Stack sx={{ maxWidth: 760, mx: "auto", py: 2 }}>
+      <Stack sx={{ maxWidth: 860, mx: "auto", py: 2 }}>
         <Stack spacing={2.5}>
-          <Paper sx={{ p: 3, textAlign: "center" }}>
-            <CheckCircleRoundedIcon color="success" sx={{ fontSize: 46 }} />
-            <Typography variant="h6" fontWeight={800} mt={1}>نتیجه آزمون شما ثبت شد</Typography>
-            <Typography variant="body2" color="text.secondary">{paper.data?.test.title}</Typography>
-            <Stack alignItems="center" mt={2}>
-              <ScoreGauge score={a.score} max={totalMax} label={a.interpretation_label} />
+          <Paper sx={{ p: 2, textAlign: "center" }}>
+            <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" flexWrap="wrap" useFlexGap>
+              <CheckCircleRoundedIcon color="success" />
+              <Typography variant="body2" fontWeight={700}>نتیجهٔ آزمون شما ثبت شد</Typography>
             </Stack>
-            {a.interpretation_guidance && (
-              <Alert severity="info" sx={{ mt: 2, textAlign: "right" }}>
-                {a.interpretation_guidance}
-              </Alert>
-            )}
           </Paper>
 
-          {subs.length > 0 && (
-            <Paper sx={{ p: 2.5 }}>
-              <Typography variant="subtitle1" fontWeight={800} mb={2}>ریزنمره ابعاد</Typography>
-              <Stack spacing={1.5}>
-                {subs.map(([name, val]) => {
-                  const subMax = questions
-                    .filter((q) => q.subscale === name)
-                    .reduce((acc, q) => acc + questionMax(questions.indexOf(q)), 0);
-                  const pct = subMax > 0 ? (val / subMax) * 100 : 0;
-                  return (
-                    <Box key={name}>
-                      <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                        <Typography variant="body2" fontWeight={700}>{name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {val.toLocaleString("fa-IR")} از {subMax.toLocaleString("fa-IR")}
-                        </Typography>
-                      </Stack>
-                      <Box sx={{ bgcolor: "#f3e8ea", borderRadius: 99, height: 10 }}>
-                        <Box sx={{
-                          width: `${pct}%`, height: 10, borderRadius: 99,
-                          background: "linear-gradient(90deg,#b04a5a,#7a5c8a)",
-                          transition: "width .6s",
-                        }} />
-                      </Box>
-                    </Box>
-                  );
-                })}
+          {report ? (
+            <PsychResultReport payload={report} attempt={a} testTitle={paper.data?.test.title} />
+          ) : (
+            <Paper sx={{ p: 3, textAlign: "center" }}>
+              <Typography variant="h6" fontWeight={800} mt={1}>{paper.data?.test.title}</Typography>
+              <Stack alignItems="center" mt={2}>
+                <ScoreGauge score={a.score} max={totalMax} label={a.interpretation_label} />
               </Stack>
+              {a.interpretation_guidance && (
+                <Alert severity="info" sx={{ mt: 2, textAlign: "right" }}>
+                  {a.interpretation_guidance}
+                </Alert>
+              )}
+              {subs.length > 0 && (
+                <Box sx={{ mt: 2.5, textAlign: "right" }}>
+                  <Typography variant="subtitle1" fontWeight={800} mb={2}>ریزنمرهٔ ابعاد</Typography>
+                  <Stack spacing={1.5}>
+                    {subs.map(([name, val]) => {
+                      const subMax = questions
+                        .filter((q) => q.subscale === name)
+                        .reduce((acc, q) => acc + questionMax(questions.indexOf(q)), 0);
+                      const pct = subMax > 0 ? (val / subMax) * 100 : 0;
+                      return (
+                        <Box key={name}>
+                          <Stack direction="row" justifyContent="space-between" mb={0.5}>
+                            <Typography variant="body2" fontWeight={700}>{name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {val.toLocaleString("fa-IR")} از {subMax.toLocaleString("fa-IR")}
+                            </Typography>
+                          </Stack>
+                          <Box sx={{ bgcolor: "#f3e8ea", borderRadius: 99, height: 10 }}>
+                            <Box sx={{
+                              width: `${pct}%`, height: 10, borderRadius: 99,
+                              background: "linear-gradient(90deg,#b04a5a,#7a5c8a)",
+                              transition: "width .6s",
+                            }} />
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
           )}
 
@@ -145,7 +128,7 @@ export default function PsychTestRunPage() {
               آزمون‌های دیگر
             </Button>
             <Button variant="outlined" startIcon={<PrintRoundedIcon />} onClick={() => window.print()}>
-              چاپ نتیجه
+              چاپ گزارش
             </Button>
           </Stack>
         </Stack>

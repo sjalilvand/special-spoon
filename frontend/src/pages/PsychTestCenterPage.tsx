@@ -1,5 +1,6 @@
 // فاز ۴۷ - B37 مرکز آزمون روان‌شناسی: کاتالوگ کارتی (الهام از پلتفرم‌های آزمون)،
 // نتایج من با ریزنمره زیرمقیاس‌ها و مدیریت ابزارها برای مدیران
+// فاز ۶۳ - «گزارش کامل» نتایج: دیالوگ گزارش تحلیلی چندلایه (snapshot)
 import {
   Alert, Box, Button, Card, CardActionArea, Chip, Dialog, DialogActions, DialogContent,
   DialogTitle, Grid, InputAdornment, MenuItem, Paper, Snackbar, Stack, Tab, Tabs, TextField,
@@ -18,11 +19,13 @@ import {
   fetchPublicPsychTests, reviewPsychTest, submitPsychTestForReview,
 } from "../api/psych";
 import { EmptyState, FormSection, OptionsEditor, OptionRow } from "../components/FormKit";
+import PsychResultReport from "../components/PsychResultReport";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import CategoryRoundedIcon from "@mui/icons-material/CategoryRounded";
 import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "سلامت روان": "#b04a5a",
@@ -236,6 +239,7 @@ function TestCard({ test, color, code, onRun }: {
 }
 
 function MyResultsTable({ results }: { results: PsychAttempt[] }) {
+  const [report, setReport] = useState<PsychAttempt | null>(null);
   return (
     <Stack spacing={1.5}>
       {results.length === 0 && (
@@ -251,23 +255,47 @@ function MyResultsTable({ results }: { results: PsychAttempt[] }) {
               <Typography variant="subtitle2" fontWeight={800}>{a.test_title ?? "آزمون"}</Typography>
               <Typography variant="caption" color="text.secondary">
                 {a.interpretation_label}
-                {a.interpretation_guidance ? ` — ${a.interpretation_guidance}` : ""}
               </Typography>
             </Box>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               {a.subscale_scores && Object.entries(a.subscale_scores).length > 0 && (
                 <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                  {Object.entries(a.subscale_scores).map(([k, v]) => (
+                  {Object.entries(a.subscale_scores).slice(0, 6).map(([k, v]) => (
                     <Chip key={k} size="small" variant="outlined" sx={{ height: 22, fontSize: 11 }}
                       label={`${k}: ${v.toLocaleString("fa-IR")}`} />
                   ))}
+                  {Object.entries(a.subscale_scores).length > 6 && (
+                    <Chip size="small" variant="outlined" sx={{ height: 22, fontSize: 11 }}
+                      label={`+${(Object.entries(a.subscale_scores).length - 6).toLocaleString("fa-IR")}`} />
+                  )}
                 </Stack>
               )}
               <Chip color="primary" label={`نمره: ${a.score.toLocaleString("fa-IR")}`} />
+              {a.result_payload && (
+                <Button size="small" variant="contained" onClick={() => setReport(a)}>
+                  گزارش کامل
+                </Button>
+              )}
             </Stack>
           </Stack>
         </Paper>
       ))}
+      {/* فاز ۶۳ - دیالوگ گزارش کامل (از snapshot بدون رفت‌وبرگشت سرور) */}
+      <Dialog open={!!report} onClose={() => setReport(null)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          گزارش کامل — {report?.test_title}
+        </DialogTitle>
+        <DialogContent dividers>
+          {report?.result_payload && (
+            <PsychResultReport payload={report.result_payload} attempt={report} testTitle={report.test_title ?? undefined} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => window.print()} startIcon={<PrintRoundedIcon />}>چاپ</Button>
+          <Button onClick={() => setReport(null)}>بستن</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
