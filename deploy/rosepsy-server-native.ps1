@@ -1,9 +1,18 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۲ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۳ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.23 - رفع ریشه‌ایِ صفحهٔ سفید «/panel» که ۱.۰.۲۱ و ۱.۰.۲۲ حل نکرده بودند:
+#             در Caddyfile نوشته شده بود «redir /panel/ 301»؛ اما در نحو Caddyfile
+#             اولین آرگومانِ آغازشده با «/» مقصد نیست، «matcher» است (سورس caddy:
+#             matcherSetFromMatcherToken در httptype.go). یعنی آن خط یعنی «وقتی
+#             مسیر /panel/ شد به رشتهٔ "301" هدایت کن» که داخل handle /panel هرگز
+#             رخ نمی‌دهد → هیچ handlerی پاسخ نمی‌دهد → ۲۰۰ با بدنهٔ خالی = صفحهٔ
+#             سفید (caddy validate هم قبولش می‌کرد). ری‌استارت سختِ ۱.۰.۲۲ هم
+#             بی‌اثر ماند چون مشکل از فرایند نبود؛ از خودِ پیکربندی بود. فرم درست:
+#             «redir * /panel/ 301» (ستاره = matcher همه‌شامل، سپس مقصد، سپس کد).
 #    1.0.22 - ری‌استارت سخت caddy در پایان upgrade: کشف میدانی نشان داد حتی با
 #             Caddyfile درست، فرایند یتیمی caddy که پورت ۸۰ را نگه داشته
 #             Restart-Service را بی‌اثر می‌کند (پاسخ /panel همان پاسخ قدیمی
@@ -1128,8 +1137,12 @@ $siteAddr {
                 header @apinostore Cache-Control "no-store"
         }
 
+        # رفع ۱.۰.۲۳: در نحو Caddyfile اولین آرگومانِ آغازشده با «/» در redir یک
+        # «matcher» است نه مقصد؛ «redir /panel/ 301» یعنی «اگر مسیر /panel/ شد به
+        # "301" برو» و هرگز اجرا نمی‌شود (نتیجه: ۲۰۰ خالی = صفحهٔ سفید). فرم درست:
+        # redir * <مقصد> <کد> → مسیر دقیق /panel به /panel/ هدایت می‌شود.
         handle /panel {
-                redir /panel/ 301
+                redir * /panel/ 301
         }
 
         # رفع اشکال ۱.۰.۱۲: handle_path خودش پیشوند /panel/assets را حذف می‌کند و try_files {path}
@@ -1207,7 +1220,7 @@ function Update-CaddyfileFromTemplate {
         Write-Warn2 'caddy.exe یافت نشد - پیکربندی جدید بدون اعتبارسنجی نوشته شد'
     }
     Move-Item $tmpCfg $caddyPath -Force
-    Write-Ok ("Caddyfile با قالب فعلی هم‌راستا شد: {0} (بلوک redir /panel اکنون فعال است)" -f $caddyPath)
+    Write-Ok ("Caddyfile با قالب فعلی هم‌راستا شد: {0} (redir درستِ /panel اکنون فعال است)" -f $caddyPath)
 }
 
 
