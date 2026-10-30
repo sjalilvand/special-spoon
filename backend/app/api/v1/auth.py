@@ -15,6 +15,7 @@ from app.core.security import (
     generate_refresh_token,
     hash_password,
     hash_token,
+    is_https_request,
     verify_password,
 )
 from app.db.session import get_db
@@ -66,13 +67,17 @@ def _clear_attempts(key: str) -> None:
         _failed_attempts.pop(key, None)
 
 
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _set_refresh_cookie(response: Response, token: str, request: Request | None = None) -> None:
+    # فیکس ورود روی HTTP ساده: کوکی Secure فقط وقتی واقعاً روی HTTPS هستیم.
+    # روی http://130.185.73.157 مرورگر کوکیِ Secure را دور می‌ریخت و کاربر
+    # پس از ورود در همان صفحهٔ لاگین می‌ماند (همان باگ رز هاب).
+    secure = is_https_request(request) if request is not None else settings.cookie_secure
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=token,
         max_age=settings.refresh_token_expire_days * 24 * 3600,
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=secure,
         samesite="lax",
         path="/api",  # فاز ۳۹: هر دو نسخه v1/v2 — کوکی refresh نسخه‌agnostic است
     )
@@ -131,7 +136,7 @@ def login(
     db.commit()
 
     record_audit(db, action="auth.login", actor_user_id=user.id, detail={"ip": ip})
-    _set_refresh_cookie(response, token)
+    _set_refresh_cookie(response, token, request)
     return TokenResponse(
         access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
         must_change_password=user.must_change_password,
@@ -168,7 +173,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
     db.add(new_session)
     db.commit()
 
-    _set_refresh_cookie(response, new_token)
+    _set_refresh_cookie(response, new_token, request)
     return TokenResponse(
         access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
         must_change_password=user.must_change_password,

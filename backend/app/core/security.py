@@ -69,3 +69,22 @@ def hash_token(token: str) -> str:
 def generate_random_password(length: int = 16) -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%"
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def is_https_request(request) -> bool:
+    """تشخیص HTTPS واقعی — از هدر X-Forwarded-Proto (پشت پراکسی مثل Caddy)
+    یا اسکیم خود درخواست.
+
+    چرا مهم است: کوکی با فلگ Secure روی HTTP ساده توسط مرورگر دور ریخته می‌شود
+    و کاربر در صفحهٔ ورود گیر می‌کند (همان باگ شناخته‌شدهٔ رز هاب روی
+    http://130.185.73.157). تشخیص از اسکیم واقعی یعنی روی HTTPS همچنان Secure
+    می‌ماند و روی HTTP ساده هم ورود کار می‌کند.
+    """
+    try:
+        forwarded = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+        if forwarded:
+            return forwarded == "https"
+        scheme = getattr(getattr(request, "url", None), "scheme", "") or ""
+        return scheme == "https"
+    except Exception:
+        return False

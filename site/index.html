@@ -8,6 +8,23 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // ورود یکپارچه (SSO) با رز هاب: توکن موقت ?sso_token= که رز هاب به همین
+      // نشانی (ریشهٔ سایت) برمی‌گرداند، قبل از بوت برنامه به بک‌اند منتقل
+      // می‌شود؛ بک‌اند نشست را برقرار می‌کند و به پنل سامانه هدایت می‌کند
+      // و پارامتر sso_token از نشانی پاک می‌شود (ماندن توکن در history ممنوع).
+      (function () {
+        try {
+          var q = new URLSearchParams(window.location.search);
+          var t = q.get("sso_token");
+          if (t) {
+            window.location.replace(
+              "/api/v1/auth/rose-sso?sso_token=" + encodeURIComponent(t)
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

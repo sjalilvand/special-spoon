@@ -9,7 +9,7 @@
 
 مسیرها:
 - ``GET  /api/v1/auth/rose-sso?sso_token=...`` — جریان مرورگری؛ پس از ورود
-  به ``/`` ریدایرکت می‌کند (پارامتر توکن از نشانی پاک می‌شود).
+  به ``/panel`` ریدایرکت می‌کند (پارامتر توکن از نشانی پاک می‌شود).
 - ``POST /api/v1/auth/rose-sso`` با بدنه ``{"token": ...}`` — برای استفاده
   برنامه‌نویسی‌شده از سمت SPA.
 """
@@ -30,6 +30,7 @@ from app.core.security import (
     generate_refresh_token,
     hash_password,
     hash_token,
+    is_https_request,
 )
 from app.db.session import get_db
 from app.models.user import AuthSession, User, UserStatus
@@ -118,13 +119,16 @@ def _open_session(db: Session, user: User, request: Request) -> str:
     return token
 
 
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _set_refresh_cookie(response: Response, token: str, request: Request) -> None:
+    # فیکس ورود یکپارچه روی HTTP ساده: کوکی Secure فقط روی HTTPS واقعی —
+    # روی http://130.185.73.157 مرورگر کوکیِ Secure را دور می‌ریخت و کاربر
+    # پس از تأیید توکن باز هم به صفحهٔ ورود برمی‌گشت (همان باگ رز هاب).
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=token,
         max_age=settings.refresh_token_expire_days * 24 * 3600,
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=is_https_request(request),
         samesite="lax",
         path="/api",
     )
@@ -140,7 +144,7 @@ def _issue_login(db: Session, raw_token: str, request: Request, response: Respon
         actor_user_id=user.id,
         detail={"ip": _client_ip(request), "via": "rose-hub", "jti": payload.get("jti")},
     )
-    _set_refresh_cookie(response, refresh)
+    _set_refresh_cookie(response, refresh, request)
     return user
 
 
@@ -154,7 +158,9 @@ def rose_sso_redirect(
     if not sso_token:
         # ورود مستقیم → هدایت به رز هاب برای احراز هویت (جریان SP-initiated)
         return RedirectResponse(settings.rose_hub_launch_url)
-    response = RedirectResponse("/", status_code=303)
+    # مقصد: پنل سامانه — پس از برقراری نشست، اسپای پنل با کوکی refresh
+    # به‌طور خودکار وارد می‌شود؛ پارامتر sso_token هم از نشانی پاک می‌شود.
+    response = RedirectResponse("/panel", status_code=303)
     _issue_login(db, sso_token, request, response)
     return response
 
