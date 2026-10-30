@@ -1,8 +1,13 @@
-import { Alert, Box, Button, Card, CardContent, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Divider, Stack, TextField, Typography } from "@mui/material";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { errDetail } from "../api/client";
+
+// ورود یکپارچه (SSO) با رز هاب — Rose Hub
+const ROSE_HUB_LAUNCH_URL =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_ROSE_HUB_LAUNCH_URL ||
+  "http://130.185.73.157:8082/api/sso/launch?clientId=rose-psy-5c3f9b";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -60,6 +65,16 @@ export default function LoginPage() {
               />
               <Button type="submit" variant="contained" disabled={busy}>
                 {busy ? "در حال ورود…" : "ورود"}
+              </Button>
+              <Divider>
+                <Typography variant="caption" color="text.secondary">یا</Typography>
+              </Divider>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => { window.location.href = ROSE_HUB_LAUNCH_URL; }}
+              >
+                ورود یکپارچه با رز هاب (SSO)
               </Button>
             </Stack>
           </form>

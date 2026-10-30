@@ -12,6 +12,7 @@ from app.api.v1.appointments import router as appointments_router
 from app.api.v1.assessments import router as assessments_router
 from app.api.v1.accounting import router as accounting_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.rose_sso import router as rose_sso_router
 from app.api.v1.branches import router as branches_router
 from app.api.v1.cartable import router as cartable_router
 from app.api.v1.cases import router as cases_router
@@ -98,6 +99,8 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (intake_router, None),
     (referrals_router, None),
     (public_router, None),
+    # ورود یکپارچه (SSO) با رز هاب
+    (rose_sso_router, None),
     (public_chat_router, ["public-chat"]),
     # فاز ۵۵: پنل پذیرش/مدیر — مشاهدهٔ گفتگوهای عمومی و امتیازها
     (public_chat_admin_router, ["public-chat-admin"]),

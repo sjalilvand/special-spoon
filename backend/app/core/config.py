@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5
     login_attempt_window_minutes: int = 15
 
+    # ورود یکپارچه (SSO) با رز هاب — Rose Hub (BASIC flow)
+    # clientSecret اختصاصی این سامانه در رز هاب؛ در استقرار واقعی با env بازنویسی شود
+    rose_hub_client_id: str = "rose-psy-5c3f9b"
+    rose_hub_client_secret: str = "1d5f9b3e7a0c4e82f6b0d2a8c4e1f735a9d0c6e2b8f4a0d6c2e8b1f5a3d7c940"
+    rose_hub_launch_url: str = "http://130.185.73.157:8082/api/sso/launch?clientId=rose-psy-5c3f9b"
+
+
     # فاز ۳۷ - ADR-04: Object Storage پلاگین‌پذیر (تصمیم سند: MinIO/S3)
     # همان الگوی D02/D03/D07/B28:
     # storage_backend = "s3" (پیش‌فرض از فاز ۴۰ - گام ۳ طرح مهاجرت ADR-04) | "local"
