@@ -1,5 +1,6 @@
 import { Box } from "@mui/material";
 import About from "../components/About";
+import AppDownload from "../components/AppDownload";
 import Academy from "../components/Academy";
 import Articles from "../components/Articles";
 import BookingSteps from "../components/BookingSteps";
@@ -29,6 +30,7 @@ export default function HomePage() {
       <About />
       <Articles />
       <Testimonials />
+      <AppDownload />
       <Faq />
       <CtaBand />
       <ConsultForm />

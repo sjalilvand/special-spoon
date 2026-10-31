@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+// امضای release از keystore.properties (مستند در README.md همین پوشه)
+def ksProps = new Properties()
+def ksFile = rootProject.file('keystore.properties')
+if (ksFile.exists()) {
+    ksProps.load(new FileInputStream(ksFile))
+}
+
+android {
+    namespace 'ir.rosepsy.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ir.rosepsy.app'
+        minSdk 24          // اندروید ۷ به بالا
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile.exists()) {
+                storeFile rootProject.file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

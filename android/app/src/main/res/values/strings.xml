@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">رزپسی</string>
+    <string name="error_title">اتصال برقرار نشد</string>
+    <string name="error_body">دسترسی به سرور رزپسی ممکن نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.</string>
+    <string name="error_retry">تلاش دوباره</string>
+    <string name="download_started">دانلود آغاز شد</string>
+    <string name="cannot_open">برنامه‌ای برای باز کردن این پیوند پیدا نشد</string>
+    <string name="pick_file">انتخاب فایل</string>
+</resources>
