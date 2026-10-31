@@ -87,6 +87,15 @@ class Branch(Base):
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=BranchStatus.DRAFT)
+    # فاز ۶۶ - مشخصات کلینیک‌های شرکت رز (نقشهٔ سایت)
+    manager_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    manager_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    exec_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    exec_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    map_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    province_code: Mapped[str | None] = mapped_column(
+        String(2), ForeignKey("provinces.code", ondelete="SET NULL"), nullable=True
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

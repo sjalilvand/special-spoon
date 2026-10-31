@@ -118,3 +118,40 @@ export async function verifyOtp(mobile: string, code: string): Promise<{ verify_
   }
   return (await r.json()) as { verify_token: string };
 }
+// ---------------- فاز ۶۶ - نقشهٔ کلینیک‌های شرکت رز ----------------
+
+export interface MapCounselor {
+  name: string;
+  degree: string | null;
+  rank: string | null;
+  license: string | null;
+  mobile: string | null;
+}
+
+export interface MapClinic {
+  id: string;
+  name: string;
+  clinic_name: string | null;
+  province_code: string | null;
+  province: string | null;
+  city: string | null;
+  address: string | null;
+  postal_code: string | null;
+  phone: string | null;
+  manager_name: string | null;
+  manager_phone: string | null;
+  exec_name: string | null;
+  exec_phone: string | null;
+  working_hours: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  map_url: string | null;
+  counselor_count: number;
+  counselors: MapCounselor[];
+}
+
+export async function fetchClinicsMap(): Promise<MapClinic[]> {
+  const r = await fetch("/api/v1/public/clinics-map");
+  if (!r.ok) throw new Error("خطا در دریافت کلینیک‌ها");
+  return (await r.json()).items as MapClinic[];
+}

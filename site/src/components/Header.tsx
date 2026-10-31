@@ -61,6 +61,19 @@ export default function Header() {
             ))}
 
             <Button
+              href="/clinics"
+              sx={{
+                color: "text.primary",
+                display: { xs: "none", lg: "inline-flex" },
+                fontWeight: 600,
+                fontSize: 14.5,
+                "&:hover": { color: "primary.main", bgcolor: "rgba(168,58,84,.06)" },
+              }}
+            >
+              کلینیک‌ها
+            </Button>
+
+            <Button
               href="/panel/"
               variant="outlined"
               size="small"
@@ -102,6 +115,10 @@ export default function Header() {
           </IconButton>
         </Stack>
         <List sx={{ mb: 2 }}>
+          <ListItem component="a" href="/clinics" onClick={() => setOpen(false)}
+            sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
+            کلینیک‌ها
+          </ListItem>
           {texts.nav.map((n) => (
             <ListItem key={n.id} component="a" href={`#${n.id}`} onClick={() => setOpen(false)}
               sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>

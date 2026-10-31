@@ -84,6 +84,10 @@ class Counselor(Base):
     contract_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sheba_number: Mapped[str | None] = mapped_column(String(34), nullable=True)
     detailed_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # فاز ۶۶ - شعبهٔ کلینیک (برای نمایش مشاوران هر کلینیک روی نقشهٔ سایت)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("branches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True
     )

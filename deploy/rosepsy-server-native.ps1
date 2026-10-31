@@ -1,9 +1,13 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۵ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۶ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.26 - فاز ۶۶: گام جدید seed_rose_data.py در انتهای upgrade (داخل همان بلوک
+#             Push-Location بعد از seed مقیاس‌ها؛ idempotent): درج ۳۱ کلینیک استانی
+#             شرکت رز + جایگزینی فهرست ۲۱۶ مشاور از rose_seed/ برای صفحهٔ نقشهٔ
+#             «کلینیک‌ها»ی سایت عمومی (/clinics).
 #    1.0.25 - رفع اشکال ارتقا: در ۱.۰.۲۴ بلوک seed_psych_scales.py بعد از Pop-Location
 #             اجرا می‌شد؛ یعنی با CWDِ فراخوان (مثلاً C:\RoseHub) و خطای «can't open file».
 #             حالا داخل همان بلوک Push-Location و بلافاصله بعد از alembic اجرا می‌شود.
@@ -1442,9 +1446,10 @@ function Invoke-Migration {
         if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق بود' }
         Write-Ok 'بانک داده در آخرین نسخه است'
         # فاز ۶۳ - مقیاس‌ها و تفسیر سطح‌بندی‌شدهٔ آزمون‌ها (idempotent)
+        # ۱.۰.۲۵: مسیر مطلق (CWD در برخی حالت‌ها backend نیست)
         if (Test-Path "$AppDir\backend\seed_psych_scales.py") {
             Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — فاز ۶۳)'
-            & $VenvPy seed_psych_scales.py
+            & $VenvPy "$AppDir\backend\seed_psych_scales.py"
             if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
             else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد' }
         }
@@ -1579,6 +1584,14 @@ function Invoke-Upgrade {
             & $VenvPy .\seed_psych_scales.py
             if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
             else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد (گزارش تحلیلی فعال)' }
+        }
+        # ۱.۰.۲۶ / فاز ۶۶: کلینیک‌های رز روی نقشه + جایگزینی فهرست مشاوران (idempotent)
+        # داخل همان بلوک Push-Location — خارج از آن دوباره باگ CWD تکرار می‌شد
+        if (Test-Path ".\seed_rose_data.py") {
+            Write-Step 'درج کلینیک‌ها و مشاوران شرکت رز (seed_rose_data.py — فاز ۶۶)'
+            & $VenvPy .\seed_rose_data.py
+            if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج کلینیک‌ها/مشاوران ناموفق بود (نقشهٔ سایت بی‌تأثیر است)' }
+            else { Write-Ok 'کلینیک‌ها و فهرست مشاوران به‌روز شد (نقشهٔ سایت فعال)' }
         }
     } finally { Pop-Location }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue

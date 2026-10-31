@@ -460,3 +460,70 @@ def public_map_config() -> dict:
         "providers": configured_map_providers(),
         "privacy_note": "مکان کاربر فقط برای مرتب‌سازی شعب استفاده می‌شود و ذخیره نمی‌شود",
     }
+
+
+# ------------------------------------------------- فاز ۶۶ - نقشهٔ کلینیک‌های رز
+@router.get("/public/clinics-map")
+def public_clinics_map(db: Session = Depends(get_db)) -> dict:
+    """نقشهٔ کلینیک‌های شرکت رز: شعب منتشرشده + مشاوران فعال هر شعبه.
+
+    خروجی مستقیم برای صفحهٔ «کلینیک‌ها»ی سایت عمومی استفاده می‌شود؛
+    هر آیتم شامل مشخصات کامل شعبه (نشانی، کدپستی، تلفن، مدیر، مسئول
+    اجرایی، ساعات کاری، مختصات و لینک مسیریابی نشان) و فهرست مشاورانِ
+    فعالِ همان کلینیک است.
+    """
+    from app.models.location import Province
+    from app.models.people import Counselor
+
+    branches = db.scalars(
+        select(Branch)
+        .options(joinedload(Branch.clinic))
+        .join(Clinic, Clinic.id == Branch.clinic_id)
+        .where(
+            Branch.status == BranchStatus.PUBLISHED,
+            Clinic.is_active.is_(True),
+        )
+        .order_by(Branch.province_code.nulls_last(), Branch.name)
+    ).unique().all()
+
+    prov_names = {p.code: p.name for p in db.scalars(select(Province)).all()}
+    items: list[dict] = []
+    total_counselors = 0
+    for b in branches:
+        counselors = db.scalars(
+            select(Counselor)
+            .where(Counselor.branch_id == b.id, Counselor.status == "active")
+            .order_by(Counselor.last_name, Counselor.first_name)
+        ).all()
+        total_counselors += len(counselors)
+        items.append({
+            "id": str(b.id),
+            "name": b.name,
+            "clinic_name": b.clinic.name if b.clinic else None,
+            "province_code": b.province_code,
+            "province": prov_names.get(b.province_code) if b.province_code else b.province,
+            "city": b.city,
+            "address": b.address,
+            "postal_code": b.postal_code,
+            "phone": b.phone,
+            "manager_name": b.manager_name,
+            "manager_phone": b.manager_phone,
+            "exec_name": b.exec_name,
+            "exec_phone": b.exec_phone,
+            "working_hours": (b.working_hours or {}).get("text") if b.working_hours else None,
+            "latitude": float(b.latitude) if b.latitude is not None else None,
+            "longitude": float(b.longitude) if b.longitude is not None else None,
+            "map_url": b.map_url,
+            "counselor_count": len(counselors),
+            "counselors": [
+                {
+                    "name": f"{c.first_name} {c.last_name}".strip(),
+                    "degree": c.degree,
+                    "rank": c.professional_rank,
+                    "license": c.license_number,
+                    "mobile": c.work_mobile,
+                }
+                for c in counselors
+            ],
+        })
+    return {"items": items, "total": len(items), "total_counselors": total_counselors}
