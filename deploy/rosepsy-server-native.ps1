@@ -1,9 +1,14 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۳ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۴ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.24 - نتیجهٔ آزمون‌ها دوباره ساده بود: seed_psych_scales.py (فاز ۶۳) فقط در setup
+#             اجرا می‌شد و سرورهای ارتقایافته هرگز مقیاس‌ها را نگرفته بودند → گزارش
+#             تحلیلی چندلایه رندر نمی‌شد. حالا بعد از alembic در upgrade (و psychseed)
+#             اجرای idempotent می‌شود + در سمت API فالبک سنتز گزارش از زیرمقیاس‌ها
+#             (فاز ۶۵) تا هیچ ابزاری به نمای ساده برگردد.
 #    1.0.23 - رفع ریشه‌ایِ صفحهٔ سفید «/panel» که ۱.۰.۲۱ و ۱.۰.۲۲ حل نکرده بودند:
 #             در Caddyfile نوشته شده بود «redir /panel/ 301»؛ اما در نحو Caddyfile
 #             اولین آرگومانِ آغازشده با «/» مقصد نیست، «matcher» است (سورس caddy:
@@ -1562,6 +1567,14 @@ function Invoke-Upgrade {
     if ($map.ContainsKey('DATABASE_URL')) { $env:DATABASE_URL = $map['DATABASE_URL'] }
     Push-Location "$AppDir\backend"
     try { & $VenvPy -m alembic upgrade head; if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق' } } finally { Pop-Location }
+    # ۱.۰.۲۴: مقیاس‌ها/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها (idempotent — فاز ۶۳/۶۵)
+    # تا دیروز فقط در setup اجرا می‌شد؛ ارتقایافته‌ها گزارش تحلیلی را نمی‌دیدند
+    if (Test-Path "$AppDir\backend\seed_psych_scales.py") {
+        Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — idempotent)'
+        & $VenvPy seed_psych_scales.py
+        if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
+        else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد (گزارش تحلیلی فعال)' }
+    }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
     # ۱.۰.۲۱: هم‌راستاسازی Caddyfile با قالب فعلی (خودترمیمی؛ شامل redir /panel)
     Update-CaddyfileFromTemplate
@@ -1623,6 +1636,13 @@ function Invoke-PsychSeed {
             & $VenvPy seed_org_program.py
             if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج نمونهٔ سازمانی ناموفق بود (برنامهٔ اصلی بی‌تأثیر است)' }
             else { Write-Ok 'نمونهٔ آزمون‌های سازمانی درج شد (منوی آزمون‌های سازمانی پنل)' }
+        }
+        # ۱.۰.۲۴ - مقیاس‌ها هم همراه بانک آزمون به‌روز می‌شوند (idempotent)
+        if (Test-Path "$AppDir\backend\seed_psych_scales.py") {
+            Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — idempotent)'
+            & $VenvPy seed_psych_scales.py
+            if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود' }
+            else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد' }
         }
     } finally { Pop-Location }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue

@@ -45,6 +45,26 @@ def _level_for(levels: list | None, score: int) -> dict | None:
     return None
 
 
+# فاز ۶۵ - نوارهای شدت عمومی (درصد نسبت به بیشینهٔ همان بعد) برای ابزارهایی که
+# هیچ ردیف PsychScale ندارند؛ برچسب‌ها توصیفی‌اند (نه تشخیصی) و مقیاس‌های
+# ثبت‌شدهٔ seed (سطح‌بندی اختصاصی) همیشه بر آن‌ها اولویت دارند.
+_GENERIC_LEVELS: tuple[tuple[int, str, str], ...] = (
+    (34, "در محدوده عادی", "نمرهٔ این بعد در محدودهٔ عادی قرار دارد."),
+    (50, "خفیف", "نشانه‌های خفیفی در این بعد دیده می‌شود؛ پیگیری عادی کافی است."),
+    (67, "متوسط", "این بعد نسبتاً برجسته است؛ گفت‌وگو دربارهٔ آن با مشاور مفید خواهد بود."),
+    (101, "شدید", "این بعد فشار قابل‌توجهی را نشان می‌دهد؛ بررسی آن در جلسه با مشاور توصیه می‌شود."),
+)
+
+
+def _generic_level(percent: int) -> dict:
+    """سطح عمومی بر پایهٔ درصد ۰..۱۰۰"""
+    for cap, label, text in _GENERIC_LEVELS:
+        if percent < cap:
+            return {"label": label, "text": text, "guidance": None}
+    cap, label, text = _GENERIC_LEVELS[-1]
+    return {"label": label, "text": text, "guidance": None}
+
+
 def build_report_payload(
     db: Session,
     test: PsychTest,
@@ -59,7 +79,10 @@ def build_report_payload(
         select(PsychScale).where(PsychScale.test_id == test.id).order_by(PsychScale.sort_order)
     ).all()
     if not scales:
-        return None
+        return _synthesize_from_subscales(
+            questions, answers, total_score=total_score, total_max=total_max,
+            total_label=total_label, total_guidance=total_guidance,
+        )
 
     # نمره و بیشینهٔ هر مقیاس برگ از سؤال‌های هم‌نام با match_names
     # (وجه‌ها هم parent_id دارند؛ مقیاس بعد match_names ندارد — تطابق نام کافی است)
@@ -113,6 +136,74 @@ def build_report_payload(
         best = max(top_with_pct, key=lambda x: x["percent"])
         dominant = {"key": best["key"], "title": best["title"], "percent": best["percent"]}
 
+    return {
+        "version": 1,
+        "total": {
+            "score": total_score,
+            "max": total_max,
+            "label": total_label,
+            "guidance": total_guidance,
+        },
+        "dominant": dominant,
+        "scales": out_scales,
+    }
+
+
+def _synthesize_from_subscales(
+    questions: list[PsychQuestion],
+    answers: list[int],
+    total_score: int,
+    total_max: int,
+    total_label: str | None = None,
+    total_guidance: str | None = None,
+) -> dict | None:
+    """فاز ۶۵ - فالبک سنتز گزارش از زیرمقیاس‌های سؤال‌ها.
+
+    ابزار بدون ردیف PsychScale (مثلاً ابزار دستی ادمین یا بانک پیش از اجرای
+    seed مقیاس‌ها) به‌جای نمای سادهٔ گیج، گزارش چندلایهٔ فاز ۶۳ می‌گیرد:
+    یک مقیاس به‌ازای هر زیرمقیاس + سطح عمومی درصدی. ابزار تک‌بعدی (بدون
+    subscale) همان‌طور که قبلاً None برمی‌گرداند (نمای کلاسیک گیج کافی است).
+    """
+    groups: dict[str, dict] = {}
+    order: list[str] = []
+    for qi, q in enumerate(questions):
+        sub = q.subscale
+        if not sub or qi >= len(answers):
+            continue
+        opts = q.options or []
+        try:
+            got = int(opts[answers[qi]].get("score", 0))
+            top = max(int(o.get("score", 0)) for o in opts)
+        except (IndexError, TypeError, ValueError):
+            continue
+        if sub not in groups:
+            groups[sub] = {"score": 0, "max": 0}
+            order.append(sub)
+        groups[sub]["score"] += got
+        groups[sub]["max"] += top
+    if not order:
+        return None
+    out_scales: list[dict] = []
+    for name in order:
+        g = groups[name]
+        pct = round(g["score"] / g["max"] * 100) if g["max"] else 0
+        out_scales.append({
+            "key": name,
+            "title": name,
+            "description": None,
+            "color": None,
+            # جهت بالینی: نمرهٔ بالاتر = بدتر (ابزارهای دارای subscale در این پلتفرم
+            # عمدتاً نشانه‌محورند؛ مقیاس‌های seed اختصاصی همیشه جایگزین‌اند)
+            "direction": "higher_worse",
+            "score": g["score"], "max": g["max"], "percent": pct,
+            "level": _generic_level(pct),
+            "children": None,
+        })
+    dominant = None
+    top_with_pct = [x for x in out_scales if x["max"] > 0]
+    if len(top_with_pct) >= 3:
+        best = max(top_with_pct, key=lambda x: x["percent"])
+        dominant = {"key": best["key"], "title": best["title"], "percent": best["percent"]}
     return {
         "version": 1,
         "total": {
