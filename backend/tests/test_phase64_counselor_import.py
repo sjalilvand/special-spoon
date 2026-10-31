@@ -241,3 +241,44 @@ def test_otp_login_wrong_code_rejected(client, env):
     code = req.json()["dev_code"]
     r = client.post(f"{API}/auth/otp/verify", json={"mobile": "09121110988", "code": "000000" if code != "000000" else "000001", "purpose": "login"})
     assert r.status_code == 400
+
+
+# ---------------- فاز ۶۶ب: اتخاذ حساب موجود بدون پروندهٔ مشاور ----------------
+
+def test_import_adopts_existing_user_without_counselor_profile(client, env):
+    """بازتولید خطای میدانی ۱.۰.۲۶ در مسیر پنل: حسابی با username=کد ملی از قبل
+    هست ولی پروندهٔ مشاور ندارد؛ ورود اکسل باید حساب را «اتخاذ» کند (پرونده
+    بسازد، رمز را دست نزند) نه اینکه با تضاد ix_users_username خطا بدهد."""
+    from app.core.security import hash_password
+    from app.models.people import Counselor
+    from app.models.user import User, UserStatus
+
+    n1 = _nid("007612391")
+    db = env["db"]
+    db.expire_all()
+    # حساب از قبل (مثلاً دستی ساخته‌شده) بدون هیچ پروندهٔ مشاور
+    u = User(username=n1, display_name="حساب قدیمی", status=UserStatus.ACTIVE,
+             must_change_password=False)
+    u.password_hash = hash_password("old-secret-789")
+    db.add(u)
+    db.commit()
+    uid = u.id
+    old_hash = u.password_hash
+
+    data = _xlsx([_valid_row("007612391", "09121110971", name="حساب قدیمی")])
+    r = client.post(f"{API}/counselors/import", files={"file": ("h.xlsx", data)},
+                    headers=_admin(client))
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["created"] == 1 and out["failed"] == 0, out
+
+    db.expire_all()
+    c = db.query(Counselor).filter(Counselor.national_id == n1).one()
+    assert c.user_id == uid
+    u2 = db.get(User, uid)
+    assert u2.password_hash == old_hash  # رمز حفظ شد
+    assert u2.display_name == "حساب قدیمی"
+    assert u2.status == UserStatus.ACTIVE
+    assert any(r_.code == "COUNSELOR" for r_ in u2.roles)
+    # فقط یک حساب با این username
+    assert db.query(User).filter(User.username == n1).count() == 1

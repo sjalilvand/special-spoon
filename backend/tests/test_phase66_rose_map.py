@@ -43,12 +43,12 @@ def test_seed_counselors_upsert_and_replace(seeded):
     s1, s2 = seeded
     c1 = s1["counselors"]
     c2 = s2["counselors"]
-    # فایل رسمی ۲۱۶ ردیف دارد؛ اجرای اول همه ساخته/به‌روز شده‌اند
-    assert c1["created"] + c1["updated"] == 216
+    # فایل رسمی ۲۱۶ ردیف دارد؛ اجرای اول همه ساخته/به‌روز/اتخاذ شده‌اند
+    assert c1["created"] + c1["updated"] + c1.get("adopted", 0) == 216
     assert c1["skipped"] == 0
     # اجرای دوم: هیچ رکورد جدیدی ساخته نمی‌شود (idempotent)
-    assert c2["created"] == 0
-    assert c2["created"] + c2["updated"] == 216
+    assert c2["created"] == 0 and c2.get("adopted", 0) == 0
+    assert c2["created"] + c2["updated"] + c2.get("adopted", 0) == 216
 
 
 def test_replacement_deactivates_missing_counselor(seeded):
@@ -121,4 +121,168 @@ def test_new_counselor_can_login_with_mobile_password(client, seeded):
         assert u.status == UserStatus.ACTIVE
         assert any(r.code == "COUNSELOR" for r in u.roles)
     finally:
+        db.close()
+
+
+# ---------------- فاز ۶۶ب: مقاوم‌سازی seed (خطای میدانی استقرار ۱.۰.۲۶) ----------------
+#
+# خطای میدانی: در پایگاه عملیاتی حسابی با username=کد ملی از قبل بود ولی
+# «پروندهٔ مشاور» نداشت؛ seed به‌جای اتخاذ حساب، INSERT می‌زد و با
+# «duplicate key ix_users_username» کل اجرا (از جمله کلینیک‌ها) رول‌بک می‌شد.
+
+
+def _use_roster(monkeypatch, tmp_path, rows):
+    """فهرست موقت برای seed — بدون دست‌زدن به فایل واقعی مخزن."""
+    import json as _json
+    import seed_rose_data as _srd
+    f = tmp_path / "counselors.json"
+    f.write_text(_json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(_srd, "COUNSELORS_FILE", f)
+    return f
+
+
+def _cleanup_counselor(db, nid: str) -> None:
+    """حذف ردیف‌های آزمایشی (با هر قالب کد ملی) + بازگرداندن فهرست واقعی."""
+    import seed_rose_data as _srd
+    from sqlalchemy import select as _sel, or_ as _or
+    try:
+        u = db.scalars(_sel(User).where(User.username == nid)).first()
+        cond = [Counselor.national_id == nid]
+        if u is not None:
+            cond.append(Counselor.user_id == u.id)
+        for c in db.scalars(_sel(Counselor).where(_or(*cond))).all():
+            db.delete(c)
+        if u is not None:
+            u.roles.clear()  # پاک‌سازی جدول واسط نقش‌ها
+            db.flush()
+            db.delete(u)
+        db.commit()
+    finally:
+        # فهرست واقعی دوباره اجرا می‌شود تا مشاوران فهرستِ غیرفعال‌شدهٔ آزمون
+        # فعال شوند (آزمون‌های بعدی و فایل‌های دیگر بی‌تأثیر بمانند)
+        _srd.seed_counselors(db)
+        db.commit()
+
+
+def test_seed_adopts_preexisting_user_without_counselor_profile(monkeypatch, tmp_path):
+    """بازتولید دقیق خطای میدانی: حساب موجود با username=کد ملی و بدون پرونده.
+
+    seed باید حساب را «اتخاذ» کند (پرونده بسازد، رمز را دست نزند)، نه INSERT.
+    """
+    from sqlalchemy import select
+    from app.core.security import hash_password
+    import seed_rose_data as _srd
+
+    nid = "1699999991"
+    db = SessionLocal()
+    try:
+        _cleanup_counselor(db, nid)  # اجرای مجدد احتمالی
+        u = User(username=nid, display_name="حساب بدون پرونده", status=UserStatus.ACTIVE,
+                 must_change_password=False)
+        u.password_hash = hash_password("orig-secret-123")
+        db.add(u)
+        db.commit()
+        uid = u.id
+        old_hash = u.password_hash
+
+        _use_roster(monkeypatch, tmp_path, [
+            {"province_code": "08", "full_name": "حساب بدون پرونده",
+             "national_id": nid, "mobile": "09120000000"},
+        ])
+        stats = _srd.seed_counselors(db)
+        db.commit()
+
+        assert stats["adopted"] == 1, stats
+        assert stats["created"] == 0
+        assert any(nid in n for n in stats["notices"])
+        c = db.scalars(select(Counselor).where(Counselor.national_id == nid)).first()
+        assert c is not None and c.user_id == uid
+        assert c.status == "active"
+        db.refresh(u)
+        assert u.password_hash == old_hash  # رمز حساب موجود دست نخورد
+        assert u.display_name == "حساب بدون پرونده" or u.display_name
+        assert u.status == UserStatus.ACTIVE
+        assert any(r.code == "COUNSELOR" for r in u.roles)
+        # فقط یک حساب با این username باشد (INSERT تکراری رخ نداده)
+        assert db.scalars(select(User).where(User.username == nid)).all().__len__() == 1
+    finally:
+        _cleanup_counselor(db, nid)
+        db.close()
+
+
+def test_seed_survives_bad_row_and_continues(monkeypatch, tmp_path):
+    """سیوپوینتِ هر ردیف: خطای یک ردیف (کد ملی بلندتر از ستون ۲۰ نویسه‌ای)
+    بقیهٔ ردیف‌ها را نمی‌کشد — فقط رد می‌شود و هشدار می‌گذارد."""
+    from sqlalchemy import select
+    import seed_rose_data as _srd
+
+    good_nid = "1699999992"
+    bad_nid = "1" * 25  # Counselor.national_id = String(20) → خطای پایگاه
+    db = SessionLocal()
+    try:
+        _cleanup_counselor(db, good_nid)
+        _use_roster(monkeypatch, tmp_path, [
+            {"province_code": "08", "full_name": "ردیف خراب", "national_id": bad_nid,
+             "mobile": "09120000001"},
+            {"province_code": "08", "full_name": "ردیف سالم", "national_id": good_nid,
+             "mobile": "09120000002"},
+        ])
+        stats = _srd.seed_counselors(db)
+        db.commit()
+
+        assert stats["created"] == 1, stats
+        assert stats["skipped"] == 1, stats
+        assert any(bad_nid in w for w in stats["warnings"])
+        # ردیف سالم درج شده؛ حساب ردیف خراب هم رول‌بک شده (اثری نمانده)
+        c = db.scalars(select(Counselor).where(Counselor.national_id == good_nid)).first()
+        assert c is not None
+        assert db.scalars(select(User).where(User.username == bad_nid)).first() is None
+    finally:
+        _cleanup_counselor(db, good_nid)
+        db.close()
+
+
+def test_seed_canonicalizes_drifted_nid_profile(monkeypatch, tmp_path):
+    """پروندهٔ مشاورِ وصل به حساب با کد ملیِ بدقالب (ارقام فارسی):
+        همان پرونده به‌روز می‌شود و کد ملی‌اش كانونی می‌شود؛ رکورد تکراری
+        و خطای user_id یکتا ساخته نمی‌شود."""
+    from sqlalchemy import select
+    from app.core.security import hash_password
+    import seed_rose_data as _srd
+
+    nid = "1699999993"
+    drifted = "۱۶۹۹۹۹۹۹۳"  # همان عدد با ارقام فارسی
+    db = SessionLocal()
+    try:
+        _cleanup_counselor(db, nid)
+        u = User(username=nid, display_name="بدقالب آزمایشی", status=UserStatus.ACTIVE,
+                 must_change_password=False)
+        u.password_hash = hash_password("keep-me-456")
+        db.add(u)
+        db.flush()
+        c = Counselor(counselor_code=f"C-{nid}", first_name="بدقالب", last_name="آزمایشی",
+                      national_id=drifted, status="active", user_id=u.id)
+        db.add(c)
+        db.commit()
+        uid = u.id
+        old_hash = u.password_hash
+
+        _use_roster(monkeypatch, tmp_path, [
+            {"province_code": "08", "full_name": "بدقالب آزمایشی",
+             "national_id": nid, "mobile": "09120000003"},
+        ])
+        stats = _srd.seed_counselors(db)
+        db.commit()
+
+        # پرونده از قبل به حساب وصل بود → مسیر «به‌روزرسانی» با كانونی‌سازی کد ملی
+        assert stats["updated"] == 1, stats
+        assert stats["adopted"] == 0 and stats["created"] == 0
+        rows = db.scalars(select(Counselor).where(Counselor.user_id == uid)).all()
+        assert len(rows) == 1  # رکورد تکراری ساخته نشد (یکتای user_id)
+        assert rows[0].national_id == nid  # كانونی شد
+        assert rows[0].status == "active"  # در فهرست است → غیرفعال نشده
+        db.refresh(u)
+        assert u.password_hash == old_hash
+    finally:
+        _cleanup_counselor(db, nid)
         db.close()

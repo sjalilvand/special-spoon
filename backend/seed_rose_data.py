@@ -8,12 +8,24 @@
 
 قواعد:
 - کلینیک: یک Clinic با slug=rose + یک Branch منتشرشده به‌ازای هر استان
-  (کلید: province_code) — اجرای مجدد فقط به‌روزرسانی می‌کند؛
-- مشاوران: upsert بر پایهٔ کد ملی؛ حساب کاربری هر مشاور جدید:
-  نام کاربری = کد ملی، رمز عبور اولیه = شماره تماس (در نبود آن، کد ملی)،
-  نقش = مشاور، وضعیت = فعال؛ هر مشاور به شعبهٔ استان خود وصل می‌شود؛
+  (کلید: province_code) — اجرای مجدد فقط به‌روزرسانی می‌کند و «قبل از» مشاوران
+  در تراکنش جداگانه کامیت می‌شود تا نقشهٔ سایت حتی در خطای بخش مشاوران هم
+  به‌روز بماند؛
+- مشاوران: upsert بر پایهٔ کد ملی (نرمال‌سازی ارقام فارسی/عربی)؛
+  حساب کاربری هر مشاور جدید: نام کاربری = کد ملی، رمز عبور اولیه = شماره تماس
+  (در نبود آن، کد ملی)، نقش = مشاور، وضعیت = فعال؛ هر مشاور به شعبهٔ استان
+  خود وصل می‌شود؛
+- پذیرش حساب موجود (فاز ۶۶ب — رفع خطای میدانی ۱.۰.۲۶): اگر کاربری با
+  username = کد ملی از قبل موجود باشد ولی «پروندهٔ مشاور» نداشته باشد، به‌جای
+  INSERT (که با ix_users_username تضاد می‌گیرد) همان حساب «اتخاذ» می‌شود:
+  پروندهٔ مشاور به آن وصل می‌گردد، نام/موبایل/نقش/وضعیت به‌روز می‌شود ولی
+  «رمز عبور دست نمی‌خورد»؛ اگر پروندهٔ مشاور همان حساب با کد ملیِ بدقالب
+  (ارقام فارسی و…) موجود باشد، همان پرونده به‌روز و کد ملی‌اش كانونی می‌شود؛
 - جایگزینی فهرست: مشاوران فعالِ خارج از فهرست فعلی غیرفعال و حسابشان
-  غیرفعال می‌شود (حذف فیزیکی نمی‌شوند)؛
+  غیرفعال می‌شود (حذف فیزیکی نمی‌شوند)؛ مقایسه با نرمال‌سازی ارقام در پایتون
+  انجام می‌شود تا کد ملی‌های بدقالب در پایگاه به‌اشتباه غیرفعال نشوند؛
+- هر ردیف در «سیوپوینت» جدا اجرا می‌شود؛ خطای یک ردیف بقیهٔ ۲۱۵ ردیف را
+  نمی‌کشد و فقط هشدار می‌گذارد؛
 - برخلاف ورود اکسل پنل، این seed «رسمی و بخشنده» است: کد ملی با رقم کنترل
   نامعتبر یا موبایل ناموجود (ستاره در فایل) رد نمی‌شود؛ فقط هشدار چاپ
   می‌کند (فهرست رسمی شرکت است).
@@ -24,7 +36,9 @@ import sys
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.dates import normalize_digits
 from app.core.security import hash_password
 from app.models.branch import Branch, BranchStatus, Clinic
 from app.models.location import IRAN_PROVINCE_SEED, Province
@@ -43,6 +57,13 @@ COUNSELORS_FILE = SEED_DIR / "counselors.json"
 
 ROSE_CLINIC_SLUG = "rose"
 ROSE_CLINIC_NAME = "شرکت مشاوره رز"
+
+MAX_WARNINGS_PRINTED = 20
+
+
+def _norm_nid(value) -> str:
+    """کد ملی كانونی: ارقام فارسی/عربی→انگلیسی، حذف فاصله‌ها و نویسه‌های میانی."""
+    return normalize_digits(str(value or "")).replace(" ", "").replace("\u200c", "").strip()
 
 
 def _ensure_provinces(db) -> dict[str, Province]:
@@ -114,6 +135,154 @@ def seed_clinics(db) -> int:
     return count
 
 
+def _find_counselor_by_nid(db, nid: str) -> Counselor | None:
+    return db.scalars(select(Counselor).where(Counselor.national_id == nid)).first()
+
+
+def _find_user_by_username(db, username: str) -> User | None:
+    return db.scalars(select(User).where(User.username == username)).first()
+
+
+def _ensure_counselor_role(db, u: User, counselor_role: Role | None) -> None:
+    if counselor_role is not None and all(r.code != counselor_role.code for r in u.roles):
+        u.roles.append(counselor_role)
+
+
+def _adopt_or_attach_user(db, u_pre: User | None, nid: str, full_name: str, mobile: str | None,
+                          password_src: str, counselor_role: Role | None) -> tuple[User, bool]:
+    """حساب کاربری ردیف را برمی‌گرداند؛ خروجی دوم = «اتخاذ حساب موجود» است.
+
+    - اگر حسابی با username=کد ملی موجود باشد همان اتخاذ می‌شود (رمزش دست
+      نمی‌خورد) — ریشهٔ خطای میدانی «duplicate key ix_users_username»؛
+    - وگرنه حساب جدید با رمز اولیه ساخته می‌شود.
+    """
+    if u_pre is not None:
+        u_pre.display_name = full_name
+        if mobile and is_valid_mobile(mobile):
+            u_pre.mobile = mobile
+        if u_pre.status != UserStatus.ACTIVE:
+            u_pre.status = UserStatus.ACTIVE
+        _ensure_counselor_role(db, u_pre, counselor_role)
+        return u_pre, True
+    u = User(
+        username=nid,
+        display_name=full_name,
+        status=UserStatus.ACTIVE,
+        must_change_password=False,
+        mobile=mobile or None,
+    )
+    u.password_hash = hash_password(password_src)
+    _ensure_counselor_role(db, u, counselor_role)
+    db.add(u)
+    db.flush()
+    return u, False
+
+
+def _process_counselor_row(db, doc: dict, branch_by_code: dict, counselor_role: Role | None,
+                           stats: dict) -> str:
+    """یک ردیف فهرست را پردازش می‌کند؛ خروجی = نام کامل ردیف.
+
+    خطاها به فراخوان پرتاب می‌شوند تا در سیوپوینتِ همان ردیف رول‌بک شوند.
+    """
+    nid = _norm_nid(doc.get("national_id"))
+    full_name = (doc.get("full_name") or "").strip()
+    if not nid or not full_name:
+        stats["skipped"] += 1
+        stats["warnings"].append(f"ردیف بدون کد ملی/نام: {doc}")
+        return ""
+
+    mobile = normalize_mobile(doc.get("mobile") or "")
+    if doc.get("mobile") and not is_valid_mobile(mobile):
+        stats["warnings"].append(f"موبایل نامعتبر برای {full_name} ({nid}): {doc.get('mobile')} — ذخیره شد")
+        mobile = (doc.get("mobile") or "").strip()
+    if not mobile:
+        stats["warnings"].append(f"بدون موبایل: {full_name} ({nid}) — رمز اولیه = کد ملی")
+    password_src = mobile or nid
+
+    branch = branch_by_code.get(doc.get("province_code"))
+    first_name, _, last_name = full_name.partition(" ")
+    if not last_name:
+        last_name = first_name
+
+    # ۱) پروندهٔ مشاور با کد ملی كانونی
+    c = _find_counselor_by_nid(db, nid)
+    u_pre = _find_user_by_username(db, nid)
+
+    if c is None and u_pre is not None:
+        # ۲) پروندهٔ همان حساب با کد ملیِ بدقالب (ارقام فارسی و…)
+        c = db.scalars(select(Counselor).where(Counselor.user_id == u_pre.id)).first()
+
+    outcome: str | None = None  # created / adopted / updated — فقط بعد از flush موفق
+    if c is None:
+        # ۳) رکورد کاملاً جدید (یا اتخاذ حساب بی‌پرونده)
+        counselor_code = f"C-{nid}"
+        if db.scalar(select(Counselor.id).where(Counselor.counselor_code == counselor_code)):
+            stats["skipped"] += 1
+            stats["warnings"].append(f"کد مشاور {counselor_code} تکراری است — رد شد: {full_name}")
+            return ""
+        u, was_adopted = _adopt_or_attach_user(
+            db, u_pre, nid, full_name, mobile or None, password_src, counselor_role,
+        )
+        c = Counselor(
+            counselor_code=counselor_code,
+            first_name=first_name,
+            last_name=last_name,
+            national_id=nid,
+            status="active",
+            user_id=u.id,
+        )
+        db.add(c)
+        db.flush()
+        outcome = "adopted" if was_adopted else "created"
+        if was_adopted:
+            stats["notices"].append(
+                f"حساب موجود {nid} ({full_name}) اتخاذ شد — پروندهٔ مشاور ساخته شد؛ رمز قبلی حفظ شد"
+            )
+    else:
+        # ۴) پروندهٔ موجود: حسابش را تضمین کن (user_id خالی/یتیم هم هندل می‌شود)
+        u = db.get(User, c.user_id) if c.user_id else None
+        if u is None:
+            u, was_adopted = _adopt_or_attach_user(
+                db, u_pre, nid, full_name, mobile or None, password_src, counselor_role,
+            )
+            c.user_id = u.id
+            outcome = "adopted" if was_adopted else "created"
+            if was_adopted:
+                stats["notices"].append(
+                    f"حساب موجود {nid} ({full_name}) به پروندهٔ مشاور وصل شد؛ رمز قبلی حفظ شد"
+                )
+        else:
+            u.display_name = full_name
+            if mobile and is_valid_mobile(mobile):
+                u.mobile = mobile
+            if u.status != UserStatus.ACTIVE:
+                u.status = UserStatus.ACTIVE
+            _ensure_counselor_role(db, u, counselor_role)
+            outcome = "updated"
+        # کد ملی بدقالب در پایگاه كانونی می‌شود (مقایسهٔ جایگزینی هم درست می‌شود)
+        if c.national_id != nid:
+            c.national_id = nid
+
+    # جایگزینی کامل فیلدها با نسخهٔ رسمی جدید (semantics: جایگزین)
+    c.first_name = first_name
+    c.last_name = last_name
+    c.degree = doc.get("degree")
+    c.license_number = doc.get("license_number")
+    c.professional_rank = doc.get("professional_rank")
+    c.contract_number = doc.get("contract_number")
+    c.detailed_code = doc.get("detailed_code")
+    c.province_code = doc.get("province_code")
+    c.work_mobile = mobile or None
+    c.branch_id = branch.id if branch is not None else None
+    if c.status != "active":
+        c.status = "active"
+    db.flush()
+    # شمارش فقط بعد از flush موفق — ردیفِ خطاخورده در آمار «ساخته/به‌روز» نمی‌رود
+    if outcome is not None:
+        stats[outcome] += 1
+    return full_name
+
+
 def seed_counselors(db) -> dict:
     docs = json.loads(COUNSELORS_FILE.read_text(encoding="utf-8"))
     counselor_role = db.get(Role, "COUNSELOR")
@@ -122,110 +291,53 @@ def seed_counselors(db) -> dict:
         for b in db.scalars(select(Branch).where(Branch.province_code.isnot(None))).all()
     }
 
-    created = updated = skipped = 0
-    warnings: list[str] = []
+    stats = {
+        "created": 0,
+        "updated": 0,
+        "adopted": 0,
+        "skipped": 0,
+        "deactivated": [],
+        "warnings": [],
+        "notices": [],
+    }
     listed_nids: set[str] = set()
 
     for doc in docs:
-        nid = (doc.get("national_id") or "").strip()
-        full_name = (doc.get("full_name") or "").strip()
-        if not nid or not full_name:
-            skipped += 1
-            warnings.append(f"ردیف بدون کد ملی/نام: {doc}")
-            continue
-        listed_nids.add(nid)
+        nid = _norm_nid(doc.get("national_id"))
+        if nid:
+            # حتی اگر پردازش ردیف خطا بخورد، این شخص «در فهرست» است و نباید
+            # غیرفعال شود (فقط هشدار می‌گیرد)
+            listed_nids.add(nid)
+        # فاز ۶۶ب: سیوپوینت هر ردیف — خطای یک ردیف کل اجرا را نمی‌کشد
+        try:
+            with db.begin_nested():
+                _process_counselor_row(db, doc, branch_by_code, counselor_role, stats)
+        except SQLAlchemyError as exc:
+            stats["skipped"] += 1
+            name = (doc.get("full_name") or "?").strip()
+            stats["warnings"].append(f"ردیف {name} ({nid or '?'}) درج نشد: {exc.__class__.__name__}")
+        except Exception as exc:  # noqa: BLE001 — بخشندگی: هر خطای ردیفی فقط هشدار
+            stats["skipped"] += 1
+            name = (doc.get("full_name") or "?").strip()
+            stats["warnings"].append(f"ردیف {name} ({nid or '?'}) خطای غیرمنتظره: {exc}")
 
-        mobile = normalize_mobile(doc.get("mobile") or "")
-        if doc.get("mobile") and not is_valid_mobile(mobile):
-            warnings.append(f"موبایل نامعتبر برای {full_name} ({nid}): {doc.get('mobile')} — ذخیره شد")
-            mobile = (doc.get("mobile") or "").strip()
-        if not mobile:
-            warnings.append(f"بدون موبایل: {full_name} ({nid}) — رمز اولیه = کد ملی")
-        password_src = mobile or nid
-
-        branch = branch_by_code.get(doc.get("province_code"))
-        first_name, _, last_name = full_name.partition(" ")
-        if not last_name:
-            last_name = first_name
-
-        c = db.scalars(select(Counselor).where(Counselor.national_id == nid)).first()
-        if c is None:
-            counselor_code = f"C-{nid}"
-            if db.scalar(select(Counselor.id).where(Counselor.counselor_code == counselor_code)):
-                skipped += 1
-                warnings.append(f"کد مشاور {counselor_code} تکراری است — رد شد: {full_name}")
-                continue
-            u = User(
-                username=nid,
-                display_name=full_name,
-                status=UserStatus.ACTIVE,
-                must_change_password=False,
-                mobile=mobile or None,
-            )
-            u.password_hash = hash_password(password_src)
-            if counselor_role is not None:
-                u.roles.append(counselor_role)
-            db.add(u)
-            db.flush()
-            c = Counselor(
-                counselor_code=counselor_code,
-                first_name=first_name,
-                last_name=last_name,
-                national_id=nid,
-                status="active",
-                user_id=u.id,
-            )
-            db.add(c)
-            created += 1
-        else:
-            updated += 1
-            if c.user_id:
-                u = db.get(User, c.user_id)
-                if u is not None:
-                    u.display_name = full_name
-                    u.mobile = mobile or u.mobile
-                    if u.status != UserStatus.ACTIVE:
-                        u.status = UserStatus.ACTIVE
-
-        # جایگزینی کامل فیلدها با نسخهٔ رسمی جدید (semantics: جایگزین)
-        c.first_name = first_name
-        c.last_name = last_name
-        c.degree = doc.get("degree")
-        c.license_number = doc.get("license_number")
-        c.professional_rank = doc.get("professional_rank")
-        c.contract_number = doc.get("contract_number")
-        c.detailed_code = doc.get("detailed_code")
-        c.province_code = doc.get("province_code")
-        c.work_mobile = mobile or None
-        c.branch_id = branch.id if branch is not None else None
-        if c.status != "active":
-            c.status = "active"
-        db.flush()
-
-    # جایگزینی فهرست: مشاوران فعالِ خارج از فهرست جدید غیرفعال می‌شوند
-    deactivated: list[str] = []
-    others = db.scalars(
-        select(Counselor).where(
-            Counselor.status == "active",
-            Counselor.national_id.notin_(listed_nids) if listed_nids else True,
-        )
-    ).all()
+    # جایگزینی فهرست: مشاوران فعالِ خارج از فهرست جدید غیرفعال می‌شوند.
+    # مقایسه در پایتون با نرمال‌سازی ارقام — کد ملی بدقالب در پایگاه باعث
+    # غیرفعال‌سازی اشتباه نمی‌شود؛ ردیف بدون کد ملی دست‌نخورده می‌ماند.
+    others = db.scalars(select(Counselor).where(Counselor.status == "active")).all()
     for c in others:
+        cnid = _norm_nid(c.national_id)
+        if not cnid or cnid in listed_nids:
+            continue
         c.status = "inactive"
-        deactivated.append(f"{c.first_name} {c.last_name}".strip())
+        stats["deactivated"].append(f"{c.first_name} {c.last_name}".strip())
         if c.user_id:
             u = db.get(User, c.user_id)
             if u is not None:
                 u.status = UserStatus.DISABLED
 
     db.flush()
-    return {
-        "created": created,
-        "updated": updated,
-        "skipped": skipped,
-        "deactivated": deactivated,
-        "warnings": warnings,
-    }
+    return stats
 
 
 def main() -> int:
@@ -234,16 +346,25 @@ def main() -> int:
         return 1
     db = SessionLocal()
     try:
+        # فاز ۶۶ب: کلینیک‌ها در تراکنش جداگانه و «قبل از» مشاوران کامیت می‌شوند
+        # تا نقشهٔ سایت حتی در خطای بخش مشاوران هم به‌روز بماند
         n_clinics = seed_clinics(db)
-        stats = seed_counselors(db)
         db.commit()
         print(f"[OK] کلینیک‌ها: {n_clinics} شعبهٔ استانی به‌روز شد")
+
+        stats = seed_counselors(db)
+        db.commit()
         print(f"[OK] مشاوران: {stats['created']} جدید، {stats['updated']} به‌روز، "
-              f"{stats['skipped']} ردشده، {len(stats['deactivated'])} غیرفعال")
-        for w in stats["warnings"][:20]:
+              f"{stats['adopted']} اتخاذحساب‌شده، {stats['skipped']} ردشده، "
+              f"{len(stats['deactivated'])} غیرفعال")
+        for n in stats["notices"][:MAX_WARNINGS_PRINTED]:
+            print(f"  [اتخاذ] {n}")
+        for w in stats["warnings"][:MAX_WARNINGS_PRINTED]:
             print(f"  [هشدار] {w}")
+        if len(stats["warnings"]) > MAX_WARNINGS_PRINTED:
+            print(f"  … و {len(stats['warnings']) - MAX_WARNINGS_PRINTED} هشدار دیگر")
         if stats["deactivated"]:
-            print("  غیرفعال‌شده‌ها: " + "، ".join(stats["deactivated"][:20]))
+            print("  غیرفعال‌شده‌ها: " + "، ".join(stats["deactivated"][:MAX_WARNINGS_PRINTED]))
         return 0
     except Exception:
         db.rollback()

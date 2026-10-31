@@ -328,23 +328,47 @@ def validate_and_upsert(db: Session, rows: list[dict], actor, upload_name: str |
         detailed_code = v.get("کد تفضیلی شخص")
 
         c = db.scalar(select(Counselor).where(Counselor.national_id == nid))
+        adopted_user: User | None = None
+        if c is None:
+            # فاز ۶۶ب: اگر «حسابی» با username = کد ملی موجود باشد ولی پروندهٔ
+            # مشاور نداشته باشد، INSERT جدید با ix_users_username تضاد می‌گیرد
+            # (خطای میدانی استقرار ۱.۰.۲۶). حساب موجود «اتخاذ» می‌شود: پروندهٔ
+            # مشاور به آن وصل می‌گردد و رمزش دست نمی‌خورد. اگر پروندهٔ همان
+            # حساب با کد ملیِ بدقالب (ارقام فارسی و…) موجود باشد، همان
+            # به‌روز می‌شود و کد ملی‌اش كانونی می‌شود.
+            u_pre = db.scalar(select(User).where(User.username == nid))
+            if u_pre is not None:
+                c = db.scalar(select(Counselor).where(Counselor.user_id == u_pre.id))
+                if c is not None:
+                    c.national_id = nid
+                adopted_user = u_pre
         if c is None:
             counselor_code = f"C-{nid}"
             if db.scalar(select(Counselor).where(Counselor.counselor_code == counselor_code)):
                 failed += 1
                 errors.append({"row": r, "message": f"کد مشاور «{counselor_code}» قبلاً برای شخص دیگری ثبت شده است"})
                 continue
-            u = User(
-                username=nid,
-                display_name=full_name,
-                status=UserStatus.ACTIVE,
-                must_change_password=False,
-                mobile=mobile,
-            )
-            u.password_hash = hash_password(mobile)
-            u.roles.append(counselor_role)
-            db.add(u)
-            db.flush()
+            if adopted_user is not None:
+                u = adopted_user
+                u.display_name = full_name
+                u.mobile = mobile
+                if u.status != UserStatus.ACTIVE:
+                    u.status = UserStatus.ACTIVE
+                if counselor_role is not None and all(rr.code != counselor_role.code for rr in u.roles):
+                    u.roles.append(counselor_role)
+                # گذرواژهٔ حساب موجود عمداً حفظ می‌شود (حساب از قبل بوده است)
+            else:
+                u = User(
+                    username=nid,
+                    display_name=full_name,
+                    status=UserStatus.ACTIVE,
+                    must_change_password=False,
+                    mobile=mobile,
+                )
+                u.password_hash = hash_password(mobile)
+                u.roles.append(counselor_role)
+                db.add(u)
+                db.flush()
             c = Counselor(
                 counselor_code=counselor_code,
                 first_name=first_name,
