@@ -4,7 +4,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { errDetail } from "../api/client";
 import {
@@ -45,6 +45,19 @@ export default function BranchesPage() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const clinics = useQuery({ queryKey: ["clinics"], queryFn: fetchClinics });
+
+  // فاز ۶۶د: تا وقتی مرکزی انتخاب نشده، جدول عمداً خالی است (فاز ۵۱) — اما
+  // گزارش میدانی: کاربر فکر می‌کرد «هیچ کلینیکی لود نمی‌شود». حالا به‌محض
+  // بارگذاری فهرست، اولین مرکز (ترتیب نام سرور) خودکار انتخاب می‌شود تا
+  // فهرست شعب بی‌درنگ دیده شود؛ انتخاب دستی همچنان آزاد است (فقط یک‌بار،
+  // با useRef، تا «همه / انتخاب کنید» دستی کاربر دوباره override نشود).
+  const autoPicked = useRef(false);
+  useEffect(() => {
+    if (!autoPicked.current && !selectedClinic && (clinics.data?.length ?? 0) > 0) {
+      autoPicked.current = true;
+      setSelectedClinic(clinics.data![0].id);
+    }
+  }, [clinics.data, selectedClinic]);
   const branches = useQuery({
     queryKey: ["branches", selectedClinic],
     queryFn: () => fetchBranches(selectedClinic!),
@@ -109,6 +122,11 @@ export default function BranchesPage() {
       </Box>
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+      {clinics.isError && (
+        <Alert severity="error">
+          بارگذاری فهرست مراکز ناموفق بود{errDetail(clinics.error) ? `: ${errDetail(clinics.error)}` : ""}
+        </Alert>
+      )}
       {okMsg && <Alert severity="success" onClose={() => setOkMsg(null)}>{okMsg}</Alert>}
 
       {clinic && (
