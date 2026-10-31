@@ -12,6 +12,13 @@
 سایر نقش‌ها→COUNSELOR). بدون این نگاشت، کاربر SSO نقش محلی ندارد و پنل
 با «دسترسی مجاز نیست» بسته می‌شود.
 
+فاز ۶۵ — انتقال مشخصات کامل: توکن رز هاب علاوه بر email/name/role/nationalId،
+حالا ``mobile``، ``province``، ``provinceCode`` و ``clinic`` را هم حمل می‌کند.
+در هر ورود SSO، حساب کاربر (display_name، mobile) و پروندهٔ مشاور متناظر
+(Counselor) بر اساس کد ملی پیدا یا ساخته و بروزرسانی می‌شود — نام و نام
+خانوادگی، موبایل، استان (کد رسمی از جدول provinces) و کلینک محل خدمت.
+منبع حقیقت این فیلدها رز هاب است؛ خطای همگام‌سازی ورود را نمی‌شکند.
+
 مسیرها:
 - ``GET  /api/v1/auth/rose-sso?sso_token=...`` — جریان مرورگری؛ پس از ورود
   به ``/panel`` ریدایرکت می‌کند (پارامتر توکن از نشانی پاک می‌شود).
@@ -19,6 +26,7 @@
   برنامه‌نویسی‌شده از سمت SPA.
 """
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -38,8 +46,15 @@ from app.core.security import (
     is_https_request,
 )
 from app.db.session import get_db
+from app.models.branch import Branch
+from app.models.location import Province
+from app.models.people import Counselor
 from app.models.user import AuthSession, Role, User, UserStatus
 from app.services.audit import record_audit
+from app.services.counselor_import import (
+    _norm_province_name,
+    normalize_province_code,
+)
 
 router = APIRouter(prefix="/auth", tags=["rose-sso"])
 settings = get_settings()
@@ -141,6 +156,100 @@ def _find_or_create_user(db: Session, claims: dict) -> User:
     return user
 
 
+logger = logging.getLogger(__name__)
+
+
+def _sync_profile_from_rose_hub(db: Session, user: User, claims: dict) -> None:
+    """فاز ۶۵: همگام‌سازی مشخصات کامل کاربر از توکن رز هاب.
+
+    - حساب کاربر: display_name (نام و نام خانوادگی) و mobile (موبایل)؛
+    - پروندهٔ مشاور: بر اساس کد ملی (nationalId) پیدا یا ساخته می‌شود؛
+      بعد از آن نام/نام خانوادگی، موبایل، استان (کد رسمی دو رقمی از جدول
+      provinces — با کد یا نام) و کلینک محل خدمت بروزرسانی می‌شود و
+      پرونده به حساب کاربر متصل می‌گردد؛ در صورت موجود بودن شعبهٔ کلینیک
+      همان استان (فاز ۶۶) و خالی‌بودن branch_id، پرونده به آن شعبه هم
+      متصل می‌شود.
+
+    فیلد خالی در توکن یعنی «مقداری در رز هاب ثبت نشده» — مقدار محلی پاک
+    نمی‌شود تا دادهٔ موجود با ورود بعدی از بین نرود. منبع حقیقت در تعارض،
+    مقدار توکن است.
+    """
+    name = (claims.get("name") or "").strip()
+    mobile = (claims.get("mobile") or "").strip()
+    national_id = (claims.get("nationalId") or "").strip()
+    province = (claims.get("province") or "").strip()
+    province_code_raw = (claims.get("provinceCode") or "").strip()
+    clinic = (claims.get("clinic") or "").strip()
+
+    # ---------- حساب کاربر ----------
+    if name and user.display_name != name[:200]:
+        user.display_name = name[:200]
+    if mobile and user.mobile != mobile[:20]:
+        user.mobile = mobile[:20]
+
+    # ---------- پروندهٔ مشاور: پیدا کردن ----------
+    counselor: Counselor | None = None
+    if national_id:
+        counselor = db.scalar(select(Counselor).where(Counselor.national_id == national_id))
+    if counselor is None:
+        counselor = db.scalar(select(Counselor).where(Counselor.user_id == user.id))
+    if counselor is None and national_id:
+        # پروندهٔ بدون کد ملی که کد مشاورش از همین کد ملی ساخته شده
+        counselor = db.scalar(
+            select(Counselor).where(Counselor.counselor_code == f"C-{national_id}")
+        )
+
+    # ---------- پروندهٔ مشاور: ساختن ----------
+    if counselor is None and national_id:
+        parts = name.split()
+        counselor = Counselor(
+            counselor_code=f"C-{national_id}",
+            first_name=(parts[0] if parts else "کاربر")[:100],
+            last_name=(" ".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "رز هاب"))[:100],
+            national_id=national_id,
+            status="active",
+        )
+        db.add(counselor)
+        db.flush()
+
+    # ---------- پروندهٔ مشاور: بروزرسانی ----------
+    if counselor is not None:
+        if name:
+            parts = name.split()
+            counselor.first_name = parts[0][:100]
+            counselor.last_name = (" ".join(parts[1:]) if len(parts) > 1 else parts[0])[:100]
+        if national_id and not counselor.national_id:
+            counselor.national_id = national_id
+        if mobile:
+            counselor.work_mobile = mobile[:20]
+        if not counselor.email and user.email:
+            counselor.email = user.email
+        if province or province_code_raw:
+            resolved = normalize_province_code(province_code_raw or None)
+            if resolved is None and province:
+                code_by_name = {
+                    _norm_province_name(p.name): p.code
+                    for p in db.scalars(select(Province)).all()
+                }
+                resolved = code_by_name.get(_norm_province_name(province))
+            if resolved:
+                counselor.province_code = resolved
+                # فاز ۶۶: اتصال به شعبهٔ کلینیک همان استان — فقط اگر پرونده هنوز
+                # شعبه‌ای نداشته باشد؛ تخصیص دستی/سید مدیر رز سای بازنویسی نمی‌شود.
+                if counselor.branch_id is None:
+                    branch = db.scalar(
+                        select(Branch).where(Branch.province_code == resolved).limit(1)
+                    )
+                    if branch is not None:
+                        counselor.branch_id = branch.id
+        if clinic:
+            counselor.clinic = clinic[:200]
+        if counselor.user_id is None:
+            counselor.user_id = user.id
+
+    db.commit()
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -184,6 +293,11 @@ def _issue_login(db: Session, raw_token: str, request: Request, response: Respon
     payload = _decode_rose_hub_token(raw_token)
     user = _find_or_create_user(db, payload)
     _ensure_sso_roles(db, user, payload)
+    try:
+        _sync_profile_from_rose_hub(db, user, payload)
+    except Exception:  # noqa: BLE001 — همگام‌سازی پروفایل هرگز ورود را نمی‌شکند
+        db.rollback()
+        logger.exception("rose-hub profile sync failed for user %s", user.id)
     refresh = _open_session(db, user, request)
     record_audit(
         db,

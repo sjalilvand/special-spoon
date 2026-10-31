@@ -13,6 +13,7 @@ from app.models.catalog import (
     CredentialKind,
     CredentialVerificationStatus,
 )
+from app.models.branch import Branch
 from app.models.location import Province
 from app.models.people import Counselor, ServiceLocation
 from app.models.user import Role, User, UserStatus
@@ -37,6 +38,11 @@ def _out(c: Counselor, db: Session) -> dict:
     if c.province_code:
         prov = db.scalar(select(Province).where(Province.code == c.province_code))
         province_name = prov.name if prov else None
+    # فاز ۶۵: کلینک محل خدمت (انتقال از رز هاب) + شعبهٔ متناظر (فاز ۶۶)
+    branch_title = None
+    if c.branch_id:
+        branch = db.get(Branch, c.branch_id)
+        branch_title = branch.name if branch else None
     # فاز ۲۸ - B05: وضعیت صلاحیت برای فهرست قابل رزرو
     bookable = is_counselor_bookable(db, c)
     approved_count = db.scalar(
@@ -69,6 +75,8 @@ def _out(c: Counselor, db: Session) -> dict:
         "service_location_title": loc_title,
         "province_code": c.province_code,
         "province_name": province_name,
+        "clinic": c.clinic,
+        "branch_title": branch_title,
         "professional_rank": c.professional_rank,
         "contract_number": c.contract_number,
         "sheba_number": c.sheba_number,

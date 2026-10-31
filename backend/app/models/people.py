@@ -80,6 +80,8 @@ class Counselor(Base):
     province_code: Mapped[str | None] = mapped_column(
         String(2), ForeignKey("provinces.code", ondelete="SET NULL"), nullable=True
     )
+    # فاز ۶۵: کلینک محل خدمت مشاور — از claim «clinic» توکن ورود یکپارچه رز هاب
+    clinic: Mapped[str | None] = mapped_column(String(200), nullable=True)
     professional_rank: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contract_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sheba_number: Mapped[str | None] = mapped_column(String(34), nullable=True)
