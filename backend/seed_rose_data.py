@@ -26,6 +26,11 @@
   انجام می‌شود تا کد ملی‌های بدقالب در پایگاه به‌اشتباه غیرفعال نشوند؛
 - هر ردیف در «سیوپوینت» جدا اجرا می‌شود؛ خطای یک ردیف بقیهٔ ۲۱۵ ردیف را
   نمی‌کشد و فقط هشدار می‌گذارد؛
+- بازنشستگی شعب دمو (فاز ۶۶ج): شعب نمونهٔ «شعبه <استان>» کلینیک دمو
+  (slug=rosepsy-main، فاز ۴۹) که با انتشار شعب واقعی رز نشانگرِ تکراری و
+  خالی روی نقشهٔ عمومی می‌ساختند — هر شعبهٔ منتشرشدهٔ آن کلینیک در استانی
+  که شعبهٔ واقعی رز دارد و «هیچ مشاور فعالی» ندارد، به draft برمی‌گردد
+  (بدون حذف؛ کاملاً بازگشت‌پذیر از پنل)؛
 - برخلاف ورود اکسل پنل، این seed «رسمی و بخشنده» است: کد ملی با رقم کنترل
   نامعتبر یا موبایل ناموجود (ستاره در فایل) رد نمی‌شود؛ فقط هشدار چاپ
   می‌کند (فهرست رسمی شرکت است).
@@ -35,7 +40,7 @@ import os
 import sys
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.dates import normalize_digits
@@ -92,6 +97,51 @@ def _ensure_clinic(db) -> Clinic:
     return c
 
 
+DEMO_CLINIC_SLUG = "rosepsy-main"  # کلینیک دموی فاز ۴۹ (seed_demo_rich)
+
+
+def retire_superseded_demo_branches(db, rose_clinic: Clinic) -> int:
+    """فاز ۶۶ج — بازنشستگی شعب دموی هم‌استان با شعب واقعی رز.
+
+    seed_demo_rich برای کلینیک دمو (slug=rosepsy-main) در هر استان یک شعبهٔ
+    نمونهٔ «شعبه <استان>» منتشر می‌کند. حالا که ۳۱ شعبهٔ واقعی شرکت رز منتشر
+    شده‌اند، این شعب نمایشی باعث ۶۲ نشانگر روی نقشهٔ عمومی می‌شوند (هر استان
+    یک پین واقعی + یک پین دموی خالی). قاعدهٔ بازنشستگی (همه با هم):
+      ۱) منتشرشده باشد؛
+      ۲) کلینیکِ مالکش دمو باشد (slug=rosepsy-main) — نه هیچ کلینیک دیگری؛
+      ۳) استانش در پوشش شعب واقعی رز باشد؛
+      ۴) هیچ مشاور فعالی به آن متصل نباشد.
+    نتیجه: status=draft (حذف فیزیکی نیست؛ از پنل قابل بازگشت است).
+    """
+    rose_provs = {
+        b.province for b in db.scalars(
+            select(Branch).where(Branch.clinic_id == rose_clinic.id)
+        ).all() if b.province
+    }
+    if not rose_provs:
+        return 0
+    has_active_counselor = exists(
+        select(1).select_from(Counselor).where(
+            Counselor.branch_id == Branch.id, Counselor.status == "active"
+        )
+    )
+    superseded = db.scalars(
+        select(Branch).where(
+            Branch.status == BranchStatus.PUBLISHED,
+            Branch.clinic_id != rose_clinic.id,
+            Branch.province.in_(rose_provs),
+            ~has_active_counselor,
+            Branch.clinic.has(Clinic.slug == DEMO_CLINIC_SLUG),
+        )
+    ).unique().all()
+    for b in superseded:
+        b.status = BranchStatus.DRAFT
+    if superseded:
+        db.flush()
+        print(f"[OK] شعب دموی جایگزین‌شده به draft: {len(superseded)}")
+    return len(superseded)
+
+
 def seed_clinics(db) -> int:
     docs = json.loads(CLINICS_FILE.read_text(encoding="utf-8"))
     provs = _ensure_provinces(db)
@@ -132,6 +182,7 @@ def seed_clinics(db) -> int:
         b.status = BranchStatus.PUBLISHED
         count += 1
     db.flush()
+    retire_superseded_demo_branches(db, clinic)
     return count
 
 

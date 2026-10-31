@@ -286,3 +286,84 @@ def test_seed_canonicalizes_drifted_nid_profile(monkeypatch, tmp_path):
     finally:
         _cleanup_counselor(db, nid)
         db.close()
+
+
+# ---------------- فاز ۶۶ج: بازنشستگی شعب دموی تکراری روی نقشهٔ عمومی ----------------
+#
+# خطای میدانی: بعد از انتشار ۳۱ شعبهٔ واقعی رز، نقشهٔ عمومی ۶۲ نشانگر داشت —
+# هر استان یک پین واقعی + یک پین دموی «شعبه <استان>» (کلینیک rosepsy-main
+# فاز ۴۹) که خالی و گمراه‌کننده بود. seed باید دموهای هم‌استانِ بی‌مشاور را
+# draft کند، اما دموی دارای مشاور فعال و شعب کلینیک‌های دیگر را دست نزند.
+
+def test_superseded_demo_branches_demoted_to_draft(seeded):
+    from sqlalchemy import select
+    from app.models.branch import Branch, BranchStatus, Clinic
+    from seed_rose_data import seed_clinics
+
+    db = SessionLocal()
+    created_branch_ids = []
+    try:
+        rose = db.scalars(select(Clinic).where(Clinic.slug == "rose")).first()
+        assert rose is not None
+        demo = db.scalars(select(Clinic).where(Clinic.slug == "rosepsy-main")).first()
+        if demo is None:
+            demo = Clinic(name="کلینیک رزپسی — مرکز", slug="rosepsy-main", is_active=True)
+            db.add(demo)
+            db.flush()
+        other = db.scalars(select(Clinic).where(Clinic.slug == "other-66c")).first()
+        if other is None:
+            other = Clinic(name="کلینیک دیگر ۶۶ج", slug="other-66c", is_active=True)
+            db.add(other)
+            db.flush()
+
+        # الف) دموی هم‌استان با رز، بدون مشاور فعال → باید draft شود
+        b1 = Branch(clinic_id=demo.id, name="شعبه تهران (آزمایش ۶۶ج)",
+                    province="تهران", city="تهران",
+                    address="آزمایش", status=BranchStatus.PUBLISHED)
+        # ب) دموی هم‌استان اما دارای مشاور فعال → باید منتشر بماند
+        b2 = Branch(clinic_id=demo.id, name="شعبه فارس (آزمایش ۶۶ج)",
+                    province="فارس", city="شیراز",
+                    address="آزمایش", status=BranchStatus.PUBLISHED)
+        # ج) شعبهٔ کلینیک دیگر (نه دمو) → دست‌نخورده
+        b3 = Branch(clinic_id=other.id, name="شعبه اصفهان (آزمایش ۶۶ج)",
+                    province="اصفهان", city="اصفهان",
+                    address="آزمایش", status=BranchStatus.PUBLISHED)
+        db.add_all([b1, b2, b3])
+        db.flush()
+        u = User(username="9999900002", display_name="مشاور دموی نگه‌داشتنی",
+                 status=UserStatus.ACTIVE, must_change_password=False)
+        db.add(u)
+        db.flush()
+        c = Counselor(counselor_code="C-9999900002", first_name="مشاور",
+                      last_name="دموی نگه‌داشتنی", national_id="9999900002",
+                      status="active", user_id=u.id, branch_id=b2.id)
+        db.add(c)
+        db.commit()
+        created_branch_ids = [b1.id, b2.id, b3.id]
+
+        seed_clinics(db)
+        db.commit()
+
+        db.refresh(b1)
+        db.refresh(b2)
+        db.refresh(b3)
+        assert b1.status == BranchStatus.DRAFT      # دموی بی‌مشاور → draft
+        assert b2.status == BranchStatus.PUBLISHED  # دموی دارای مشاور فعال → دست‌نخورده
+        assert b3.status == BranchStatus.PUBLISHED  # کلینیک دیگر → دست‌نخورده
+    finally:
+        # پاک‌سازی (اول وابسته‌ها) تا سایر تست‌ها بی‌تأثیر بمانند
+        c2 = db.scalars(select(Counselor).where(Counselor.national_id == "9999900002")).first()
+        if c2 is not None:
+            db.delete(c2)
+        u2 = db.scalars(select(User).where(User.username == "9999900002")).first()
+        if u2 is not None:
+            db.delete(u2)
+        for bid in created_branch_ids:
+            b = db.get(Branch, bid)
+            if b is not None:
+                db.delete(b)
+        o = db.scalars(select(Clinic).where(Clinic.slug == "other-66c")).first()
+        if o is not None:
+            db.delete(o)
+        db.commit()
+        db.close()
