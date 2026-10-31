@@ -7,6 +7,11 @@
 پیدا یا ساخته شده و نشست عادی سامانه (AuthSession + refresh cookie) برقرار
 می‌شود — یعنی کاربر با همان هویت رز هاب، بدون رمز جداگانه وارد Rosepsy می‌شود.
 
+نقش‌ها: بر اساس نقش کاربر در رز هاب، نقش محلی معادل به‌صورت جمع‌شونده
+اختصاص داده می‌شود (SUPER_ADMIN→SYSTEM_ADMIN، UNIT_MANAGER→ORG_MANAGER،
+سایر نقش‌ها→COUNSELOR). بدون این نگاشت، کاربر SSO نقش محلی ندارد و پنل
+با «دسترسی مجاز نیست» بسته می‌شود.
+
 مسیرها:
 - ``GET  /api/v1/auth/rose-sso?sso_token=...`` — جریان مرورگری؛ پس از ورود
   به ``/panel`` ریدایرکت می‌کند (پارامتر توکن از نشانی پاک می‌شود).
@@ -33,13 +38,54 @@ from app.core.security import (
     is_https_request,
 )
 from app.db.session import get_db
-from app.models.user import AuthSession, User, UserStatus
+from app.models.user import AuthSession, Role, User, UserStatus
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/auth", tags=["rose-sso"])
 settings = get_settings()
 
 REFRESH_COOKIE = "rosepsy_refresh"  # همان کوکی مسیر /api در auth.py
+
+# ---------------------------------------------------------------------------
+# نگاشت نقش رز هاب → نقش‌های محلی رز سای (جمع‌شونده)
+# - کاربرِ ساخته/پیدا‌شده از مسیر SSO اگر نقش محلی نداشته باشد، پنل با
+#   «دسترسی مجاز نیست» بسته می‌شود؛ پس بر اساس نقش تأییدشده در توکن رز هاب،
+#   نقش محلی معادل اختصاص می‌یابد.
+# - نقش‌های دستیِ اضافه‌شده توسط مدیر رز سای حذف نمی‌شوند.
+# - SYSTEM_ADMIN در effective_permissions همیشه دسترسی کامل دارد.
+# ---------------------------------------------------------------------------
+ROSE_HUB_ROLE_MAP = {
+    "SUPER_ADMIN": ["SYSTEM_ADMIN"],
+    "UNIT_MANAGER": ["ORG_MANAGER"],
+    "THERAPIST": ["COUNSELOR"],
+    "STAFF": ["COUNSELOR"],
+    "TEACHER": ["COUNSELOR"],
+    "EXTERNAL": ["COUNSELOR"],
+}
+DEFAULT_SSO_ROLES = ["COUNSELOR"]
+SSO_ROLE_TITLES = {
+    "SYSTEM_ADMIN": "مدیر سامانه",
+    "ORG_MANAGER": "مدیر سازمان",
+    "COUNSELOR": "مشاور",
+}
+
+
+def _ensure_sso_roles(db: Session, user: User, claims: dict) -> None:
+    """اختصاص نقش محلی معادل نقش رز هاب (فقط نقش‌های جاافتاده اضافه می‌شوند)."""
+    rh_role = (claims.get("role") or "").strip().upper()
+    wanted = ROSE_HUB_ROLE_MAP.get(rh_role, DEFAULT_SSO_ROLES)
+    have = {r.code for r in user.roles}
+    missing = [code for code in wanted if code not in have]
+    if not missing:
+        return
+    for code in missing:
+        role = db.get(Role, code)
+        if role is None:
+            role = Role(code=code, title=SSO_ROLE_TITLES.get(code, code))
+            db.add(role)
+            db.flush()
+        user.roles.append(role)
+    db.commit()
 
 
 class RoseSSORequest(BaseModel):
@@ -137,6 +183,7 @@ def _set_refresh_cookie(response: Response, token: str, request: Request) -> Non
 def _issue_login(db: Session, raw_token: str, request: Request, response: Response):
     payload = _decode_rose_hub_token(raw_token)
     user = _find_or_create_user(db, payload)
+    _ensure_sso_roles(db, user, payload)
     refresh = _open_session(db, user, request)
     record_audit(
         db,
