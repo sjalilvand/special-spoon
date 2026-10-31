@@ -4,6 +4,10 @@ export interface PublicCounselor {
   professional_title: string | null;
   specialty: string | null;
   photo_url: string | null;
+  /** فاز ۶۷: استان/شعبهٔ مشاور برای فیلتر فهرست رزرو بر اساس استان */
+  province_code: string | null;
+  province_name: string | null;
+  branch_name: string | null;
 }
 
 export interface SlotDay {
@@ -121,11 +125,12 @@ export async function verifyOtp(mobile: string, code: string): Promise<{ verify_
 // ---------------- فاز ۶۶ - نقشهٔ کلینیک‌های شرکت رز ----------------
 
 export interface MapCounselor {
+  id: string;
   name: string;
   degree: string | null;
-  rank: string | null;
   license: string | null;
-  mobile: string | null;
+  /** فاز ۶۷: موبایل/رتبه از خروجی عمومی حذف شد؛ پرچم واجد شرط رزرو (B05) */
+  bookable: boolean;
 }
 
 export interface MapClinic {

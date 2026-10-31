@@ -78,6 +78,8 @@ function ClinicCard({ c }: { c: MapClinic }) {
       <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
         مشاوران این کلینیک ({faNum(c.counselor_count)})
       </Typography>
+      {/* فاز ۶۷: موبایل و رتبه از نمایش عمومی حذف شد (کسی نباید ببیند)؛
+          برای مشاوران واجد شرط رزرو، دکمهٔ «رزرو نوبت» نمایش داده می‌شود. */}
       {c.counselors.length === 0 ? (
         <Typography variant="body2" color="text.secondary">مشاوری برای این کلینیک ثبت نشده است.</Typography>
       ) : (
@@ -88,15 +90,22 @@ function ClinicCard({ c }: { c: MapClinic }) {
               <Typography variant="body2" fontWeight={700}>{x.name}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 {x.degree && <Chip size="small" label={x.degree} sx={{ bgcolor: "#efe3ee", height: 24 }} />}
-                {x.rank && x.rank !== "*" && <Chip size="small" label={`رتبه: ${x.rank}`} sx={{ bgcolor: "#e8eaf6", height: 24 }} />}
-                {x.mobile && (
-                  <Link href={`tel:${x.mobile}`} sx={{ fontWeight: 600, fontSize: 13, direction: "ltr", unicodeBidi: "isolate" }}>
-                    {x.mobile}
-                  </Link>
+                {x.bookable && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    href={`/booking?counselor=${encodeURIComponent(x.id)}`}
+                    sx={{ height: 26, minWidth: 0, px: 1.2, fontSize: 12, whiteSpace: "nowrap" }}
+                  >
+                    رزرو نوبت
+                  </Button>
                 )}
               </Stack>
             </Stack>
           ))}
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+            دکمهٔ «رزرو نوبت» فقط برای مشاوران دارای مجوز معتبر فعال است؛ برای هماهنگی با سایر مشاوران با خود کلینیک تماس بگیرید.
+          </Typography>
         </Stack>
       )}
     </Paper>

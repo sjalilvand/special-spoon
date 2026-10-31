@@ -124,6 +124,90 @@ def test_new_counselor_can_login_with_mobile_password(client, seeded):
         db.close()
 
 
+# ---------------- فاز ۶۷: حذف موبایل/رتبه از خروجی عمومی + رزرو از کارت کلینیک ----------------
+#
+# درخواست کاربر: «شماره موبایل و رتبه مشاورین را بردار و کسی نبینه» +
+# «امکان رزرو نوبت از روی مشاورین در [کارت] کلینیک» + «لیست رزرو براساس
+# انتخاب استان و اسامی مشاورین واقعی به‌جای قبلی‌ها».
+
+def test_clinics_map_hides_mobile_and_rank_and_flags_bookable(client, seeded):
+    """موبایل و رتبه هرگز در خروجی عمومی نمی‌آیند؛ bookable طبق B05 محاسبه می‌شود."""
+    r = client.get("/api/v1/public/clinics-map")
+    assert r.status_code == 200, r.text
+    rose = [x for x in r.json()["items"] if x["clinic_name"] == "شرکت مشاوره رز"]
+    assert rose
+    entries = [c for x in rose for c in x["counselors"]]
+    assert entries
+    for c in entries:
+        assert "mobile" not in c and "rank" not in c
+        assert isinstance(c["bookable"], bool)
+        assert c["id"]  # شناسه برای دکمهٔ «رزرو نوبت» در کارت کلینیک
+    # مشاور فهرست رسمی با «دارد» → license_verified → قابل رزرو (تهران حتماً دارد)
+    tehran = next(x for x in rose if x["province_code"] == "08")
+    assert any(c["bookable"] for c in tehran["counselors"])
+
+
+def test_public_counselors_expose_province_for_booking_filter(client, seeded):
+    """فهرست عمومی رزرو: استان هر مشاور برای فیلتر استان + فقط اسامی واقعی رز."""
+    r = client.get("/api/v1/public/counselors")
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert items
+    for c in items:
+        assert "mobile" not in c and "rank" not in c
+    # مشاور واقعی فهرست رسمی حتماً استان/شعبه دارد (اردبیل — پری ملکی گلندوز)
+    pari = next(c for c in items if "ملکی گلندوز" in c["name"])
+    assert pari["province_name"] == "اردبیل"
+    assert pari["province_code"] == "03"
+    # مشاوران خارج از فهرست رسمی (مثلاً ردیف‌های آزمونی/قدیمی بدون شعبه)
+    # مجازند province=None بیایند — در UI فقط زیر «همهٔ استان‌ها» دیده می‌شوند.
+    # تنوع استان برای فیلتر: بیش از یک استان میان مشاوران دارای استان هست
+    assert len({c["province_code"] for c in items if c["province_code"]}) > 1
+
+
+def test_seed_deactivates_demo_range_counselors(seeded):
+    """فاز ۶۷: مشاور نمونهٔ دمو (کد C-10xx، بدون کد ملی) غیرفعال و حسابش
+    disabled می‌شود؛ اما مشاور آزمونی خارج از بازهٔ دمو (کد دلخواه، بدون
+    کد ملی) دست‌نخورده می‌ماند."""
+    from sqlalchemy import select
+    from app.models.people import Counselor
+    from app.models.user import User, UserStatus
+    db = SessionLocal()
+    try:
+        u = User(username="9999900003", display_name="دمو نگه‌داشتنی",
+                 status=UserStatus.ACTIVE, must_change_password=False)
+        db.add(u)
+        db.flush()
+        demo = Counselor(counselor_code="C-1002", first_name="رضا", last_name="احمدی",
+                         status="active", user_id=None)
+        keeper = Counselor(counselor_code="TC-Z", first_name="آزمون", last_name="خارج دمو",
+                           status="active", user_id=u.id)
+        db.add_all([demo, keeper])
+        db.commit()
+
+        seed_counselors(db)
+        db.commit()
+
+        db.refresh(demo)
+        db.refresh(keeper)
+        assert demo.status == "inactive"          # دموی C-10xx → غیرفعال
+        assert keeper.status == "active"          # خارج از بازهٔ دمو → دست‌نخورده
+        db.refresh(u)
+        assert u.status == UserStatus.ACTIVE      # حسابش هم دست نخورد
+    finally:
+        d2 = db.scalars(select(Counselor).where(Counselor.counselor_code == "C-1002")).first()
+        if d2 is not None:
+            db.delete(d2)
+        k2 = db.scalars(select(Counselor).where(Counselor.counselor_code == "TC-Z")).first()
+        if k2 is not None:
+            db.delete(k2)
+        u2 = db.scalars(select(User).where(User.username == "9999900003")).first()
+        if u2 is not None:
+            db.delete(u2)
+        db.commit()
+        db.close()
+
+
 # ---------------- فاز ۶۶ب: مقاوم‌سازی seed (خطای میدانی استقرار ۱.۰.۲۶) ----------------
 #
 # خطای میدانی: در پایگاه عملیاتی حسابی با username=کد ملی از قبل بود ولی

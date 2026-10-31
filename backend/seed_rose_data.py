@@ -319,6 +319,10 @@ def _process_counselor_row(db, doc: dict, branch_by_code: dict, counselor_role: 
     c.last_name = last_name
     c.degree = doc.get("degree")
     c.license_number = doc.get("license_number")
+    # فاز ۶۷: فهرست رسمی شرکت مبناست — «دارد» یعنی مجوز دارد → B05 قابل رزرو
+    # (license_expiry_date=None یعنی بدون انقضا)؛ «ندارد»/خالی → غیرقابل رزرو
+    # (روی کارت کلینیک می‌آید ولی دکمهٔ رزرو ندارد)
+    c.license_verified = (doc.get("license_number") == "دارد")
     c.professional_rank = doc.get("professional_rank")
     c.contract_number = doc.get("contract_number")
     c.detailed_code = doc.get("detailed_code")
@@ -374,12 +378,17 @@ def seed_counselors(db) -> dict:
 
     # جایگزینی فهرست: مشاوران فعالِ خارج از فهرست جدید غیرفعال می‌شوند.
     # مقایسه در پایتون با نرمال‌سازی ارقام — کد ملی بدقالب در پایگاه باعث
-    # غیرفعال‌سازی اشتباه نمی‌شود؛ ردیف بدون کد ملی دست‌نخورده می‌ماند.
+    # غیرفعال‌سازی اشتباه نمی‌شود؛ ردیف بدون کد ملی دست‌نخورده می‌ماند —
+    # به‌جز بازهٔ نمونه‌های دمو (C-10xx از seed_demo/seed_demo_rich مثل
+    # «سارا محمدی/امیر موسوی») که فاز ۶۷ آنها را غیرفعال می‌کند تا فهرست
+    # عمومی رزرو فقط مشاوران واقعی رز باشد («اسامی جدید به‌جای قبلی‌ها»).
     others = db.scalars(select(Counselor).where(Counselor.status == "active")).all()
     for c in others:
         cnid = _norm_nid(c.national_id)
-        if not cnid or cnid in listed_nids:
+        if cnid in listed_nids:
             continue
+        if not cnid and not (c.counselor_code or "").startswith("C-10"):
+            continue  # بدون کد ملی و خارج از بازهٔ دمو → دست‌نخورده
         c.status = "inactive"
         stats["deactivated"].append(f"{c.first_name} {c.last_name}".strip())
         if c.user_id:

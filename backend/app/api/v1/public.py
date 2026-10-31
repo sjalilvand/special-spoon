@@ -103,14 +103,28 @@ class ConsultationCreate(BaseModel):
 
 @router.get("/counselors")
 def public_counselors(db: Session = Depends(get_db)) -> dict:
-    """فاز ۲۸ - B05: فقط مشاوران با صلاحیت معتبر در فهرست قابل رزرو می‌آیند."""
+    """فاز ۲۸ - B05: فقط مشاوران با صلاحیت معتبر در فهرست قابل رزرو می‌آیند.
+
+    فاز ۶۷: استان هر مشاور (از شعبهٔ متصل) هم برمی‌گردد تا صفحهٔ رزرو
+    فهرست را بر اساس انتخاب استان فیلتر کند.
+    """
+    from app.models.branch import Branch
+
     items = bookable_counselors(db)
+    branch_ids = {c.branch_id for c in items if c.branch_id}
+    branches = {}
+    if branch_ids:
+        for b in db.scalars(select(Branch).where(Branch.id.in_(branch_ids))).all():
+            branches[b.id] = b
     return {"items": [{
         "id": str(c.id),
         "name": f"{c.first_name} {c.last_name}",
         "professional_title": c.professional_title,
         "specialty": c.specialty,
         "photo_url": f"/api/v1/public/counselors/{c.id}/photo" if c.photo_path else None,
+        "province_code": branches[c.branch_id].province_code if c.branch_id in branches else None,
+        "province_name": branches[c.branch_id].province if c.branch_id in branches else None,
+        "branch_name": branches[c.branch_id].name if c.branch_id in branches else None,
     } for c in sorted(items, key=lambda x: x.last_name)]}
 
 

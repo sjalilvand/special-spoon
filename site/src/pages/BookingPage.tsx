@@ -6,10 +6,10 @@
 // می‌شد. اکنون remaining هنگام ساخت hold مقداردهی می‌شود و انقضا فقط پس از
 // راه‌افتادن واقعی شمارش معکوس (countdownReadyRef) بررسی می‌شود.
 import {
-  Alert, Avatar, Box, Button, Chip, CircularProgress, Container, LinearProgress,
-  MenuItem, Paper, Stack, TextField, Typography,
+  Alert, Avatar, Box, Button, Chip, CircularProgress, Container, FormControl, InputLabel,
+  LinearProgress, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from "@mui/material";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   createBookingHold, fetchBookingSlots, fetchPublicCounselors, postConsultation,
@@ -109,6 +109,8 @@ export default function BookingPage() {
   const [step, setStep] = useState(0);
   const [counselors, setCounselors] = useState<PublicCounselor[] | null>(null);
   const [counselor, setCounselor] = useState<PublicCounselor | null>(null);
+  // فاز ۶۷: فیلتر استان روی فهرست مشاوران قابل رزرو («لیست براساس انتخاب استان»)
+  const [province, setProvince] = useState<string>("");
   const [days, setDays] = useState<SlotDay[] | null>(null);
   const [day, setDay] = useState<SlotDay | null>(null);
   const [slot, setSlot] = useState<{ start_at: string; label: string } | null>(null);
@@ -154,6 +156,17 @@ export default function BookingPage() {
     }).catch(() => setCounselors([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // فاز ۶۷: فهرست استان‌ها + فیلتر سمت کاربر (۲۱۶ آیتم — نیازی به کوئری سرور نیست)
+  const provinces = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of counselors ?? []) if (c.province_name) names.add(c.province_name);
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "fa"));
+  }, [counselors]);
+  const visibleCounselors = useMemo(
+    () => (province ? (counselors ?? []).filter((c) => c.province_name === province) : (counselors ?? [])),
+    [counselors, province],
+  );
 
   // شمارش معکوس نگهداشت — محدودشده به زمان سمت سرور (remaining_seconds)
   // فاز ۵۶: remainingRef + countdownReadyRef برای این‌که افکت انقضا فقط پس از
@@ -386,8 +399,33 @@ export default function BookingPage() {
                     در حال حاضر مشاوری برای رزرو موجود نیست.
                   </Typography>
                 ) : (
+                  <>
+                  {/* فاز ۶۷: انتخاب استان — «لیست را براساس انتخاب استان بذار» */}
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} sx={{ mb: 2 }}>
+                    <FormControl size="small" sx={{ minWidth: 240 }}>
+                      <InputLabel>فیلتر استان</InputLabel>
+                      <Select
+                        value={province}
+                        label="فیلتر استان"
+                        onChange={(e) => setProvince(e.target.value)}
+                      >
+                        <MenuItem value="">همهٔ استان‌ها</MenuItem>
+                        {provinces.map((p) => (
+                          <MenuItem key={p} value={p}>{p}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Typography variant="body2" color="text.secondary">
+                      {visibleCounselors.length.toLocaleString("fa-IR")} مشاور قابل رزرو
+                    </Typography>
+                  </Stack>
+                  {visibleCounselors.length === 0 ? (
+                    <Typography textAlign="center" color="text.secondary" py={3}>
+                      برای این استان مشاوری قابل رزرو نیست — استان دیگری را انتخاب کنید.
+                    </Typography>
+                  ) : (
                   <Box display="grid" gridTemplateColumns={{ xs: "1fr", sm: "1fr 1fr" }} gap={2}>
-                    {counselors.map((c) => (
+                    {visibleCounselors.map((c) => (
                       <Paper
                         key={c.id} variant="outlined"
                         sx={{
@@ -404,12 +442,20 @@ export default function BookingPage() {
                               <Typography variant="body2" color="text.secondary" noWrap>{c.professional_title}</Typography>
                             )}
                             {c.specialty && <Chip size="small" label={c.specialty} sx={{ mt: 0.75, bgcolor: "#fdf3f5" }} />}
+                            {c.province_name && (
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                                کلینیک رز — {c.province_name}
+                              </Typography>
+                            )}
                           </Box>
                           <Box sx={{ color: "primary.main", flexShrink: 0, fontWeight: 800 }}>‹</Box>
                         </Stack>
                       </Paper>
                     ))}
                   </Box>
+                  )
+                  }
+                  </>
                 )
               )}
 

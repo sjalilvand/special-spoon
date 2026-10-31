@@ -471,7 +471,15 @@ def public_clinics_map(db: Session = Depends(get_db)) -> dict:
     هر آیتم شامل مشخصات کامل شعبه (نشانی، کدپستی، تلفن، مدیر، مسئول
     اجرایی، ساعات کاری، مختصات و لینک مسیریابی نشان) و فهرست مشاورانِ
     فعالِ همان کلینیک است.
+
+    فاز ۶۷: موبایل و رتبهٔ مشاور از خروجی عمومی «حذف» شد (کسی نبیند —
+    این داده‌ها فقط در پنل کارکنان دیده می‌شود)؛ در عوض پرچم ``bookable``
+    هر مشاور برگردانده می‌شود تا فقط برای مشاورانِ واجد شرط B05 دکمهٔ
+    «رزرو نوبت» در کارت کلینیک نمایش داده شود.
     """
+    from datetime import date
+
+    from app.models.catalog import CounselorCredential, CredentialVerificationStatus
     from app.models.location import Province
     from app.models.people import Counselor
 
@@ -487,6 +495,26 @@ def public_clinics_map(db: Session = Depends(get_db)) -> dict:
     ).unique().all()
 
     prov_names = {p.code: p.name for p in db.scalars(select(Province)).all()}
+
+    # فاز ۶۷: محاسبهٔ bookable با دو کوئری مجموعه‌ای (نه ۲۱۶ کوئری):
+    # مشاوران با مدرک تأییدشدهٔ منقضی‌نشده + مشاوران با مجوز تأییدشدهٔ بدون انقضا
+    today = date.today()
+    cred_ok: set = set()
+    for cid, exp in db.execute(
+        select(CounselorCredential.counselor_id, CounselorCredential.expires_at).where(
+            CounselorCredential.verification_status == CredentialVerificationStatus.APPROVED,
+        )
+    ).all():
+        if exp is None or exp >= today:
+            cred_ok.add(cid)
+
+    def _bookable(c) -> bool:
+        if c.id in cred_ok:
+            return True
+        return bool(c.license_verified) and (
+            c.license_expiry_date is None or c.license_expiry_date >= today
+        )
+
     items: list[dict] = []
     total_counselors = 0
     for b in branches:
@@ -517,11 +545,11 @@ def public_clinics_map(db: Session = Depends(get_db)) -> dict:
             "counselor_count": len(counselors),
             "counselors": [
                 {
+                    "id": str(c.id),
                     "name": f"{c.first_name} {c.last_name}".strip(),
                     "degree": c.degree,
-                    "rank": c.professional_rank,
                     "license": c.license_number,
-                    "mobile": c.work_mobile,
+                    "bookable": _bookable(c),
                 }
                 for c in counselors
             ],
