@@ -1,9 +1,12 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۴ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۲۵ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.25 - رفع اشکال ارتقا: در ۱.۰.۲۴ بلوک seed_psych_scales.py بعد از Pop-Location
+#             اجرا می‌شد؛ یعنی با CWDِ فراخوان (مثلاً C:\RoseHub) و خطای «can't open file».
+#             حالا داخل همان بلوک Push-Location و بلافاصله بعد از alembic اجرا می‌شود.
 #    1.0.24 - نتیجهٔ آزمون‌ها دوباره ساده بود: seed_psych_scales.py (فاز ۶۳) فقط در setup
 #             اجرا می‌شد و سرورهای ارتقایافته هرگز مقیاس‌ها را نگرفته بودند → گزارش
 #             تحلیلی چندلایه رندر نمی‌شد. حالا بعد از alembic در upgrade (و psychseed)
@@ -1566,15 +1569,18 @@ function Invoke-Upgrade {
     $map = Read-EnvMap "$AppDir\backend\.env"
     if ($map.ContainsKey('DATABASE_URL')) { $env:DATABASE_URL = $map['DATABASE_URL'] }
     Push-Location "$AppDir\backend"
-    try { & $VenvPy -m alembic upgrade head; if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق' } } finally { Pop-Location }
-    # ۱.۰.۲۴: مقیاس‌ها/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها (idempotent — فاز ۶۳/۶۵)
-    # تا دیروز فقط در setup اجرا می‌شد؛ ارتقایافته‌ها گزارش تحلیلی را نمی‌دیدند
-    if (Test-Path "$AppDir\backend\seed_psych_scales.py") {
-        Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — idempotent)'
-        & $VenvPy seed_psych_scales.py
-        if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
-        else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد (گزارش تحلیلی فعال)' }
-    }
+    try {
+        & $VenvPy -m alembic upgrade head
+        if ($LASTEXITCODE -ne 0) { throw 'alembic ناموفق' }
+        # ۱.۰.۲۵: رفع اشکال ۱.۰.۲۴ — seed باید داخل Push-Location اجرا شود؛ در ۱.۰.۲۴
+        # بعد از Pop-Location اجرا می‌شد و با CWDِ فراخوان به «can't open file» می‌خورد
+        if (Test-Path ".\seed_psych_scales.py") {
+            Write-Step 'درج مقیاس‌های آزمون‌ها (seed_psych_scales.py — idempotent)'
+            & $VenvPy .\seed_psych_scales.py
+            if ($LASTEXITCODE -ne 0) { Write-Warn2 'درج مقیاس‌ها ناموفق بود (گزارش کلاسیک آزمون‌ها بی‌تأثیر است)' }
+            else { Write-Ok 'مقیاس/تفسیر سطح‌بندی‌شدهٔ آزمون‌ها به‌روز شد (گزارش تحلیلی فعال)' }
+        }
+    } finally { Pop-Location }
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
     # ۱.۰.۲۱: هم‌راستاسازی Caddyfile با قالب فعلی (خودترمیمی؛ شامل redir /panel)
     Update-CaddyfileFromTemplate
