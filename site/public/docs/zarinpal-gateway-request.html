@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>درخواست درگاه پرداخت زرین‌پال — rosedoctor.ir | سامانهٔ رز</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<style>
+  :root{
+    --rose:#c2185b; --rose-dark:#880e4f; --rose-soft:#fce4ec;
+    --ink:#263238; --muted:#607d8b; --line:#f3d7e3;
+    --ok:#2e7d32; --warn:#e65100; --bad:#c62828; --bg:#fdf6f9;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Vazirmatn,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.9}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 16px 64px}
+  header.hero{background:linear-gradient(135deg,var(--rose-dark),var(--rose));color:#fff;border-radius:18px;padding:28px 26px;margin-bottom:22px}
+  header.hero h1{margin:0 0 6px;font-size:26px}
+  header.hero p{margin:0;opacity:.92;font-size:14px}
+  .badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:2px 12px;font-size:12px;margin-top:10px;margin-inline-end:6px}
+  h2{font-size:19px;color:var(--rose-dark);border-inline-start:4px solid var(--rose);padding-inline-start:10px;margin:34px 0 12px}
+  h3{font-size:16px;color:var(--rose-dark);margin:18px 0 8px}
+  p{margin:8px 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0;box-shadow:0 1px 3px rgba(136,14,79,.06)}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}
+  .stat{border-radius:12px;padding:14px 16px;border:1px solid}
+  .stat .t{font-size:13px;color:var(--muted)}
+  .stat .v{font-size:16px;font-weight:700;margin-top:4px}
+  .stat.ok{background:#e8f5e9;border-color:#a5d6a7}.stat.ok .v{color:var(--ok)}
+  .stat.bad{background:#ffebee;border-color:#ef9a9a}.stat.bad .v{color:var(--bad)}
+  .stat.warn{background:#fff3e0;border-color:#ffcc80}.stat.warn .v{color:var(--warn)}
+  code,.mono{font-family:Consolas,'Courier New',monospace;direction:ltr;unicode-bidi:embed}
+  pre{background:#263238;color:#eceff1;border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:13px;direction:ltr;text-align:left;position:relative;margin:10px 0}
+  pre .c{color:#80cbc4}
+  .copyrow{display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--line);padding:9px 0;flex-wrap:wrap}
+  .copyrow:last-child{border-bottom:none}
+  .copyrow .k{min-width:170px;color:var(--muted);font-size:13px}
+  .copyrow .val{flex:1;background:#faf1f5;border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13.5px;direction:ltr;text-align:left;word-break:break-all}
+  .copyrow .val.fa{direction:rtl;text-align:right;font-family:Vazirmatn,Tahoma,sans-serif}
+  .btn{background:var(--rose);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--rose-dark)}
+  .btn.done{background:var(--ok)}
+  .note{border-inline-start:4px solid var(--warn);background:#fff8e1;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  .danger{border-inline-start:4px solid var(--bad);background:#ffebee;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  .tip{border-inline-start:4px solid var(--ok);background:#e8f5e9;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.steps>li{counter-increment:s;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:12px 0;position:relative;padding-inline-start:56px}
+  ol.steps>li::before{content:counter(s);position:absolute;inset-inline-start:14px;top:14px;width:30px;height:30px;border-radius:50%;background:var(--rose);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+  ol.steps>li h3{margin-top:0}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13.5px;margin:10px 0}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:right;vertical-align:top}
+  th{background:var(--rose-soft);color:var(--rose-dark)}
+  .check{list-style:none;padding:0;margin:0}
+  .check li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 14px;margin:6px 0;font-size:14px}
+  .check li::before{content:'☐';color:var(--rose);font-weight:700;margin-inline-end:8px}
+  .letter{background:#fff;border:2px dashed var(--rose);border-radius:12px;padding:16px 18px;font-size:14px}
+  footer{margin-top:36px;color:var(--muted);font-size:12px;text-align:center}
+  .ph{color:var(--bad);font-weight:700}
+  @media print{.btn{display:none}body{background:#fff}header.hero{border-radius:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>درخواست درگاه پرداخت زرین‌پال</h1>
+  <p>راهنمای گام‌به‌گام فعال‌سازی پرداخت آنلاین واقعی روی دامنهٔ rosedoctor.ir — سامانهٔ روان‌سنجی و مشاورهٔ رز</p>
+  <span class="badge">تاریخ سند: ۱۴۰۴/۰۸/۱۳ (2026-11-04)</span>
+  <span class="badge">نسخهٔ سامانه: v0.59.2</span>
+  <span class="badge">درگاه فعلی: sandbox (شبیه‌ساز)</span>
+</header>
+
+<h2>وضعیت فعلی زیرساخت (اسکن امروز)</h2>
+<div class="grid3">
+  <div class="stat ok"><div class="t">سرور — وب روی HTTP</div><div class="v">پورت 80 و 8080 ✓ فعال از بیرون</div></div>
+  <div class="stat bad"><div class="t">HTTPS (پورت 443)</div><div class="v">بسته در فایروال هاستینگ ✗</div></div>
+  <div class="stat bad"><div class="t">DNS دامنهٔ rosedoctor.ir</div><div class="v">هنوز رکوردی ثبت نشده ✗</div></div>
+</div>
+<div class="danger">زرین‌پال برای تأیید درگاه، سایت را از اینترنت بررسی می‌کند و آدرس callback باید از دامنهٔ اصلی با HTTPS برسد. تا زمانی که دو مورد قرمز بالا برطرف نشود، درخواست درگاه واقعی را ثبت نکنید — رد می‌شود یا فعال‌سازی معلق می‌ماند.</div>
+
+<h2>گام‌های پیش از درخواست</h2>
+<ol class="steps">
+  <li>
+    <h3>تنظیم DNS دامنهٔ rosedoctor.ir</h3>
+    <p>در پنل مدیریت دامنه (سایت فروشندهٔ دامنه) دو رکورد اضافه کنید:</p>
+    <div class="card">
+      <div class="copyrow"><span class="k">رکورد اول (A)</span><span class="val mono">@ &nbsp;→&nbsp; A &nbsp;→&nbsp; 130.185.73.157</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">رکورد دوم (A)</span><span class="val mono">www &nbsp;→&nbsp; A &nbsp;→&nbsp; 130.185.73.157</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+    </div>
+    <p>TTL را کم (۳۰۰ تا ۳۶۰۰ ثانیه) بگذارید تا تست سریع‌تر اعمال شود. اعمال DNS معمولاً بین چند دقیقه تا چند ساعت طول می‌کشد.</p>
+  </li>
+  <li>
+    <h3>باز کردن TCP 443 در پنل شرکت هاستینگ</h3>
+    <p>فایروال «ویندوز» سرور باز است؛ مشکل از فایروال شرکت هاستینگ است (اسکن: 3389 و 80 و 8080 و 8082 و 8083 از بیرون بازند ولی 443 کامل دور می‌شود). در پنل کاربری هاستینگ یک قانون <b>Allow / TCP / 443</b> ثبت کنید. اگر چنین گزینه‌ای در پنل نیست، از پشتیبانی هاستینگ بخواهید پورت 443 را باز کند.</p>
+  </li>
+  <li>
+    <h3>فعال‌سازی HTTPS روی سرور</h3>
+    <p>بعد از باز شدن 443 و تنظیم DNS، روی سرور در PowerShell (مسیر پوشهٔ deploy را با <code class="mono">cd</code> بدهید و با <b>.\</b> اجرا کنید):</p>
+<pre>cd C:\rosepsy\app\deploy\windows
+powershell -ExecutionPolicy Bypass -File .\rosepsy-server-tls.ps1</pre>
+    <p>اسکریپت گواهی معتبر برای rosedoctor.ir می‌گیرد و Caddy را روی HTTPS تنظیم می‌کند. سپس تست کنید: <code class="mono">https://rosedoctor.ir</code></p>
+    <div class="note">نکتهٔ اجرای اسکریپت در PowerShell: فایل داخل پوشهٔ جاری با اسم خالی اجرا نمی‌شود؛ حتماً با پیشوند <b>.\</b> صدا بزنید (<code class="mono">.\rosepsy-server-tls.ps1</code>) یا با مسیر کامل همان‌طور که در خط بالا آمده.</div>
+  </li>
+  <li>
+    <h3>به‌روز کردن PUBLIC_BASE_URL</h3>
+    <p>در فایل <code class="mono">C:\rosepsy\app\.env</code> مقدار زیر را تنظیم کنید (این آدرس پایهٔ callback پرداخت است):</p>
+<pre><span class="c"># C:\rosepsy\app\.env</span>
+PUBLIC_BASE_URL=https://rosedoctor.ir</pre>
+    <p>سپس در PowerShell با دسترسی Administrator: <code class="mono">Restart-Service rosepsy-api</code></p>
+  </li>
+</ol>
+
+<h2>درخواست درگاه در zarinpal.com</h2>
+<ol class="steps">
+  <li>
+    <h3>ثبت‌نام و تأیید حساب</h3>
+    <p>در <code class="mono">zarinpal.com</code> با شمارهٔ موبایل و ایمیل واقعی صاحب کسب‌وکار ثبت‌نام کنید و احراز هویت (کد ملی، شمارهٔ شبا بانکی به نام همان شخص/شرکت، اطلاعات تماس) را کامل کنید. نوع حساب را مطابق وضعیت حقوقی خودتان انتخاب کنید.</p>
+  </li>
+  <li>
+    <h3>ثبت درخواست «درگاه پرداخت»</h3>
+    <p>از پنل کاربری زرین‌پال، درخواست درگاه پرداخت جدید ثبت کنید و اطلاعات زیر را وارد کنید. روی دکمهٔ «کپی» هر ردیف بزنید و در فرم زرین‌پال بچسبانید:</p>
+    <div class="card">
+      <div class="copyrow"><span class="k">آدرس سایت</span><span class="val mono">https://rosedoctor.ir</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">IP سرور (در صورت نیاز)</span><span class="val mono">130.185.73.157</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">عنوان سایت</span><span class="val fa">سامانهٔ روان‌سنجی و مشاورهٔ آنلاین رز (rosedoctor)</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">توضیح کوتاه سایت</span><span class="val fa">پلتفرم روان‌سنجی و مشاورهٔ روان‌شناختی: برگزاری آزمون‌های استاندارد روان‌سنجی، رزرو نوبت مشاورهٔ حضوری و آنلاین در ۳۱ شعبهٔ استانی، ارائهٔ گزارش تخصصی نتایج و پیگیری پروندهٔ مشاوره توسط مشاوران رسمی.</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">صفحهٔ قوانین و بازگشت پرداخت</span><span class="val mono">https://rosedoctor.ir/payment-rules</span><button class="btn" onclick="copyVal(this)">کپی</button></div>
+      <div class="copyrow"><span class="k">ایمیل پشتیبانی</span><span class="val"><span class="ph">[تکمیل کنید — ایمیل واقعی پشتیبانی]</span></span></div>
+      <div class="copyrow"><span class="k">تلفن پشتیبانی</span><span class="val"><span class="ph">[تکمیل کنید — شمارهٔ ثابت/موبایل ثبت‌شده به نام شما]</span></span></div>
+    </div>
+    <div class="note">فیلدهای قرمز «تکمیل کنید» را پیش از ارسال حتماً پر کنید؛ اطلاعات تماس باید با احراز هویت حساب زرین‌پال یکسان باشد وگرنه درخواست رد می‌شود.</div>
+  </li>
+  <li>
+    <h3>متن درخواست آمادهٔ ارسال</h3>
+    <p>اگر فرم زرین‌پال فیلد «توضیحات تکمیلی» یا مکاتبهٔ پشتیبانی داشت، این بند را بچسبانید:</p>
+    <div class="letter">
+      <div id="coverLetter">با سلام و احترام؛
+درخواست درگاه پرداخت برای سامانهٔ «روان‌سنجی و مشاورهٔ رز» به نشانی https://rosedoctor.ir به شرح زیر ارائه می‌شود:
+سامانهٔ مذکور، پلتفرم رسمی ارائهٔ خدمات روان‌شناختی است که خدمات خود (برگزاری آزمون‌های استاندارد روان‌سنجی، رزرو نوبت مشاورهٔ حضوری و تلفنی/آنلاین، و ارائهٔ گزارش تخصصی نتایج) را در ۳۱ شعبهٔ استانی کشور عرضه می‌کند. پرداخت آنلاین صرفاً برای تسویهٔ هزینهٔ خدمات رزرو‌شدهٔ مشاوره و آزمون‌های سامانه استفاده می‌شود؛ فروش کالای فیزیکی نداریم.
+آدرس صفحهٔ قوانین و شرایط مرجوعی: https://rosedoctor.ir/payment-rules
+همهٔ صفحات سایت از طریق HTTPS و با گواهی معتبر سرو می‌شود و مسیر بازگشت بانکی (callback) نیز بر روی همین دامنه پیاده‌سازی شده است. در صورت نیاز به اطلاعات تکمیلی، از طریق اطلاعات تماس ثبت‌شده در حساب در دسترس هستیم.
+با تشکر</div>
+      <div style="margin-top:10px"><button class="btn" onclick="copyNode(this,'coverLetter')">کپی کل متن</button></div>
+    </div>
+  </li>
+  <li>
+    <h3>انتظار برای تأیید</h3>
+    <p>بررسی معمولاً چند روز کاری زمان می‌برد (مطابق روال جاری زرین‌پال). در همین فاصله، جریان پرداخت با «درگاه شبیه‌ساز» داخلی سرور به‌کار خود ادامه می‌دهد و کاربران متوجه وقفه نمی‌شوند.</p>
+  </li>
+</ol>
+
+<h2>پس از دریافت merchant_id — تنظیم سرور</h2>
+<ol class="steps">
+  <li>
+    <h3>درج شناسهٔ پذیرندگی در .env</h3>
+    <p>فایل <code class="mono">C:\rosepsy\app\.env</code> را باز کنید (Notepad) و سه مقدار زیر را تنظیم کنید:</p>
+<pre><span class="c"># C:\rosepsy\app\.env</span>
+PAYMENT_GATEWAY=zarinpal
+ZARINPAL_MERCHANT_ID=<span class="c">[کد ۳۶ کاراکتری از ایمیل تأیید زرین‌پال]</span>
+ZARINPAL_SANDBOX=false
+PUBLIC_BASE_URL=https://rosedoctor.ir</pre>
+    <div class="tip">با هر بار اجرای دستور ارتقا، محتوای <code class="mono">C:\rosepsy\app\.env</code> به‌صورت خودکار در <code class="mono">C:\rosepsy\app\backend\.env</code> کپی می‌شود؛ پس فقط همین فایل را ویرایش کنید.</div>
+  </li>
+  <li>
+    <h3>ری‌استارت سرویس API</h3>
+<pre>powershell (با دسترسی Administrator):
+Restart-Service rosepsy-api
+Get-Service rosepsy-api   <span class="c"># باید Running شود</span></pre>
+  </li>
+  <li>
+    <h3>تست پرداخت واقعی</h3>
+    <ol>
+      <li>از سایت یک رزرو آزمایشی با مبلغ کم ثبت کنید و در انتخاب درگاه، «پرداخت آنلاین» را بزنید.</li>
+      <li>باید به صفحهٔ واقعی زرین‌پال هدایت شوید (نه شبیه‌ساز داخلی <code class="mono">/api/v1/sandbox-gateway</code>).</li>
+      <li>پرداخت را کامل کنید و بررسی کنید بازگشت به سایت درست انجام می‌شود و وضعیت سفارش در پنل مدیریت (سفارش‌ها) به «پرداخت‌شده» تغییر می‌کند.</li>
+      <li>یک بار صفحهٔ بازگشت را Refresh کنید — تأیید تکراری باید بی‌اثر باشد (قفل وضعیت + authority یکتا، در سامانه پیاده‌سازی شده است).</li>
+    </ol>
+    <div class="note">مبالغ سفارش در سامانه به «ریال» ذخیره می‌شود و هنگام ارسال به زرین‌پال به «تومان» تبدیل می‌شود؛ اگر عدد ناهمخوانی در رسید زرین‌پال دیدید، مبلغ سفارش را در پنل بررسی کنید.</div>
+  </li>
+</ol>
+
+<h2>چک‌لیست نهایی پیش از ثبت درخواست زرین‌پال</h2>
+<ul class="check">
+  <li>rosedoctor.ir با ping/مرورگر باز می‌شود (رکورد A تنظیم شده)</li>
+  <li>https://rosedoctor.ir بدون هشدار گواهی باز می‌شود (پورت 443 باز و rosepsy-server-tls.ps1 اجرا شده)</li>
+  <li>صفحهٔ قوانین پرداخت (payment-rules) از دامنهٔ اصلی در دسترس است</li>
+  <li>PUBLIC_BASE_URL روی https://rosedoctor.ir تنظیم و rosepsy-api ری‌استارت شده</li>
+  <li>اطلاعات تماس و شبا با احراز هویت حساب زرین‌پال یکسان است</li>
+  <li>فیلدهای «تکمیل کنید» در همین سند پر شده‌اند</li>
+</ul>
+
+<h2>پیوست — مرجع سریع فنی</h2>
+<table>
+  <tr><th>موضوع</th><th>مقدار / مسیر</th></tr>
+  <tr><td>فایل تنظیمات پرداخت</td><td class="mono">C:\rosepsy\app\.env</td></tr>
+  <tr><td>کلیدهای درگاه</td><td class="mono">PAYMENT_GATEWAY / ZARINPAL_MERCHANT_ID / ZARINPAL_SANDBOX</td></tr>
+  <tr><td>آدرس callback (خودکار از سمت سرور)</td><td class="mono">{PUBLIC_BASE_URL}/api/v1/payments/callback/zarinpal</td></tr>
+  <tr><td>API زرین‌پال (REST v4)</td><td class="mono">api.zarinpal.com/pg/v4/payment/request.json و verify.json</td></tr>
+  <tr><td>درگاه شبیه‌ساز برای تست بدون درگاه واقعی</td><td class="mono">GET /api/v1/sandbox-gateway</td></tr>
+  <tr><td>بررسی درگاه فعال فعلی</td><td class="mono">GET /api/v1/payments/gateways</td></tr>
+  <tr><td>لاگ در صورت خطای پرداخت</td><td class="mono">C:\rosepsy\logs\rosepsy-api\</td></tr>
+</table>
+
+<footer>سامانهٔ روان‌سنجی و مشاورهٔ رز — راهنمای درگاه پرداخت زرین‌پال · نسخهٔ ۱ · ۱۴۰۴/۰۸/۱۳<br>شرایط و فرم‌های زرین‌پال ممکن است به‌روزرسانی شود؛ نهایت ملاک، پنل کاربری zarinpal.com است.</footer>
+</div>
+
+<script>
+function flash(btn){
+  var old=btn.textContent; btn.textContent='کپی شد ✓'; btn.classList.add('done');
+  setTimeout(function(){btn.textContent=old;btn.classList.remove('done')},1600);
+}
+function copyVal(btn){
+  var t=btn.parentElement.querySelector('.val');
+  doCopy(t.innerText,btn);
+}
+function copyNode(btn,id){
+  doCopy(document.getElementById(id).innerText,btn);
+}
+function doCopy(text,btn){
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){legacy(text,btn)});
+  } else { legacy(text,btn); }
+}
+function legacy(text,btn){
+  var ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{document.execCommand('copy');flash(btn)}catch(e){alert('کپی ناموفق بود؛ متن را دستی انتخاب کنید')}
+  ta.remove();
+}
+</script>
+</body>
+</html>

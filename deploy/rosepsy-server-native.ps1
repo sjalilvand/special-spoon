@@ -1,9 +1,17 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳۰ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳۲ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.32 - خطای میدانی گزارش کاربر: «Get-NetTCPListener is not recognized» در
+#             بررسی سلامت نهایی upgrade. چنین فرمانی در هیچ نسخهٔ ویندوز وجود
+#             ندارد (نام درست Get-NetTCPConnection است) و چون «نبودنِ خودِ فرمان»
+#             CommandNotFoundException است، -ErrorAction SilentlyContinue هم آن را
+#             نمی‌پوشاند و خطای قرمز چاپ می‌شد (رفتار غیرمرگبار اما نگران‌کننده).
+#             اصلاح: نام درست + fallback به netstat -ano داخل try/catch تا حتی اگر
+#             ماژول NetTCPServer در بعضی builds در دسترس نبود، وارسی کار کند.
+#             بنر Invoke-Setup هم که عقب‌مانده بود (1.0.22) با شمارهٔ هدر همگام شد.
 #    1.0.30 - رفع خطای میدانی فاز ۷۰: سرور با کد ۰.۵۴.۰ بالا آمده بود ولی
 #             مایگریشن ۰۰۴۴ روی بانک اعمال نشده بود → صفحه‌های «آزمون‌های
 #             برگزار شده» و «پرونده‌های مشاوره» با «خطای نامشخص رخ داد» (500)
@@ -1605,7 +1613,18 @@ function Invoke-HealthAndSummary {
         # (تست «از داخل سرور به IP عمومی خودش» به‌دلیل اتصال محلی، همیشه موفق
         # نشان داده می‌شود و فایروال هاستینگ را تشخیص نمی‌دهد؛ لذا گوش‌دهی داخلی
         # وارسی و راهنمای فایروال هاستینگ چاپ می‌شود.)
-        $listenPorts = @(Get-NetTCPListener -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort -Unique)
+        # ۱.۰.۳۲: Get-NetTCPListener فرمانِ درستی نیست (نام درست Get-NetTCPConnection است)؛
+        # «نبودنِ خودِ فرمان» با SilentlyContinue پوشانده نمی‌شود و CommandNotFoundException قرمز می‌دهد.
+        # fallback: netstat -ano (بخشی از خود ویندوز) تا وارسی در همهٔ builds کار کند.
+        $listenPorts = @()
+        try {
+            $listenPorts = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Select-Object -ExpandProperty LocalPort -Unique)
+        } catch {
+            foreach ($ln in (netstat -ano -p tcp 2>$null | Select-String 'LISTENING')) {
+                if ($ln.Line -match ':(\d+)\s+\S+\s+LISTENING') { $listenPorts += [int]$Matches[1] }
+            }
+            $listenPorts = @($listenPorts | Sort-Object -Unique)
+        }
         foreach ($wp in @($WebHttpPort, $AltWebPort)) {
             if ($listenPorts -contains $wp) { Write-Ok ("Caddy روی پورت {0} گوش می‌دهد" -f $wp) }
             else { Write-Warn2 ("Caddy روی پورت {0} گوش نمی‌دهد - سرویس rosepsy-caddy و لاگ آن را بررسی کنید" -f $wp) }
@@ -1649,7 +1668,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.22 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.32 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛

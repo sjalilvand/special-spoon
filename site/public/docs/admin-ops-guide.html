@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>راهنمای مدیر سامانه — استقرار بومی Rosepsy روی Windows Server</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<style>
+  :root{
+    --rose:#c2185b; --rose-dark:#880e4f; --rose-soft:#fce4ec;
+    --ink:#263238; --muted:#607d8b; --line:#f3d7e3; --bg:#fdf6f9;
+    --ok:#2e7d32; --warn:#e65100; --bad:#c62828;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Vazirmatn,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.9}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 16px 64px}
+  header.hero{background:linear-gradient(135deg,var(--rose-dark),var(--rose));color:#fff;border-radius:18px;padding:28px 26px;margin-bottom:22px}
+  header.hero h1{margin:0 0 6px;font-size:26px}
+  header.hero p{margin:0;opacity:.92;font-size:14px}
+  .badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:2px 12px;font-size:12px;margin-top:10px;margin-inline-end:6px}
+  h2{font-size:19px;color:var(--rose-dark);border-inline-start:4px solid var(--rose);padding-inline-start:10px;margin:34px 0 12px}
+  p{margin:8px 0}
+  code,.mono{font-family:Consolas,'Courier New',monospace;direction:ltr;unicode-bidi:embed;background:#faf1f5;border-radius:6px;padding:1px 6px;font-size:.92em}
+  pre{background:#263238;color:#eceff1;border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:13px;direction:ltr;text-align:left;position:relative;margin:10px 0}
+  pre code{background:none;padding:0;color:inherit}
+  pre .c{color:#80cbc4}
+  .btn{background:var(--rose);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-family:inherit;font-size:12px;cursor:pointer;position:absolute;top:8px;left:8px}
+  .btn:hover{background:var(--rose-dark)}
+  .btn.done{background:var(--ok)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0;box-shadow:0 1px 3px rgba(136,14,79,.06)}
+  .note{border-inline-start:4px solid var(--warn);background:#fff8e1;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  .tip{border-inline-start:4px solid var(--ok);background:#e8f5e9;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  .danger{border-inline-start:4px solid var(--bad);background:#ffebee;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13.5px;margin:10px 0}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:right;vertical-align:top}
+  th{background:var(--rose-soft);color:var(--rose-dark)}
+  td.mono{background:#fbf7f9}
+  ul.tight{margin:6px 0;padding-inline-start:22px}
+  ul.tight li{margin:4px 0}
+  footer{margin-top:36px;color:var(--muted);font-size:12px;text-align:center}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  .kbd{background:#eceff1;border:1px solid #cfd8dc;border-radius:6px;padding:0 6px;font-size:12px;direction:ltr;display:inline-block}
+  @media print{.btn{display:none}body{background:#fff}header.hero{border-radius:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>راهنمای مدیر سامانه — استقرار بومی Rosepsy</h1>
+  <p>مرجع عملیاتی سرور ویندوزی: به‌روزرسانی، سلامت‌سنجی، پشتیبان‌گیری، TLS، فایروال و خطاهای رایج</p>
+  <span class="badge">تاریخ سند: ۱۴۰۴/۰۸/۱۳ (2026-11-04)</span>
+  <span class="badge">نسخهٔ سامانه: v0.59.2</span>
+  <span class="badge">اسکریپت استقرار: 1.0.32</span>
+</header>
+
+<h2>۱) نمای کلی اجزای سامانه</h2>
+<table>
+  <tr><th>جزء</th><th>مسیر / پورت</th><th>سرویس ویندوز</th></tr>
+  <tr><td>کد پروژه (مخزن git)</td><td class="mono">C:\rosepsy\app &nbsp;(github.com/sjalilvand/special-spoon — branch main)</td><td>—</td></tr>
+  <tr><td>بک‌اند FastAPI</td><td class="mono">127.0.0.1:8000 (فقط داخلی)</td><td class="mono">rosepsy-api</td></tr>
+  <tr><td>وب‌سرور Caddy (سایت + پنل)</td><td class="mono">پورت 80 و 8080 — پنل: /panel/</td><td class="mono">rosepsy-caddy</td></tr>
+  <tr><td>پیکربندی Caddy</td><td class="mono">C:\rosepsy\etc\Caddyfile (پشتیبان‌ها: Caddyfile.bak-*)</td><td>—</td></tr>
+  <tr><td>PostgreSQL 16</td><td class="mono">127.0.0.1:5432 — دیتابیس rosepsy</td><td class="mono">rosepsy-pg</td></tr>
+  <tr><td>Redis</td><td class="mono">127.0.0.1:6379 (سقف نرخ fail-open)</td><td class="mono">Redis / rosepsy-redis</td></tr>
+  <tr><td>ClamAV (آنتی‌ویروس آپلود)</td><td class="mono">127.0.0.1:3310</td><td class="mono">rosepsy-clamd</td></tr>
+  <tr><td>پایتون مجازی (3.12)</td><td class="mono">C:\rosepsy\runtime\venv\Scripts\python.exe</td><td>—</td></tr>
+  <tr><td>فایل تنظیمات</td><td class="mono">C:\rosepsy\app\.env (در هر ارتقا به backend\.env کپی می‌شود)</td><td>—</td></tr>
+  <tr><td>فایل‌های آپلودی</td><td class="mono">C:\rosepsy\data\uploads (STORAGE_BACKEND=local)</td><td>—</td></tr>
+  <tr><td>لاگ‌ها</td><td class="mono">C:\rosepsy\logs\<نام‌سرویس>\</td><td>—</td></tr>
+  <tr><td>پشتیبان بانک</td><td class="mono">C:\rosepsy\backups\rosepsy-*.dump</td><td>—</td></tr>
+</table>
+
+<h2>۲) به‌روزرسانی سامانه (ارتقا)</h2>
+<div class="card">
+  <p>دستور اصلی و همیشگی (در PowerShell با دسترسی Administrator):</p>
+<pre id="cmd-upgrade">powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-server-native.ps1 -Mode upgrade<button class="btn" onclick="copyNode(this,'cmd-upgrade')">کپی</button></pre>
+  <p>این دستور به‌ترتیب: کد را از گیت می‌کشد ← وابستگی‌های pip/npm را نصب می‌کند ← فرانت‌اند و پنل را build می‌کند ← مایگریشن بانک را اعمال می‌کند ← seedها را به‌روز می‌کند ← Caddyfile را با قالب فعلی هم‌راستا و validate می‌کند ← سرویس‌ها را ری‌استارت می‌کند ← بررسی سلامت نهایی می‌کند.</p>
+</div>
+<div class="note">اگر پیام «اسکریپت استقرار در همین اجرا به‌روزرسانی شد» را دیدید، کد اپ در همان اجرا اعمال می‌شود اما بهبودهای وب‌سرور (پورت 8080، قوانین فایروال، تشخیص‌های جدید) پس از پایان اجرا، با یک اجرای دوبارهٔ همان دستور فعال می‌شوند.</div>
+<p>حالت‌های دیگر اسکریپت:</p>
+<table>
+  <tr><th>حالت</th><th>کاربرد</th></tr>
+  <tr><td class="mono">-Mode upgrade</td><td>ارتقای عادی (همیشه همین)</td></tr>
+  <tr><td class="mono">-Mode status</td><td>نمایش وضعیت سرویس‌ها و پورت‌ها بدون تغییر</td></tr>
+  <tr><td class="mono">-Mode doctor</td><td>تشخیص مشکلات محیط</td></tr>
+  <tr><td class="mono">-Mode setup</td><td>نصب از صفر (روی سرور جاری دیگر اجرا نکنید)</td></tr>
+</table>
+
+<h2>۳) سلامت‌سنجی روزانه</h2>
+<div class="grid2">
+  <div class="card">
+    <h3 style="margin-top:0;font-size:15px">وضعیت سرویس‌ها</h3>
+<pre id="cmd-services">Get-Service rosepsy-*<button class="btn" onclick="copyNode(this,'cmd-services')">کپی</button></pre>
+    <p>هر پنج سرویس باید <b>Running</b> باشد.</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0;font-size:15px">تست سریع وب و API (داخل سرور)</h3>
+<pre id="cmd-curl">curl.exe -s -o NUL -w "panel: %{time_total}s`n" http://127.0.0.1/panel/
+curl.exe -s -o NUL -w "api:   %{time_total}s`n" http://127.0.0.1:8000/api/v1/health<button class="btn" onclick="copyNode(this,'cmd-curl')">کپی</button></pre>
+    <p>مقادیر سالم: هر دو زیر ۱ ثانیه (نمونهٔ سرور جاری: ۰٫۰۰۴ و ۰٫۰۱۵ ثانیه).</p>
+  </div>
+</div>
+<div class="tip">تست از بیرون (موبایل با اینترنت اپراتور): آدرس <code class="mono">http://130.185.73.157/</code> و در صورت باز نبودن 80 از سمت اپراتور، آدرس جایگزین <code class="mono">http://130.185.73.157:8080/</code>. توجه کنید مرورگرها اگر آدرس را بدون http تایپ کنید ابتدا https را امتحان می‌کنند و چون 443 بسته است «در حال انتظار» به‌نظر می‌رسد.</div>
+
+<h2>۴) دامنه و TLS — وضعیت فعلی و گام‌های آینده</h2>
+<table>
+  <tr><th>مورد</th><th>وضعیت</th><th>اقدام لازم</th></tr>
+  <tr><td>دامنهٔ فعلی <span class="mono">130.185.73.157.sslip.io</span></td><td>HTTP فعال روی 80/8080</td><td>—</td></tr>
+  <tr><td>HTTPS / پورت 443</td><td>فایروال ویندوز باز است ولی فایروال «شرکت هاستینگ» بسته می‌کند (اسکن بیرونی: 443 کامل دور می‌شود)</td><td>در پنل هاستینگ قانون Allow/TCP/443 ثبت یا از پشتیبانی بخواهید</td></tr>
+  <tr><td>دامنهٔ جدید <span class="mono">rosedoctor.ir</span></td><td>هنوز هیچ رکورد DNS ثبت نشده (اسکن امروز)</td><td>رکورد A: <span class="mono">@ → 130.185.73.157</span> و <span class="mono">www → 130.185.73.157</span> در پنل دامنه</td></tr>
+</table>
+<p>بعد از باز شدن 443 و تنظیم DNS، گواهی HTTPS را بگیرید:</p>
+<pre id="cmd-tls">cd C:\rosepsy\app\deploy\windows
+powershell -ExecutionPolicy Bypass -File .\rosepsy-server-tls.ps1<button class="btn" onclick="copyNode(this,'cmd-tls')">کپی</button></pre>
+<div class="danger">اجرای اسکریپت ps1 از داخل پوشهٔ خودش باید با پیشوند <b>.\</b> باشد (<span class="mono">.\rosepsy-server-tls.ps1</span>)؛ در غیر این صورت PowerShell با CommandNotFoundException مواجه می‌شود چون پوشهٔ جاری در مسیر جست‌وجوی فرمان‌ها نیست.</div>
+
+<h2>۵) فایروال — دو لایهٔ جدا</h2>
+<table>
+  <tr><th>لایه</th><th>وضعیت</th><th>مدیریت</th></tr>
+  <tr><td>فایروال ویندوز سرور</td><td>قوانین <span class="mono">Rosepsy Web 80 / 443 / 8080</span> باز است (اسکریپت استقرار idempotent ثبت می‌کند)</td><td>اسکریپت استقرار یا <span class="mono">wf.msc</span></td></tr>
+  <tr><td>فایروال شرکت هاستینگ</td><td>از بیرون باز: <b>3389، 80، 8080، 8082، 8083</b> — بسته: <b>443، 8000، 8081، 8443، 8880، 2052–2096</b></td><td>فقط از پنل کاربری هاستینگ یا تیتر پشتیبانی</td></tr>
+</table>
+<div class="note">تست «از داخل سرور به IP عمومی خودش» همیشه موفق نشان داده می‌شود و فایروال هاستینگ را تشخیص نمی‌دهد؛ تشخیص واقعی فقط اسکن از یک ماشین بیرونی است.</div>
+
+<h2>۶) لاگ‌ها و ردیابی خطا</h2>
+<ul class="tight">
+  <li>لاگ هر سرویس: <code class="mono">C:\rosepsy\logs\rosepsy-api\</code> ، <code class="mono">...\rosepsy-caddy\</code> و غیره</li>
+  <li>ترنسکریپت نصب/ارتقای اسکریپت: <code class="mono">C:\rosepsy\logs\native-setup-*.log</code></li>
+  <li>خطای 500 با پیام «نامشخص» در پنل = معمولاً ناهمگامی اسکیما؛ اسکریپت ارتقا به‌صورت خودکار وارسی و ترمیم فاز ۷۰ را اجرا می‌کند و در API خطا به 503 با پیام راهنما ترجمه می‌شود.</li>
+</ul>
+
+<h2>۷) پشتیبان‌گیری و بازیابی</h2>
+<div class="card">
+  <p><b>خودکار:</b> وظیفهٔ زمان‌بندی‌شدهٔ <span class="mono">Rosepsy Backup</span> هر روز ساعت ۰۲:۳۰ اجرا می‌شود (اسکریپت: <code class="mono">C:\rosepsy\scripts\pg-backup.ps1</code>) و با <code class="mono">pg_dump -Fc</code> در <code class="mono">C:\rosepsy\backups\rosepsy-YYYYMMDD-HHmm.dump</code> ذخیره می‌کند؛ نسخه‌های قدیمی‌تر از ۱۴ روز خودکار حذف می‌شوند.</p>
+  <p><b>دستی:</b></p>
+<pre id="cmd-dump">C:\rosepsy\runtime\pgsql\bin\pg_dump.exe -U rosepsy -h 127.0.0.1 -p 5432 -Fc -f C:\rosepsy\backups\manual.dump rosepsy<button class="btn" onclick="copyNode(this,'cmd-dump')">کپی</button></pre>
+  <p><b>بازیابی</b> (هنگام نیاز — دقت کنید بانک فعلی جایگزین می‌شود):</p>
+<pre id="cmd-restore">C:\rosepsy\runtime\pgsql\bin\pg_restore.exe -U rosepsy -h 127.0.0.1 -p 5432 -d rosepsy --clean C:\rosepsy\backups\rosepsy-YYYYMMDD-HHmm.dump<button class="btn" onclick="copyNode(this,'cmd-restore')">کپی</button></pre>
+  <div class="note">رمز PostgreSQL از متغیر <span class="mono">POSTGRES_PASSWORD</span> در فایل .env خوانده می‌شود. پیش از بازیابی، سرویس API را موقتاً متوقف کنید: <code class="mono">Stop-Service rosepsy-api</code> و پس از آن دوباره اجرا کنید.</div>
+</div>
+
+<h2>۸) خطاهای رایج و راه‌حل</h2>
+<table>
+  <tr><th>عارضه</th><th>علت</th><th>راه‌حل</th></tr>
+  <tr><td class="mono">Get-NetTCPListener is not recognized</td><td>چنین فرمانی در ویندوز وجود نداشت (نام درست: Get-NetTCPConnection)</td><td><b>اصلاح‌شده در نسخهٔ 1.0.32</b> — دستور ارتقا را یک بار اجرا کنید؛ خطای قرمز در بررسی سلامت نهایی نمی‌آید</td></tr>
+  <tr><td class="mono">CommandNotFoundException</td><td>اجرای فایل ps1 داخل پوشهٔ جاری بدون پیشوند <span class="mono">.\</span></td><td>با <span class="mono">.\نام‌فایل.ps1</span> یا مسیر کامل اجرا کنید</td></tr>
+  <tr><td>صفحهٔ سفید روی /panel (بدون اسلش)</td><td>redir نادرست در قالب قدیمی Caddyfile</td><td>اصلاح‌شده (redir 301 به /panel/) — یک بار دستور ارتقا را اجرا کنید</td></tr>
+  <tr><td>«اسکریپت در همین اجرا به‌روزرسانی شد»</td><td>خود اسکریپت در همان اجرا از گیت به‌روز شده</td><td>پس از پایان اجرا، همان دستور ارتقا را یک بار دیگر بزنید</td></tr>
+  <tr><td>موبایل سایت را باز نمی‌کند / به‌نظر کند است</td><td>مرورگر موبایل پیش‌فرض https را امتحان می‌کند و 443 در فایروال هاستینگ بسته است</td><td>با <span class="mono">http://</span> صریح یا پورت <span class="mono">:8080</span> تست کنید؛ راه‌حل قطعی باز شدن 443 است (بخش ۴)</td></tr>
+  <tr><td>خطای «duplicate key» هنگام seed مشاوران</td><td>حساب هم‌نام قبلی</td><td>اصلاح‌شده (seedها idempotent) — اجرای مجدد ارتقا کافی است</td></tr>
+  <tr><td>هشدارهای زرد Caddyfile در لاگ ارتقا</td><td><span class="mono">header_up X-Forwarded-For</span> زائد و قالب‌بندی فایل</td><td>بی‌اثر — رفتار پیش‌فرض Caddy همان هدر را می‌فرستد؛ نیازی به اقدام نیست</td></tr>
+</table>
+
+<h2>۹) پرداخت آنلاین — وضعیت و کلیدها</h2>
+<ul class="tight">
+  <li>وضعیت فعلی: درگاه <b>شبیه‌ساز داخلی</b> (sandbox) تا وقتی merchant_id خالی است — رزرو آنلاین کار می‌کند و پول واقعی جابه‌جا نمی‌شود.</li>
+  <li>کلیدهای .env: <code class="mono">PAYMENT_GATEWAY</code> ، <code class="mono">ZARINPAL_MERCHANT_ID</code> ، <code class="mono">ZARINPAL_SANDBOX</code> ، <code class="mono">PUBLIC_BASE_URL</code></li>
+  <li>پس از دریافت merchant_id از زرین‌پال: مقادیر را در <code class="mono">C:\rosepsy\app\.env</code> تنظیم و <code class="mono">ZARINPAL_SANDBOX=false</code> و سپس <code class="mono">Restart-Service rosepsy-api</code>.</li>
+  <li>راهنمای کامل درخواست درگاه: فایل <code class="mono">docs/zarinpal-gateway-request.html</code> روی سایت (بخش پیوست همین سند).</li>
+  <li>تأیید پرداخت همیشه سمت سرور انجام می‌شود؛ callback تکراری بی‌اثر است (idempotent).</li>
+</ul>
+
+<h2>۱۰) دستورات اضطراری</h2>
+<div class="grid2">
+  <div class="card">
+<pre id="cmd-restart">Restart-Service rosepsy-api
+Restart-Service rosepsy-caddy
+Restart-Service rosepsy-pg<button class="btn" onclick="copyNode(this,'cmd-restart')">کپی</button></pre>
+    <p>ری‌استارت تک‌تک سرویس‌ها (با دسترسی Administrator).</p>
+  </div>
+  <div class="card">
+<pre id="cmd-caddy">C:\rosepsy\runtime\caddy\caddy.exe validate --config C:\rosepsy\etc\Caddyfile --adapter caddyfile<button class="btn" onclick="copyNode(this,'cmd-caddy')">کپی</button></pre>
+    <p>اعتبارسنجی پیکربندی Caddy؛ برای بازگردانی، جدیدترین <code class="mono">Caddyfile.bak-*</code> را کپی و سرویس را ری‌استارت کنید.</p>
+  </div>
+  <div class="card">
+<pre id="cmd-admin">Push-Location C:\rosepsy\app\backend
+&amp; "C:\rosepsy\runtime\venv\Scripts\python.exe" create_admin.py
+Pop-Location<button class="btn" onclick="copyNode(this,'cmd-admin')">کپی</button></pre>
+    <p>ساخت ادمین جدید.</p>
+  </div>
+  <div class="card">
+<pre id="cmd-stopstart">Stop-Service rosepsy-api
+# نگهداری/بازیابی بانک
+Start-Service rosepsy-api<button class="btn" onclick="copyNode(this,'cmd-stopstart')">کپی</button></pre>
+    <p>توقف/اجرای موقت API برای عملیات بانک.</p>
+  </div>
+</div>
+
+<h2>۱۱) پیوست — لینک مستندات روی خودِ سایت</h2>
+<ul class="tight">
+  <li>راهنمای درگاه زرین‌پال: <code class="mono">http://130.185.73.157/docs/zarinpal-gateway-request.html</code></li>
+  <li>همین سند: <code class="mono">http://130.185.73.157/docs/admin-ops-guide.html</code></li>
+  <li>قوانین پرداخت (برای زرین‌پال): <code class="mono">http://130.185.73.157/payment-rules</code></li>
+</ul>
+<div class="tip">این اسناد در مخزن تحت <span class="mono">site/public/docs/</span> نگهداری می‌شوند و با هر ارتقا، همراه build سایت منتشر می‌شوند.</div>
+
+<footer>سامانهٔ روان‌سنجی و مشاورهٔ رز — راهنمای مدیر سامانه · نسخهٔ ۱ · ۱۴۰۴/۰۸/۱۳<br>ساخته‌شده برای استقرار بومی Windows Server 2025 (FastAPI + PostgreSQL 16 + Redis + ClamAV + Caddy)</footer>
+</div>
+
+<script>
+function flash(btn){
+  var old=btn.textContent; btn.textContent='کپی شد ✓'; btn.classList.add('done');
+  setTimeout(function(){btn.textContent=old;btn.classList.remove('done')},1600);
+}
+function copyNode(btn,id){
+  var el=document.getElementById(id);
+  var clone=el.cloneNode(true);
+  var b=clone.querySelector('.btn'); if(b){b.remove();}
+  var text=clone.innerText;
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){legacy(text,btn)});
+  } else { legacy(text,btn); }
+}
+function legacy(text,btn){
+  var ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{document.execCommand('copy');flash(btn)}catch(e){alert('کپی ناموفق بود؛ متن را دستی انتخاب کنید')}
+  ta.remove();
+}
+</script>
+</body>
+</html>
