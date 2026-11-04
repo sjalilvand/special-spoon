@@ -28,21 +28,26 @@ class GlobalErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      // فاز ۸۱: خطای دانلود chunk (اینترنت ضعیف موبایل) پیام و راه‌حل خودش را دارد
+      const msg = this.state.error?.message ?? "";
+      const isChunkError =
+        /dynamically imported module|Loading( CSS)? chunk|Importing a module script failed|error loading dynamically/i.test(msg);
       return (
         <Box minHeight="60vh" display="flex" alignItems="center" justifyContent="center" p={3}>
           <Paper variant="outlined" sx={{ p: 4, maxWidth: 560, textAlign: "center" }}>
             <ErrorOutlineRoundedIcon color="error" sx={{ fontSize: 48, mb: 1 }} />
             <Typography variant="h6" fontWeight={800} gutterBottom>
-              نمایش این بخش با خطا مواجه شد
+              {isChunkError ? "بارگذاری این بخش ناتمام ماند" : "نمایش این بخش با خطا مواجه شد"}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              مشکلی در نمایش این صفحه پیش آمد؛ سایر بخش‌ها از منوی بالا در دسترس‌اند.
-              اگر تکرار شد، صفحه را تازه‌سازی کنید یا با پشتیبانی تماس بگیرید.
+              {isChunkError
+                ? "ارتباط با سرور هنگام دریافت این بخش برقرار نشد (اینترنت موبایل یا شبکهٔ ضعیف). دکمهٔ «تازه‌سازی» دوباره تلاش می‌کند؛ در اکثر موارد همان لحظه درست می‌شود."
+                : "مشکلی در نمایش این صفحه پیش آمد؛ سایر بخش‌ها از منوی بالا در دسترس‌اند. اگر تکرار شد، صفحه را تازه‌سازی کنید یا با پشتیبانی تماس بگیرید."}
             </Typography>
             <Typography
               variant="caption" color="text.disabled" sx={{ display: "block", mb: 2, direction: "ltr" }}
             >
-              {this.state.error.message}
+              {msg}
             </Typography>
             <Stack direction="row" spacing={1.5} justifyContent="center">
               <Button variant="contained" onClick={() => window.location.reload()}>

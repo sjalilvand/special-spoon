@@ -1,0 +1,18 @@
+{
+  "id": "/panel/",
+  "name": "رزپسی | پنل مدیریتی",
+  "short_name": "پنل رزپسی",
+  "description": "پنل مدیریتی و کارتابل سامانهٔ رزپسی",
+  "start_url": "/panel/",
+  "scope": "/panel/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "fa",
+  "background_color": "#fffafb",
+  "theme_color": "#7c2740",
+  "icons": [
+    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -2,7 +2,17 @@
 <html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- فاز ۸۱: viewport-fit=cover برای گوشی‌های ناچ‌دار (حالت standalone PWA) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- فاز ۸۱: متای PWA پنل — نصب مستقل با start_url روی /panel/ -->
+    <link rel="manifest" href="/panel/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/app-icon-192.png" />
+    <link rel="apple-touch-icon" href="/app-icon-192.png" />
+    <meta name="theme-color" content="#7c2740" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="پنل رزپسی" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Rosepsy | سامانه مشاوره روان‌شناختی سازمانی</title>
   </head>
   <body>
@@ -24,5 +34,15 @@
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // فاز ۸۱: ثبت سرویس‌ورکر سراسری (/sw.js از سایت، اسکوپ ریشه) برای پنل هم —
+      // کش آفلاین و سرعت بارهای بعدی روی موبایل. روی HTTP بی‌صدا رد می‌شود (بدون خطا)
+      // و با روشن‌شدن HTTPS خودکار فعال می‌گردد.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>

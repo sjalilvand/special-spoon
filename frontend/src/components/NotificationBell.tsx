@@ -70,8 +70,11 @@ export default function NotificationBell() {
           </Badge>
         </IconButton>
       </Tooltip>
+      {/* فاز ۸۱: رندر شرطی Popover — بستن + ناوبری هم‌زمان، backdrop نامرئی
+          باقی نمی‌گذارد (توضیح در Layout.tsx) */}
+      {anchorEl !== null && (
       <Popover
-        open={Boolean(anchorEl)}
+        open
         anchorEl={anchorEl}
         onClose={() => setAnchorEl(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
@@ -116,6 +119,7 @@ export default function NotificationBell() {
           </List>
         )}
       </Popover>
+      )}
     </>
   );
 }

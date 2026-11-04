@@ -3,9 +3,13 @@
 import { ReactNode, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  AppBar, Box, Button, Chip, Container, Divider, IconButton, ListItemIcon,
-  ListItemText, Menu, MenuItem, Stack, Toolbar, Tooltip, Typography,
+  AppBar, Box, Button, Chip, Collapse, Container, Divider, Drawer, IconButton, ListItemIcon,
+  ListItemButton, ListItemText, List, Menu, MenuItem, Stack, Toolbar, Tooltip, Typography,
+  useMediaQuery, useTheme,
 } from "@mui/material";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
 import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
@@ -176,6 +180,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout, impersonation, exitImpersonation } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // فاز ۸۱ - ریسپانسیو شدن پنل: زیر md (موبایل/تبلت باریک) منوی کشویی اپی
+  // به‌جای نوارِ اسکرول‌افقی که در موبایل نیمی از دکمه‌ها (اعلان، خروج، نام کاربر)
+  // بیرون از دید بود و ضربه‌ها روی نوارِ در حال اسکرول گم می‌شد.
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const roles = user?.roles ?? [];
   const has = (rs: Roles) => rs.some((r) => roles.includes(r));
   // فاز ۷۱: ماتریس منوهای کاربر جاری — فیلتر منو + برچسب «فقط خواندن/دیدن»
@@ -185,6 +194,8 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
 
   const openMenu = (e: React.MouseEvent<HTMLElement>, label: string) => {
     setAnchorEl(e.currentTarget);
@@ -203,9 +214,24 @@ export default function Layout({ children }: { children: ReactNode }) {
     }
     navigate(path);
   };
+  const goMobile = (path: string) => {
+    setMobileOpen(false);
+    go(path);
+  };
+  const doLogout = async () => {
+    setMobileOpen(false);
+    if (impersonation) {
+      exitImpersonation();
+      return;
+    }
+    await logout();
+    navigate("/login");
+  };
 
   const groupActive = (g: NavGroup) =>
     g.items.some((it) => location.pathname === it.path || location.pathname.startsWith(it.path + "/"));
+
+  const logoutTitle = impersonation ? "بازگشت به حساب مدیر" : "خروج از حساب";
 
   return (
     <Box minHeight="100vh" bgcolor="#fffafb">
@@ -248,12 +274,17 @@ export default function Layout({ children }: { children: ReactNode }) {
         <Toolbar
           disableGutters
           sx={{
-            gap: 0.5, px: { xs: 1.5, md: 2.5 },
-            flexWrap: "nowrap", overflowX: "auto",
-            "::-webkit-scrollbar": { display: "none" }, scrollbarWidth: "none",
+            gap: 0.5, px: { xs: 1, md: 2.5 },
+            flexWrap: "nowrap",
             minHeight: { xs: 56, md: 62 }, alignItems: "center",
           }}
         >
+          {/* فاز ۸۱: همبرگر موبایل — تمام منوها در کشوی اپی */}
+          {isMobile && (
+            <IconButton color="inherit" edge="start" aria-label="باز کردن منو" onClick={() => setMobileOpen(true)}>
+              <MenuRoundedIcon />
+            </IconButton>
+          )}
           <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0, cursor: "pointer" }}
             onClick={() => navigate("/")}>
             <BrandIcon sx={{ display: { xs: "none", md: "block" } }} />
@@ -264,37 +295,40 @@ export default function Layout({ children }: { children: ReactNode }) {
               <PublicRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,.25)", mx: 0.5, flexShrink: 0 }} />
 
-          {isApplicant && (
-            <Button color="inherit" startIcon={<PersonPanelRoundedIcon />} sx={{ flexShrink: 0 }}
-              onClick={() => navigate("/me")}>پنل من</Button>
+          {!isMobile && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,.25)", mx: 0.5, flexShrink: 0 }} />
+              {isApplicant && (
+                <Button color="inherit" startIcon={<PersonPanelRoundedIcon />} sx={{ flexShrink: 0 }}
+                  onClick={() => navigate("/me")}>پنل من</Button>
+              )}
+              {visibleGroups.map((g) => {
+                const active = groupActive(g);
+                return (
+                  <Button
+                    key={g.label}
+                    color="inherit"
+                    disableElevation
+                    endIcon={<ArrowDropDownIcon />}
+                    onClick={(e) => openMenu(e, g.label)}
+                    sx={{
+                      flexShrink: 0, whiteSpace: "nowrap", px: 1.5, minWidth: 0,
+                      bgcolor: active ? "rgba(255,255,255,.16)" : "transparent",
+                      "&:hover": { bgcolor: "rgba(255,255,255,.12)" },
+                    }}
+                  >
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <Box component="span" sx={{ display: "inline-flex", lineHeight: 0 }}>
+                        {g.icon}
+                      </Box>
+                      <span>{g.label}</span>
+                    </Stack>
+                  </Button>
+                );
+              })}
+            </>
           )}
-
-          {visibleGroups.map((g) => {
-            const active = groupActive(g);
-            return (
-              <Button
-                key={g.label}
-                color="inherit"
-                disableElevation
-                endIcon={<ArrowDropDownIcon />}
-                onClick={(e) => openMenu(e, g.label)}
-                sx={{
-                  flexShrink: 0, whiteSpace: "nowrap", px: { xs: 1, md: 1.5 }, minWidth: 0,
-                  bgcolor: active ? "rgba(255,255,255,.16)" : "transparent",
-                  "&:hover": { bgcolor: "rgba(255,255,255,.12)" },
-                }}
-              >
-                <Stack direction="row" spacing={0.75} alignItems="center">
-                  <Box component="span" sx={{ display: { xs: "none", md: "inline-flex" }, lineHeight: 0 }}>
-                    {g.icon}
-                  </Box>
-                  <span>{g.label}</span>
-                </Stack>
-              </Button>
-            );
-          })}
 
           <Box flexGrow={1} minWidth={8} />
 
@@ -304,54 +338,154 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NotificationsNoneRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          {/* فاز ۶۰: در حالت مشاهده تغییر رمز پنهان می‌شود تا رمز کاربر هدف اشتباهاً عوض نشود */}
-          {!impersonation && (
-            <Tooltip title="تغییر رمز عبور">
-              <IconButton color="inherit" size="small" onClick={() => navigate("/change-password")}>
-                <LockResetRoundedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+          {!isMobile && (
+            <>
+              {/* فاز ۶۰: در حالت مشاهده تغییر رمز پنهان می‌شود تا رمز کاربر هدف اشتباهاً عوض نشود */}
+              {!impersonation && (
+                <Tooltip title="تغییر رمز عبور">
+                  <IconButton color="inherit" size="small" onClick={() => navigate("/change-password")}>
+                    <LockResetRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {user && (
+                <Chip
+                  size="small"
+                  sx={{
+                    bgcolor: impersonation ? "#ff6d00" : "rgba(255,255,255,.22)",
+                    color: "#fff", fontWeight: 700, flexShrink: 0,
+                  }}
+                  label={user.display_name}
+                />
+              )}
+            </>
           )}
-          {user && (
-            <Chip
-              size="small"
-              sx={{
-                bgcolor: impersonation ? "#ff6d00" : "rgba(255,255,255,.22)",
-                color: "#fff", fontWeight: 700, flexShrink: 0,
-              }}
-              label={user.display_name}
-            />
-          )}
-          {/* فاز ۶۰: در حالت مشاهده دکمهٔ خروج = بازگشت به حساب مدیر؛
-              فراخوانی logout واقعی نشست refresh «مدیر» را ابطال می‌کرد (کوکی سرجاست). */}
-          <Tooltip title={impersonation ? "بازگشت به حساب مدیر" : "خروج از حساب"}>
-            <IconButton
-              color="inherit"
-              size="small"
-              onClick={async () => {
-                if (impersonation) {
-                  exitImpersonation();
-                  return;
-                }
-                await logout();
-                navigate("/login");
-              }}
-            >
+          <Tooltip title={logoutTitle}>
+            <IconButton color="inherit" size="small" onClick={doLogout}>
               <LogoutRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Toolbar>
       </AppBar>
 
-      {/* منوی پایه‌ای گروه‌ها */}
-      <Menu
-        anchorEl={anchorEl}
-        open={openGroup !== null}
-        onClose={closeMenu}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        slotProps={{ paper: { sx: { minWidth: 260, maxHeight: "72vh", mt: 0.75 } } }}
+      {/* فاز ۸۱: کشوی ناوبری اپیِ موبایل — سربرگ کاربر + گروه‌های تاشو + اقدامات حساب.
+          رندر شرطی (به‌جای تکیه بر انیمیشن خروج MUI): بستنِ هم‌زمان با ناوبری،
+          هرگز paper را گیر‌افتاده روی صفحه باقی نمی‌گذارد. */}
+      {mobileOpen && (
+      <Drawer
+        anchor="right"
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        PaperProps={{ sx: { width: 308, display: "flex", flexDirection: "column", bgcolor: "#fffafb" } }}
       >
+        <Box sx={{ p: 2, bgcolor: "primary.main", color: "#fff" }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <BrandIcon />
+            <Box flexGrow={1}>
+              <Typography fontWeight={800}>Rosepsy</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                {user ? user.display_name : "پنل کاربری"}
+              </Typography>
+            </Box>
+          </Stack>
+          {user && (
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+              {roles.map((r) => (
+                <Chip key={r} size="small" sx={{ bgcolor: "rgba(255,255,255,.2)", color: "#fff", height: 20, fontSize: 10 }} label={r} />
+              ))}
+            </Stack>
+          )}
+        </Box>
+        <List component="nav" sx={{ flexGrow: 1, overflowY: "auto", py: 0.5 }}>
+          {isApplicant && (
+            <ListItemButton onClick={() => goMobile("/me")}>
+              <ListItemIcon sx={{ minWidth: 38, color: "primary.main" }}><PersonPanelRoundedIcon /></ListItemIcon>
+              <ListItemText primary="پنل من" primaryTypographyProps={{ fontWeight: 700 }} />
+            </ListItemButton>
+          )}
+          {visibleGroups.map((g) => {
+            const expanded = openMobileGroup === g.label;
+            const active = groupActive(g);
+            return (
+              <Box key={g.label}>
+                <ListItemButton
+                  onClick={() => setOpenMobileGroup(expanded ? null : g.label)}
+                  sx={{ bgcolor: active && !expanded ? "rgba(176,74,90,.07)" : "transparent" }}
+                >
+                  <ListItemIcon sx={{ minWidth: 38, color: active ? "primary.main" : "text.secondary" }}>{g.icon}</ListItemIcon>
+                  <ListItemText primary={g.label} primaryTypographyProps={{ fontWeight: 800 }} />
+                  {expanded ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+                </ListItemButton>
+                <Collapse in={expanded} timeout="auto" unmountOnExit>
+                  <List disablePadding>
+                    {g.items.map((it) => (
+                      <ListItemButton
+                        key={it.path}
+                        onClick={() => goMobile(it.path)}
+                        selected={location.pathname === it.path}
+                        sx={{ pl: 4, py: 0.75 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 34, color: it.danger ? "error.main" : "primary.main" }}>
+                          {it.icon}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={0.75} alignItems="center">
+                              <Typography variant="body2" fontWeight={600}>{it.label}</Typography>
+                              {it.code && <Chip size="small" variant="outlined" sx={{ height: 16, fontSize: 9 }} label={it.code} />}
+                            </Stack>
+                          }
+                        />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                </Collapse>
+              </Box>
+            );
+          })}
+        </List>
+        <Divider />
+        <List sx={{ pb: "calc(8px + env(safe-area-inset-bottom))" }}>
+          <ListItemButton onClick={() => goMobile("/notifications")}>
+            <ListItemIcon sx={{ minWidth: 38, color: "primary.main" }}><NotificationsNoneRoundedIcon /></ListItemIcon>
+            <ListItemText primary="اعلان‌ها" primaryTypographyProps={{ fontWeight: 700 }} />
+          </ListItemButton>
+          {!impersonation && (
+            <ListItemButton onClick={() => goMobile("/change-password")}>
+              <ListItemIcon sx={{ minWidth: 38, color: "primary.main" }}><LockResetRoundedIcon /></ListItemIcon>
+              <ListItemText primary="تغییر رمز عبور" primaryTypographyProps={{ fontWeight: 700 }} />
+            </ListItemButton>
+          )}
+          {impersonation && (
+            <ListItemButton onClick={doLogout}>
+              <ListItemIcon sx={{ minWidth: 38, color: "warning.main" }}><SwapHorizRoundedIcon /></ListItemIcon>
+              <ListItemText primary="بازگشت به حساب مدیر" primaryTypographyProps={{ fontWeight: 700 }} />
+            </ListItemButton>
+          )}
+          {!impersonation && (
+            <ListItemButton onClick={doLogout}>
+              <ListItemIcon sx={{ minWidth: 38, color: "error.main" }}><LogoutRoundedIcon /></ListItemIcon>
+              <ListItemText primary="خروج از حساب" primaryTypographyProps={{ fontWeight: 700 }} />
+            </ListItemButton>
+          )}
+        </List>
+      </Drawer>
+      )}
+
+      {/* منوی پایه‌ای گروه‌ها (فقط دسکتاپ — موبایل از کشو استفاده می‌کند).
+          فاز ۸۱ - رندر شرطی: بستن منو هم‌زمان با navigate، ماشین‌حالت خروج Modal
+          را در محیط واقعی هم گاهی گیر می‌انداخت → backdrop نامرئی می‌ماند و
+          همهٔ کلیک‌های بعدی تا رفرش بی‌اثر می‌شد (عارضهٔ میدانی). با unmount
+          فوری، این کلاس باگ کلاً حذف می‌شود. */}
+      {!isMobile && anchorEl !== null && (
+        <Menu
+          anchorEl={anchorEl}
+          open
+          onClose={closeMenu}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{ paper: { sx: { minWidth: 260, maxHeight: "72vh", mt: 0.75 } } }}
+        >
         {openGroup &&
           visibleGroups
             .find((g) => g.label === openGroup)!
@@ -389,7 +523,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                 </MenuItem>
               </span>
             ))}
-      </Menu>
+        </Menu>
+      )}
 
       <Container maxWidth="lg" sx={{ mt: 4, pb: 6 }}>
         {children}

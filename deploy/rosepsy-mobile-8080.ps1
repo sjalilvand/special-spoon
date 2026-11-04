@@ -523,6 +523,7 @@ $tests = @(
     @{ U = '/manifest.webmanifest';               Want = 'manifest' },
     @{ U = '/sw.js';                              Want = 'sw' },
     @{ U = '/offline.html';                       Want = 'offline' },
+    @{ U = '/panel/manifest.webmanifest';         Want = 'panel-manifest' },
     @{ U = '/app-icon-192.png';                   Want = 'icon' },
     @{ U = '/app/rosepsy-1.0.0.apk';              Want = 'apk' },
     @{ U = '/docs/zarinpal-gateway-request.html'; Want = 'docs' }
