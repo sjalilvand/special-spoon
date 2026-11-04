@@ -17,14 +17,20 @@
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1            (اصلاح)
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode check (فقط گزارش)
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode revert (بعد از باز شدن پورت 80)
+#    ... -UrlHost domain   (اگر می‌خواهید آدرس‌های بیرونی دوباره دامنهٔ sslip.io شوند؛
+#                           پیش‌فرض «ip» است چون DNS دامنهٔ sslip.io از بعضی شبکه‌های
+#                           ایران کند است و IP خام سریع‌ترین راه است)
 # =====================================================================
 param(
     [ValidateSet('check','fix','revert')]
     [string]$Mode = 'fix',
-    [int]$ExternalPort = 8080   # در Mode=revert نادیده گرفته می‌شود (هدف = بدون پورت)
+    [int]$ExternalPort = 8080,  # در Mode=revert نادیده گرفته می‌شود (هدف = بدون پورت)
+    [ValidateSet('ip','domain')]
+    [string]$UrlHost = 'ip'     # ip: میزبان بیرونی = IP خام (سریع) — domain: دامنهٔ sslip.io
 )
 
 $ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $AppRoot   = 'C:\rosepsy\app'
 $Stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
 $BackupDir = "C:\rosepsy\backups\mobile8080-$Stamp"
@@ -38,7 +44,7 @@ $TargetPort = 80
 if ($Mode -ne 'revert') { $TargetPort = $ExternalPort }
 
 Write-Host ""
-Write-Host "==> نسخهٔ موبایل Rosepsy روی پورت $TargetPort (Mode=$Mode)" -ForegroundColor White
+Write-Host "==> نسخهٔ موبایل Rosepsy روی پورت $TargetPort (Mode=$Mode، میزبان=$UrlHost)" -ForegroundColor White
 Write-Host ""
 
 # ---------------------------------------------------------------
@@ -65,7 +71,11 @@ if (-not $Caddyfile) {
 if ($Caddyfile) { Write-Ok "Caddyfile: $Caddyfile" }
 else { Write-Warn2 "Caddyfile پیدا نشد — بخش PWA ممکن است root را نتواند تشخیص دهد" }
 
-# استخراج بلوک سایت :8080 و یافتن root
+# استخراج بلوک سایت :8080 و یافتن root.
+# نکتهٔ مهم: قالب سرور (rosepsy-server-native.ps1) بدنهٔ تنظیمات را در snippet
+# مشترک «(rosepsy_site)» می‌گذارد و بلوک :8080 فقط «import» می‌کند؛ پس اگر بلوک
+# import داشت، rootها را از خود snippet هم می‌خوانیم. اولویت: مسیر site\dist
+# (نه frontend/panel) که index.html واقعی دارد؛ وگرنه مسیر پیش‌فرض شناخته‌شده.
 $SiteRoot = $null
 if ($Caddyfile) {
     try {
@@ -74,6 +84,7 @@ if ($Caddyfile) {
         for ($i = 0; $i -lt $lines.Count; $i++) {
             if ($lines[$i] -match '(?<![\w.]):8080\s*\{') { $start = $i; break }
         }
+        $blocks = @()
         if ($start -ge 0) {
             $depth = 0
             $end   = $start
@@ -82,17 +93,54 @@ if ($Caddyfile) {
                 $depth -= ([regex]::Matches($lines[$i], '\}')).Count
                 if ($depth -le 0 -and $i -gt $start) { $end = $i; break }
             }
-            $block = ($lines[$start..$end] -join "`n")
-            $roots = [regex]::Matches($block, 'root\s+\*?\s*([^\s{]+)') |
-                     ForEach-Object { $_.Groups[1].Value.Trim('"') } | Select-Object -Unique
-            foreach ($r in $roots) {
-                if (Test-Path (Join-Path $r 'index.html')) { $SiteRoot = $r; break }
+            $blocks += ,($lines[$start..$end] -join "`n")
+            # اگر بلوک import داشت → snippet مشترک را هم بخوان
+            $imports = [regex]::Matches($blocks[0], '(?m)^\s*import\s+([\w-]+)') |
+                       ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+            foreach ($sn in $imports) {
+                $sStart = -1
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                    if ($lines[$i] -match ('^\s*\(' + [regex]::Escape($sn) + '\)\s*\{')) { $sStart = $i; break }
+                }
+                if ($sStart -ge 0) {
+                    $d2 = 0; $sEnd = $sStart
+                    for ($i = $sStart; $i -lt $lines.Count; $i++) {
+                        $d2 += ([regex]::Matches($lines[$i], '\{')).Count
+                        $d2 -= ([regex]::Matches($lines[$i], '\}')).Count
+                        if ($d2 -le 0 -and $i -gt $sStart) { $sEnd = $i; break }
+                    }
+                    $blocks += ,($lines[$sStart..$sEnd] -join "`n")
+                    Write-Info ("بلوک :8080 از snippet «{0}» استفاده می‌کند — rootها از آن خوانده شد" -f $sn)
+                }
+            }
+        }
+        $rootCands = @()
+        foreach ($b in $blocks) {
+            $r2 = [regex]::Matches($b, '(?m)^\s*root\s+\*?\s*"?([^\s"{]+)"?') |
+                  ForEach-Object { $_.Groups[1].Value.Trim('"') }
+            $rootCands += $r2
+        }
+        $rootCands = @($rootCands | Select-Object -Unique)
+        foreach ($r in $rootCands) {
+            if (($r -replace '/', '\') -match '(?i)site\\dist' -and (Test-Path (Join-Path $r 'index.html'))) { $SiteRoot = $r; break }
+        }
+        if (-not $SiteRoot) {
+            foreach ($r in $rootCands) {
+                if ($r -notmatch '(?i)frontend' -and (Test-Path (Join-Path $r 'index.html'))) { $SiteRoot = $r; break }
             }
         }
     } catch { Write-Warn2 "خواندن بلوک :8080 ناموفق: $($_.Exception.Message)" }
 }
+if (-not $SiteRoot) {
+    # fallback قطعی بر اساس چیدمان شناخته‌شدهٔ rosepsy-server-native
+    $defRoot = Join-Path $AppRoot 'site\dist'
+    if (Test-Path (Join-Path $defRoot 'index.html')) {
+        $SiteRoot = $defRoot
+        Write-Info ("ریشهٔ site از مسیر پیش‌فرض شناخته‌شده استفاده شد: {0}" -f $defRoot)
+    }
+}
 if ($SiteRoot) { Write-Ok "ریشهٔ site روی 8080: $SiteRoot" }
-else { Write-Warn2 "ریشهٔ site در بلوک :8080 شناسایی نشد — PWA فقط در سورس اعمال می‌شود" }
+else { Write-Warn2 "ریشهٔ site شناسایی نشد — PWA/APK فقط در سورس اعمال می‌شود" }
 
 # ---------------------------------------------------------------
 # گام ۲: نرمال‌سازی URLهای بیرونی در .env به پورت هدف
@@ -101,7 +149,7 @@ $UrlRx      = [regex]'https?://[^\s"''<>]+'
 $changedEnvs = @()
 
 Write-Host ""
-Write-Host "==> گام ۲: URLهای بیرونی در .env (پورت هدف: $TargetPort)" -ForegroundColor White
+Write-Host "==> گام ۲: URLهای بیرونی در .env (پورت هدف: $TargetPort | میزبان: $UrlHost)" -ForegroundColor White
 
 $envFiles = @()
 try {
@@ -125,16 +173,25 @@ foreach ($f in $envFiles) {
         $host_ = $u.Host
         if ($host_ -notmatch $DomainRx) { return $raw }
         if ($host_ -match '^(localhost|127\.0\.0\.1)$') { return $raw }
+
+        # میزبان هدف: ip = IP خام (سریع، بدون DNS) — domain = دامنهٔ sslip.io
+        $hostOut = $host_
         if ($Mode -ne 'revert') {
-            if ($u.Port -eq $TargetPort) { return $raw }             # همین حالا درست است
-            if ($u.Port -ne 80 -and $u.Port -ne 443) { return $raw } # پورت‌های دیگر (مثل 8082) دست‌نخورده
+            if ($UrlHost -eq 'ip') {
+                $hostOut = $host_ -replace '(?i)\.sslip\.io$', ''
+            } elseif ($host_ -eq '130.185.73.157') {
+                $hostOut = $host_ + '.sslip.io'
+            }
+            if ($u.Port -eq 80 -or $u.Port -eq 443) { $portOut = $TargetPort } else { $portOut = $u.Port }
         } else {
-            if ($u.Port -eq 80) { return $raw }                      # revert: بدون پورت یعنی 80
+            $portOut = 80   # revert: بدون پورت (پورت 80)
         }
-        $built = $u.Scheme + '://' + $u.Host
-        if ($TargetPort -ne 80) { $built += ':' + $TargetPort }
+
+        $built = $u.Scheme + '://' + $hostOut
+        if ($portOut -ne 80) { $built += ':' + $portOut }
         $built += $u.PathAndQuery
         if ($u.Fragment) { $built += $u.Fragment }
+        if ($built -eq $raw) { return $raw }
         $script:found = $true
         return $built
     })
@@ -310,7 +367,7 @@ function Add-PwaMetaToIndex {
 if ($Mode -ne 'check') {
     # ۴-الف) در dist سروشده (اثر فوری)
     if ($SiteRoot) {
-        Add-PwaFiles -Dir $SiteRoot -Label 'dist سروشده'
+        Add-PwaFiles -Dir $SiteRoot -Label 'dist سروشده' | Out-Null
         Add-PwaMetaToIndex -IndexPath (Join-Path $SiteRoot 'index.html') -Label 'dist سروشده'
     }
     # ۴-ب) در سورس (پایدار برای buildهای بعدی؛ اگر git برگرداند، اسکریپت را دوباره اجرا کنید)
@@ -318,7 +375,7 @@ if ($Mode -ne 'check') {
     if (Test-Path $srcSite) {
         $pub = Join-Path $srcSite 'public'
         if (-not (Test-Path $pub)) { New-Item -ItemType Directory -Path $pub -Force | Out-Null }
-        Add-PwaFiles -Dir $pub -Label 'سورس site/public'
+        Add-PwaFiles -Dir $pub -Label 'سورس site/public' | Out-Null
         Add-PwaMetaToIndex -IndexPath (Join-Path $srcSite 'index.html') -Label 'سورس site/index.html'
     }
 } else {
@@ -397,16 +454,20 @@ foreach ($t in $tests) {
 # ---------------------------------------------------------------
 Write-Host ""
 Write-Host "========================= جمع‌بندی نسخهٔ موبایل =========================" -ForegroundColor White
-Write-Host "  آدرس موبایل (اصلی)  : http://130.185.73.157.sslip.io:8080/"
-Write-Host "  پنل روی موبایل      : http://130.185.73.157.sslip.io:8080/panel/"
-Write-Host "  اپ اندروید (APK)    : http://130.185.73.157.sslip.io:8080/app/rosepsy-1.0.0.apk"
-Write-Host "  SSO (هم‌اکنون باز)   : http://130.185.73.157:8082"
+Write-Host "  آدرس اصلی (سریع‌ترین): http://130.185.73.157:8080/   ← بدون DNS؛ این را به کاربران بدهید"
+Write-Host "  آدرس جایگزین (دامنه) : http://130.185.73.157.sslip.io:8080/  (DNS دامنه از بعضی شبکه‌ها کند است)"
+Write-Host "  پنل روی موبایل       : http://130.185.73.157:8080/panel/"
+Write-Host "  اپ اندروید (APK)     : http://130.185.73.157:8080/app/rosepsy-1.0.0.apk"
+Write-Host "  SSO (هم‌اکنون باز)    : http://130.185.73.157:8082"
 if ($Mode -eq 'revert') {
     Write-Host "  حالت revert         : URLها به حالت بدون پورت برگشتند (پورت 80 باید باز شده باشد)"
     Write-Host "  گام بعدی            : deploy\windows\rosepsy-server-tls.ps1 را برای HTTPS اجرا کنید"
 } else {
-    Write-Host "  روی گوشی: آدرس را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
+    Write-Host "  روی گوشی: آدرس IP بالا را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
     Write-Host "  (آیکون رزپسی روی صفحهٔ گوشی می‌نشیند و تمام‌صفحه باز می‌شود)"
+    Write-Host "  درگاه پرداخت        : با UrlHost=ip آدرس callback هم روی IP می‌رود — یک پرداخت"
+    Write-Host "                        آزمایشی بزنید؛ اگر درگاه واقعی خطای دامنه داد، یک‌بار با"
+    Write-Host "                        «-UrlHost domain» اجرا کنید تا callback به دامنه برگردد"
 }
 Write-Host "  یادآوری             : URL بدون پورت (پورت 80) فقط با باز کردن TCP 80/443 در"
 Write-Host "                        پنل شرکت هاستینگ درست می‌شود؛ این مشکل داخل سرور نیست."
