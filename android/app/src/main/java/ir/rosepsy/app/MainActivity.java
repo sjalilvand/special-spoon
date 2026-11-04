@@ -27,24 +27,28 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 /**
- * فاز ۶۸ - پوستهٔ آنلاین سایت رزپسی.
+ * فاز ۶۸ - پوستهٔ آنلاین سایت رزپسی (به‌روز فاز ۷۸: تلاش اول روی 8080).
  * اپ هیچ داده‌ای را نگه نمی‌دارد؛ همه‌چیز از خود سایت خوانده می‌شود:
- * ابتدا HTTPS امتحان می‌شود و اگر سرور (فعلاً بدون پورت ۴۴۳) پاسخ نداد،
- * به‌صورت خودکار به HTTP همان دامنه سقوط می‌کند. صفحهٔ خطا هم دکمهٔ
- * «تلاش دوباره» دارد.
+ * چون فایروال شرکت هاستینگ فعلاً پورت‌های 80 و 443 را می‌بندد، تلاش اول
+ * روی http://...:8080 است؛ اگر روزی 443 باز شد ترتیب به https برمی‌گردد.
+ * صفحهٔ خطا هم دکمهٔ «تلاش دوباره» دارد که از 8080 شروع می‌کند.
  */
 public class MainActivity extends Activity {
 
     private static final String HOST = "130.185.73.157.sslip.io";
+    // فایروال هاستینگ فعلاً 80/443 را می‌بندد؛ تنها مسیر مطمئن امروز 8080 است.
+    // وقتی پورت‌های اصلی در پنل هاستینگ باز شدند، START_FAST را به
+    // "https://" + HOST + "/" تغییر دهید (یا کلاً ترتیب را جابه‌جا کنید).
+    private static final String START_FAST  = "http://" + HOST + ":8080/";
     private static final String START_HTTPS = "https://" + HOST + "/";
-    private static final String START_HTTP = "http://" + HOST + "/";
+    private static final String START_HTTP  = "http://" + HOST + "/";
 
     private static final int FILE_CHOOSER_CODE = 4242;
 
     private WebView web;
     private ProgressBar progress;
     private LinearLayout errorBox;
-    private boolean httpsFallbackUsed = false;
+    private int attempt = 0; // 0=8080 (مطمئن) ، 1=HTTPS، 2=HTTP:80
     private ValueCallback<Uri[]> pendingFilePick;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -77,7 +81,10 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new RoseChrome());
         web.setDownloadListener(new RoseDownloader());
 
-        findViewById(R.id.retryBtn).setOnClickListener(v -> loadSite());
+        findViewById(R.id.retryBtn).setOnClickListener(v -> {
+            attempt = 0; // تلاش دوباره همیشه از مسیر مطمئن 8080 شروع می‌کند
+            loadSite();
+        });
 
         if (savedInstanceState != null) {
             web.restoreState(savedInstanceState);
@@ -86,9 +93,15 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String startUrl(int a) {
+        if (a <= 0) return START_FAST;
+        if (a == 1) return START_HTTPS;
+        return START_HTTP;
+    }
+
     private void loadSite() {
         hideError();
-        web.loadUrl(httpsFallbackUsed ? START_HTTP : START_HTTPS);
+        web.loadUrl(startUrl(attempt));
     }
 
     private void showError() {
@@ -101,13 +114,12 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * خرابی صفحهٔ اصلی: اول بار (یا هر بار که هنوز سقوط نکرده‌ایم) از HTTPS
-     * به HTTP می‌رویم؛ بعد از آن صفحهٔ خطا با دکمهٔ تلاش دوباره.
+     * خرابی صفحهٔ اصلی: 8080 ← HTTPS ← HTTP:80 و بعد صفحهٔ خطا با دکمهٔ تلاش دوباره.
      */
     private void handleMainFailure() {
-        if (!httpsFallbackUsed) {
-            httpsFallbackUsed = true;
-            web.loadUrl(START_HTTP);
+        if (attempt < 2) {
+            attempt++;
+            web.loadUrl(startUrl(attempt));
         } else {
             showError();
         }

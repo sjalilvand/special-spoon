@@ -1,0 +1,417 @@
+﻿# =====================================================================
+#  rosepsy-mobile-8080.ps1  —  نسخهٔ موبایل روی پورت 8080
+#  چون پورت 80/443 در فایروال شرکت هاستینگ بسته است، تمام لینک‌های
+#  بیرونی و تجربهٔ موبایل باید روی 8080 کار کند.
+#
+#  کاری که می‌کند:
+#    1) همهٔ URLهای بیرونی در فایل‌های .env را به پورت 8080 نرمال می‌کند
+#       (OTP، بازیابی رمز، callback پرداخت، BASE_URL ...) — با بکاپ
+#    2) ساخت manifest.webmanifest + آیکون 192/512 + متاتگ‌های موبایل
+#       و تزریق به صفحهٔ اصلی site (هم در dist سروشده، هم در سورس)
+#       → گوشی «افزودن به صفحهٔ اصلی» با آیکون رزپسی می‌دهد
+#    3) وارسی باندل‌های ساخته‌شده برای URL هاردکد (گزارش)
+#    4) همگام‌سازی APK اندروید (نسخهٔ 8080) از site\public\app به dist سروشده
+#    5) خودآزمایی کامل مسیرهای موبایل روی 8080
+#
+#  مصرف:
+#    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1            (اصلاح)
+#    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode check (فقط گزارش)
+#    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode revert (بعد از باز شدن پورت 80)
+# =====================================================================
+param(
+    [ValidateSet('check','fix','revert')]
+    [string]$Mode = 'fix',
+    [int]$ExternalPort = 8080   # در Mode=revert نادیده گرفته می‌شود (هدف = بدون پورت)
+)
+
+$ErrorActionPreference = 'Stop'
+$AppRoot   = 'C:\rosepsy\app'
+$Stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
+$BackupDir = "C:\rosepsy\backups\mobile8080-$Stamp"
+$DomainRx  = '^(?:130\.185\.73\.157|.*\.sslip\.io)$'
+
+function Write-Ok    { param($m) Write-Host "  [OK]     $m" -ForegroundColor Green }
+function Write-Warn2 { param($m) Write-Host "  [هشدار]  $m" -ForegroundColor Yellow }
+function Write-Info  { param($m) Write-Host "  [i]      $m" -ForegroundColor Cyan }
+
+$TargetPort = 80
+if ($Mode -ne 'revert') { $TargetPort = $ExternalPort }
+
+Write-Host ""
+Write-Host "==> نسخهٔ موبایل Rosepsy روی پورت $TargetPort (Mode=$Mode)" -ForegroundColor White
+Write-Host ""
+
+# ---------------------------------------------------------------
+# گام ۱: یافتن Caddyfile و ریشهٔ site که Caddy روی 8080 سرو می‌کند
+# ---------------------------------------------------------------
+$Caddyfile = $null
+$candidates = @(
+    "$AppRoot\deploy\Caddyfile",
+    "$AppRoot\deploy\caddy\Caddyfile",
+    "$AppRoot\deploy\windows\Caddyfile",
+    'C:\rosepsy\Caddyfile',
+    'C:\caddy\Caddyfile'
+)
+foreach ($c in $candidates) {
+    if (Test-Path $c) { $Caddyfile = $c; break }
+}
+if (-not $Caddyfile) {
+    try {
+        $hit = Get-ChildItem 'C:\rosepsy' -Filter 'Caddyfile' -Recurse -Depth 4 -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+        if ($hit) { $Caddyfile = $hit.FullName }
+    } catch { }
+}
+if ($Caddyfile) { Write-Ok "Caddyfile: $Caddyfile" }
+else { Write-Warn2 "Caddyfile پیدا نشد — بخش PWA ممکن است root را نتواند تشخیص دهد" }
+
+# استخراج بلوک سایت :8080 و یافتن root
+$SiteRoot = $null
+if ($Caddyfile) {
+    try {
+        $lines = Get-Content $Caddyfile
+        $start = -1
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '(?<![\w.]):8080\s*\{') { $start = $i; break }
+        }
+        if ($start -ge 0) {
+            $depth = 0
+            $end   = $start
+            for ($i = $start; $i -lt $lines.Count; $i++) {
+                $depth += ([regex]::Matches($lines[$i], '\{')).Count
+                $depth -= ([regex]::Matches($lines[$i], '\}')).Count
+                if ($depth -le 0 -and $i -gt $start) { $end = $i; break }
+            }
+            $block = ($lines[$start..$end] -join "`n")
+            $roots = [regex]::Matches($block, 'root\s+\*?\s*([^\s{]+)') |
+                     ForEach-Object { $_.Groups[1].Value.Trim('"') } | Select-Object -Unique
+            foreach ($r in $roots) {
+                if (Test-Path (Join-Path $r 'index.html')) { $SiteRoot = $r; break }
+            }
+        }
+    } catch { Write-Warn2 "خواندن بلوک :8080 ناموفق: $($_.Exception.Message)" }
+}
+if ($SiteRoot) { Write-Ok "ریشهٔ site روی 8080: $SiteRoot" }
+else { Write-Warn2 "ریشهٔ site در بلوک :8080 شناسایی نشد — PWA فقط در سورس اعمال می‌شود" }
+
+# ---------------------------------------------------------------
+# گام ۲: نرمال‌سازی URLهای بیرونی در .env به پورت هدف
+# ---------------------------------------------------------------
+$UrlRx      = [regex]'https?://[^\s"''<>]+'
+$changedEnvs = @()
+
+Write-Host ""
+Write-Host "==> گام ۲: URLهای بیرونی در .env (پورت هدف: $TargetPort)" -ForegroundColor White
+
+$envFiles = @()
+try {
+    $hits = @(Get-ChildItem $AppRoot -Filter '.env*' -Recurse -Depth 2 -File -Force -ErrorAction SilentlyContinue |
+             Where-Object { $_.FullName -notmatch 'node_modules|\\dist\\|runtime' })
+    $envFiles = @() + $hits
+    $rootEnv = 'C:\rosepsy\.env'
+    if (Test-Path $rootEnv) { $envFiles = @($rootEnv) + $envFiles }
+} catch { }
+
+if (-not $envFiles -or $envFiles.Count -eq 0) { Write-Warn2 "هیچ فایل .env یافت نشد" }
+
+foreach ($f in $envFiles) {
+    $text = [IO.File]::ReadAllText($f.FullName)
+    $script:found = $false
+    $newText = $UrlRx.Replace($text, {
+        param($m)
+        $raw = $m.Value
+        $u = $null
+        if (-not [System.Uri]::TryCreate($raw, [System.UriKind]::Absolute, [ref]$u)) { return $raw }
+        $host_ = $u.Host
+        if ($host_ -notmatch $DomainRx) { return $raw }
+        if ($host_ -match '^(localhost|127\.0\.0\.1)$') { return $raw }
+        if ($Mode -ne 'revert') {
+            if ($u.Port -eq $TargetPort) { return $raw }             # همین حالا درست است
+            if ($u.Port -ne 80 -and $u.Port -ne 443) { return $raw } # پورت‌های دیگر (مثل 8082) دست‌نخورده
+        } else {
+            if ($u.Port -eq 80) { return $raw }                      # revert: بدون پورت یعنی 80
+        }
+        $built = $u.Scheme + '://' + $u.Host
+        if ($TargetPort -ne 80) { $built += ':' + $TargetPort }
+        $built += $u.PathAndQuery
+        if ($u.Fragment) { $built += $u.Fragment }
+        $script:found = $true
+        return $built
+    })
+
+    if ($script:found) {
+        Write-Ok ("{0}:" -f $f.FullName)
+        $oldLines = $text -split "`r?`n"
+        $newLines = $newText -split "`r?`n"
+        for ($i = 0; $i -lt $oldLines.Count; $i++) {
+            if ($i -lt $newLines.Count -and $oldLines[$i] -ne $newLines[$i]) {
+                Write-Info ("    {0}" -f $newLines[$i].Trim())
+            }
+        }
+        if ($Mode -ne 'check') {
+            if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+            Copy-Item $f.FullName (Join-Path $BackupDir ($f.Name + '.' + $Stamp + '.bak')) -Force
+            [IO.File]::WriteAllText($f.FullName, $newText, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Ok ("    ذخیره شد (بکاپ: {0})" -f $BackupDir)
+        }
+        $changedEnvs += $f.FullName
+    }
+}
+if (-not $changedEnvs) { Write-Ok "URL بیرونیِ نیاز به تغییر پیدا نشد (همه درست‌اند)" }
+
+# ری‌استارت API اگر .env بک‌اند تغییر کرد
+if ($Mode -eq 'fix' -and ($changedEnvs | Where-Object { $_ -match '\\backend\\|^C:\\rosepsy\\\.env' })) {
+    try {
+        Restart-Service rosepsy-api -Force -ErrorAction Stop
+        Write-Ok "سرویس rosepsy-api ری‌استارت شد (اعمال .env جدید)"
+    } catch { Write-Warn2 "ری‌استارت rosepsy-api ناموفق: $($_.Exception.Message) — دستی ری‌استارت کنید" }
+}
+
+# اگر متغیر VITE_* عوض شد → build لازم است
+if ($changedEnvs | Where-Object { $_ -match 'site|frontend' }) {
+    Write-Warn2 "متغیرهای VITE تغییر کردند — برای اعمال، یک‌بار deploy را دوباره اجرا کنید (-Mode upgrade)"
+}
+
+# ---------------------------------------------------------------
+# گام ۳: وارسی باندل‌های ساخته‌شده (گزارش URL هاردکد)
+# ---------------------------------------------------------------
+Write-Host ""
+Write-Host "==> گام ۳: وارسی باندل‌های dist (URL هاردکد)" -ForegroundColor White
+if ($SiteRoot -and (Test-Path $SiteRoot)) {
+    try {
+        $jsFiles = Get-ChildItem $SiteRoot -Filter '*.js' -Recurse -ErrorAction SilentlyContinue
+        $hits = @()
+        foreach ($j in $jsFiles) {
+            $m2 = Select-String -Path $j.FullName -Pattern 'https?://(130\.185\.73\.157|[\w.-]+\.sslip\.io)' -AllMatches -ErrorAction SilentlyContinue
+            if ($m2) { $hits += $m2 }
+        }
+        if ($hits) {
+            foreach ($h in $hits) {
+                foreach ($mm in $h.Matches) { Write-Info ("{0}: {1}" -f (Split-Path $h.Path -Leaf), $mm.Value) }
+            }
+            Write-Info "پورت‌های غیر 80 (مثل :8082) اشکالی ندارند؛ فقط URL بدون پورت مشکل‌ساز است"
+        } else {
+            Write-Ok "هیچ URL هاردکد بیرونی در باندل‌ها نیست (فراخوانی‌ها نسبی‌اند — روی 8080 سالم)"
+        }
+    } catch { Write-Warn2 "وارسی باندل ناموفق: $($_.Exception.Message)" }
+} else {
+    Write-Info "ریشهٔ site مشخص نیست — این گام رد شد"
+}
+
+# ---------------------------------------------------------------
+# گام ۴: PWA — manifest + آیکون + متاتگ موبایل
+# ---------------------------------------------------------------
+Write-Host ""
+Write-Host "==> گام ۴: نسخهٔ موبایل (PWA) — manifest، آیکون، متاتگ" -ForegroundColor White
+
+$manifestJson = @'
+{
+  "name": "رزپسی | کلینیک مشاوره و روان‌درمانی",
+  "short_name": "رزپسی",
+  "description": "سامانهٔ نوبت‌دهی و مشاورهٔ رزپسی",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "fa",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+'@
+
+function New-RosepsyIcon {
+    param([int]$Size, [string]$Path)
+    try {
+        Add-Type -AssemblyName System.Drawing
+        $bmp = New-Object System.Drawing.Bitmap $Size, $Size
+        $g   = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.SmoothingMode     = 'AntiAlias'
+        $g.TextRenderingHint = 'AntiAliasGridFit'
+        $bg = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,15,23,42))
+        $g.FillRectangle($bg, 0, 0, $Size, $Size)
+        $accent = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,45,212,191))
+        $dot = [int]($Size * 0.10)
+        $g.FillEllipse($accent, [int]($Size*0.42), [int]($Size*0.78), $dot, $dot)
+        $font = New-Object System.Drawing.Font ('Tahoma', [float]($Size*0.52), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+        $fg   = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)
+        $sf   = New-Object System.Drawing.StringFormat
+        $sf.Alignment     = 'Center'
+        $sf.LineAlignment = 'Center'
+        $rect = New-Object System.Drawing.RectangleF ([float]0, [float]([math]::Round($Size * -0.03, 2)), [float]$Size, [float]$Size)
+        $g.DrawString([string][char]0x0631, $font, $fg, $rect, $sf)   # «ر»
+        $g.Dispose()
+        $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+        return $true
+    } catch {
+        Write-Warn2 "ساخت آیکون $Path ناموفق: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+$MetaTags = @(
+    '<link rel="manifest" href="/manifest.webmanifest"/>',
+    '<meta name="theme-color" content="#0f172a"/>',
+    '<link rel="apple-touch-icon" href="/app-icon-192.png"/>',
+    '<meta name="apple-mobile-web-app-capable" content="yes"/>',
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>',
+    '<meta name="apple-mobile-web-app-title" content="رزپسی"/>',
+    '<meta name="mobile-web-app-capable" content="yes"/>'
+) -join "`n  "
+
+function Add-PwaFiles {
+    param([string]$Dir, [string]$Label)
+    if (-not $Dir -or -not (Test-Path $Dir)) { return $false }
+    try {
+        $mPath = Join-Path $Dir 'manifest.webmanifest'
+        $i192  = Join-Path $Dir 'app-icon-192.png'
+        $i512  = Join-Path $Dir 'app-icon-512.png'
+        [IO.File]::WriteAllText($mPath, $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
+        $ok1 = New-RosepsyIcon -Size 192 -Path $i192
+        $ok2 = New-RosepsyIcon -Size 512 -Path $i512
+        Write-Ok ("{0}: manifest + آیکون 192/512 نوشته شد" -f $Label)
+        return ($ok1 -or $ok2)
+    } catch {
+        Write-Warn2 ("نوشتن PWA در {0} ناموفق: {1}" -f $Label, $_.Exception.Message)
+        return $false
+    }
+}
+
+function Add-PwaMetaToIndex {
+    param([string]$IndexPath, [string]$Label)
+    if (-not (Test-Path $IndexPath)) { return }
+    try {
+        $html = [IO.File]::ReadAllText($IndexPath)
+        if ($html -match 'manifest\.webmanifest') {
+            Write-Ok ("{0}: متاتگ PWA از قبل موجود است" -f $Label)
+            return
+        }
+        $idx = $html.ToLower().IndexOf('</head>')
+        if ($idx -lt 0) { Write-Warn2 ("{0}: تگ </head> پیدا نشد" -f $Label); return }
+        $newHtml = $html.Insert($idx, "  `n  $MetaTags`n")
+        if ($Mode -ne 'check') {
+            if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+            Copy-Item $IndexPath (Join-Path $BackupDir ((Split-Path $IndexPath -Leaf) + '.' + $Stamp + '.bak')) -Force
+            [IO.File]::WriteAllText($IndexPath, $newHtml, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Ok ("{0}: متاتگ‌های موبایل تزریق شد" -f $Label)
+        } else {
+            Write-Info ("{0}: متاتگ PWA تزریق خواهد شد (Mode=check — تغییری اعمال نشد)" -f $Label)
+        }
+    } catch {
+        Write-Warn2 ("تزریق متاتگ در {0} ناموفق: {1}" -f $Label, $_.Exception.Message)
+    }
+}
+
+if ($Mode -ne 'check') {
+    # ۴-الف) در dist سروشده (اثر فوری)
+    if ($SiteRoot) {
+        Add-PwaFiles -Dir $SiteRoot -Label 'dist سروشده'
+        Add-PwaMetaToIndex -IndexPath (Join-Path $SiteRoot 'index.html') -Label 'dist سروشده'
+    }
+    # ۴-ب) در سورس (پایدار برای buildهای بعدی؛ اگر git برگرداند، اسکریپت را دوباره اجرا کنید)
+    $srcSite = Join-Path $AppRoot 'site'
+    if (Test-Path $srcSite) {
+        $pub = Join-Path $srcSite 'public'
+        if (-not (Test-Path $pub)) { New-Item -ItemType Directory -Path $pub -Force | Out-Null }
+        Add-PwaFiles -Dir $pub -Label 'سورس site/public'
+        Add-PwaMetaToIndex -IndexPath (Join-Path $srcSite 'index.html') -Label 'سورس site/index.html'
+    }
+} else {
+    Write-Info "Mode=check — هیچ فایلی نوشته نشد"
+}
+
+# ---------------------------------------------------------------
+# گام ۵: APK اندروید — نسخهٔ 8080 از ریپو به dist سروشده
+# (بعد از git pull لازم نیست حتماً rebuild کل سایت شود)
+# ---------------------------------------------------------------
+Write-Host ""
+Write-Host "==> گام ۵: APK اندروید (/app/rosepsy-1.0.0.apk)" -ForegroundColor White
+$repoApk = Join-Path $AppRoot 'site\public\app\rosepsy-1.0.0.apk'
+if ($Mode -eq 'check') {
+    if (Test-Path $repoApk) { Write-Info ("APK در ریپو موجود است: {0}" -f $repoApk) }
+    else { Write-Warn2 ("APK در ریپو نیست (git pull کنید): {0}" -f $repoApk) }
+}
+elseif ($SiteRoot) {
+    if (Test-Path $repoApk) {
+        try {
+            $apkDest = Join-Path $SiteRoot 'app'
+            $dstFile = Join-Path $apkDest 'rosepsy-1.0.0.apk'
+            $srcHash = (Get-FileHash $repoApk -Algorithm MD5).Hash
+            $dstHash = if (Test-Path $dstFile) { (Get-FileHash $dstFile -Algorithm MD5).Hash } else { '' }
+            if ($srcHash -ne $dstHash) {
+                if (-not (Test-Path $apkDest)) { New-Item -ItemType Directory -Path $apkDest -Force | Out-Null }
+                if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+                if (Test-Path $dstFile) { Copy-Item $dstFile (Join-Path $BackupDir ('rosepsy-1.0.0.apk.' + $Stamp + '.bak')) -Force }
+                Copy-Item $repoApk $dstFile -Force
+                Write-Ok ("APK نسخهٔ 8080 در مسیر سروشده کپی شد: {0}" -f $dstFile)
+                Write-Info "کاربران: اپ قبلی را باز کنید ← همان آدرس همیشگی، نصب روی نصب قبلی (بدون حذف)"
+            } else {
+                Write-Ok "APK سروشده از قبل به‌روز است"
+            }
+        } catch { Write-Warn2 ("کپی APK ناموفق: {0}" -f $_.Exception.Message) }
+    } else {
+        Write-Warn2 ("APK ریپو پیدا نشد — ابتدا git pull کنید: {0}" -f $repoApk)
+    }
+} else {
+    Write-Info "ریشهٔ site مشخص نیست — کپی APK رد شد"
+}
+
+# ---------------------------------------------------------------
+# گام ۶: خودآزمایی روی 8080
+# ---------------------------------------------------------------
+Write-Host ""
+Write-Host "==> گام ۶: خودآزمایی (http://127.0.0.1:8080)" -ForegroundColor White
+$tests = @(
+    @{ U = '/';                                   Want = 'site' },
+    @{ U = '/panel/';                             Want = 'panel' },
+    @{ U = '/api/v1/health';                      Want = 'API' },
+    @{ U = '/manifest.webmanifest';               Want = 'manifest' },
+    @{ U = '/app-icon-192.png';                   Want = 'icon' },
+    @{ U = '/app/rosepsy-1.0.0.apk';              Want = 'apk' },
+    @{ U = '/docs/zarinpal-gateway-request.html'; Want = 'docs' }
+)
+foreach ($t in $tests) {
+    try {
+        $resp = Invoke-WebRequest -Uri ("http://127.0.0.1:8080" + $t.U) -UseBasicParsing -TimeoutSec 10
+        $len  = $resp.RawContentLength
+        $ct   = $resp.Headers['Content-Type']
+        $flag = "[OK]  "
+        if ($t.U -eq '/manifest.webmanifest' -and $ct -and $ct -notmatch 'manifest|json') {
+            $flag = "[هشدار]"
+            Write-Host "  $flag $($t.U) → $($resp.StatusCode) ($len بایت، $ct) — fallback SPA! تنظیم try_files در Caddyfile را بررسی کنید" -ForegroundColor Yellow
+            continue
+        }
+        Write-Host "  $flag $($t.U) → $($resp.StatusCode) ($len بایت)" -ForegroundColor Green
+    } catch {
+        Write-Host "  [خطا]  $($t.U) → $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# ---------------------------------------------------------------
+# جمع‌بندی
+# ---------------------------------------------------------------
+Write-Host ""
+Write-Host "========================= جمع‌بندی نسخهٔ موبایل =========================" -ForegroundColor White
+Write-Host "  آدرس موبایل (اصلی)  : http://130.185.73.157.sslip.io:8080/"
+Write-Host "  پنل روی موبایل      : http://130.185.73.157.sslip.io:8080/panel/"
+Write-Host "  اپ اندروید (APK)    : http://130.185.73.157.sslip.io:8080/app/rosepsy-1.0.0.apk"
+Write-Host "  SSO (هم‌اکنون باز)   : http://130.185.73.157:8082"
+if ($Mode -eq 'revert') {
+    Write-Host "  حالت revert         : URLها به حالت بدون پورت برگشتند (پورت 80 باید باز شده باشد)"
+    Write-Host "  گام بعدی            : deploy\windows\rosepsy-server-tls.ps1 را برای HTTPS اجرا کنید"
+} else {
+    Write-Host "  روی گوشی: آدرس را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
+    Write-Host "  (آیکون رزپسی روی صفحهٔ گوشی می‌نشیند و تمام‌صفحه باز می‌شود)"
+}
+Write-Host "  یادآوری             : URL بدون پورت (پورت 80) فقط با باز کردن TCP 80/443 در"
+Write-Host "                        پنل شرکت هاستینگ درست می‌شود؛ این مشکل داخل سرور نیست."
+Write-Host "  نگه‌داری            : بعد از هر «-Mode upgrade» (rebuild فرانت) این اسکریپت را"
+Write-Host "                        یک‌بار دیگر اجرا کنید تا PWA دوباره در dist تزریق شود."
+Write-Host "  برگرداندن           : -Mode revert   (بعد از باز شدن پورت 80)"
+Write-Host "=====================================================================" -ForegroundColor White
+Write-Host ""

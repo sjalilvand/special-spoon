@@ -13,7 +13,7 @@
 | حداقل اندروید | ۷ (API 24) |
 | target SDK | 34 |
 | حجم APK | ~۳۴ کیلوبایت |
-| آدرس شروع | ابتدا `https://130.185.73.157.sslip.io` و در صورت خطا سقوط خودکار به `http://` (چون پورت ۴۴۳ سرور بسته است؛ `usesCleartextTraffic=true`) |
+| آدرس شروع | ابتدا `http://130.185.73.157.sslip.io:8080` (فاز ۷۸: تنها پورت باز فایروال هاستینگ) و در صورت خطا سقوط خودکار به `https://` و بعد `http://` (پورت‌های 80/443 فعلاً در فایروال شرکت هاستینگ بسته‌اند؛ `usesCleartextTraffic=true`)؛ وقتی 443 باز شد ترتیب را در `MainActivity.java` برگردانید |
 
 ## امکانات اپ
 
@@ -37,6 +37,12 @@ export ANDROID_HOME=<path-to-android-sdk>
 سپس APK را در `site/public/app/rosepsy-<نسخه>.apk` کپی کنید (و اگر نام/نسخه
 عوض شد، لینک دکمهٔ `AppDownload.tsx` و QR در `scripts/make_rose_qr.py` را
 هم‌گام کنید)، build سایت را بگیرید و آپگرید سرور را اجرا کنید.
+
+> یادداشت فاز ۷۸: APK موجود در `site/public/app/rosepsy-1.0.0.apk` بدون تغییر
+> نام/نسخه (1.0.0 / versionCode 1) با همین سورس بازسازی و دوباره با
+> `android/rosepsy.keystore` امضا شده تا روی نصب‌های قبلی سوار شود.
+> (بازسازی بدون Android SDK با apktool + zipalign + apksigner انجام شد؛
+> نام فایل ثابت مانده تا لینک `/app/rosepsy-1.0.0.apk` و QR سایت معتبر بمانند.)
 
 ## امضا
 
