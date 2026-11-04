@@ -327,6 +327,20 @@ $manifestJson = @'
   "icons": [
     { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "رزرو نوبت",
+      "short_name": "نوبت",
+      "url": "/booking",
+      "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "کلینیک‌ها",
+      "short_name": "کلینیک‌ها",
+      "url": "/clinics",
+      "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }
 '@
@@ -383,12 +397,23 @@ function Add-PwaFiles {
         $srcM   = Join-Path $srcPub 'manifest.webmanifest'
         $src192 = Join-Path $srcPub 'app-icon-192.png'
         $src512 = Join-Path $srcPub 'app-icon-512.png'
-        if ((Test-Path $srcM) -and (Test-Path $src192) -and (Test-Path $src512) -and
-            ($Dir.TrimEnd('\').ToLower() -ne $srcPub.TrimEnd('\').ToLower())) {
+        $isSource = ($Dir.TrimEnd('\').ToLower() -eq $srcPub.TrimEnd('\').ToLower())
+        # فاز ۸۰: سورس site\public دیگر بازنویسی نمی‌شود — بازنویسیِ همین بخش، علتِ قدیمیِ
+        # خطای «local changes would be overwritten» در git pull بود
+        if ($isSource -and (Test-Path $mPath) -and (Test-Path $i192) -and (Test-Path $i512)) {
+            Write-Ok ("{0}: manifest + آیکون 192/512 از قبل موجود است (سورس دست نخورد)" -f $Label)
+            return $true
+        }
+        if (-not $isSource -and (Test-Path $srcM) -and (Test-Path $src192) -and (Test-Path $src512)) {
             Copy-Item $srcM   $mPath -Force
             Copy-Item $src192 $i192  -Force
             Copy-Item $src512 $i512  -Force
-            Write-Ok ("{0}: manifest + آیکون 192/512 از سورس کپی شد (طرح رز)" -f $Label)
+            # فاز ۸۰: سرویس‌ورکر و صفحهٔ آفلاین هم از سورس به dist
+            foreach ($swf in @('sw.js', 'offline.html')) {
+                $s = Join-Path $srcPub $swf
+                if (Test-Path $s) { Copy-Item $s (Join-Path $Dir $swf) -Force }
+            }
+            Write-Ok ("{0}: manifest + آیکون 192/512 + sw.js/offline.html از سورس کپی شد (طرح رز)" -f $Label)
             return $true
         }
         [IO.File]::WriteAllText($mPath, $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
@@ -496,6 +521,8 @@ $tests = @(
     @{ U = '/panel/';                             Want = 'panel' },
     @{ U = '/api/v1/health';                      Want = 'API' },
     @{ U = '/manifest.webmanifest';               Want = 'manifest' },
+    @{ U = '/sw.js';                              Want = 'sw' },
+    @{ U = '/offline.html';                       Want = 'offline' },
     @{ U = '/app-icon-192.png';                   Want = 'icon' },
     @{ U = '/app/rosepsy-1.0.0.apk';              Want = 'apk' },
     @{ U = '/docs/zarinpal-gateway-request.html'; Want = 'docs' }
@@ -540,6 +567,8 @@ if ($Mode -eq 'revert') {
 } else {
     Write-Host "  روی گوشی: آدرس IP بالا را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
     Write-Host "  (آیکون رزپسی روی صفحهٔ گوشی می‌نشیند و تمام‌صفحه باز می‌شود)"
+    Write-Host "  PWA کامل       : سرویس‌ورکر فعال است — باز کردن‌های بعدی از کش، سریع‌تر؛"
+    Write-Host "                   قطعی اینترنت → صفحهٔ آفلاین برند‌شده؛ کشوی «بیشتر» ← نصب PWA"
     Write-Host "  درگاه پرداخت        : با UrlHost=ip آدرس callback هم روی IP می‌رود — یک پرداخت"
     Write-Host "                        آزمایشی بزنید؛ اگر درگاه واقعی خطای دامنه داد، یک‌بار با"
     Write-Host "                        «-UrlHost domain» اجرا کنید تا callback به دامنه برگردد"

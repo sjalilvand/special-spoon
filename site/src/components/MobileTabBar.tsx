@@ -2,8 +2,14 @@ import {
   Box, Button, Drawer, List, ListItem, Paper, Stack, Typography,
 } from "@mui/material";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+
+// فاز ۸۰ - رویداد نصب PWA (اندروید/کروم). تایپ استاندارد هنوز در lib.dom نیست.
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 // ---------------------------------------------------------------------------
 // فاز ۷۹ - نوار ناوبری اپیِ موبایل (تجربهٔ PWA)
@@ -76,6 +82,29 @@ const MORE_ITEMS = [
 export default function MobileTabBar() {
   const { pathname, hash } = useLocation();
   const [more, setMore] = useState(false);
+  const [installEvt, setInstallEvt] = useState<InstallPromptEvent | null>(null);
+
+  // فاز ۸۰ - گرفتن رویداد نصب PWA: اگر مرورگر اجازهٔ نصب بدهد، دکمهٔ «نصب روی گوشی»
+  // در کشوی «بیشتر» ظاهر می‌شود؛ اگر اپ از قبل نصب باشد (standalone) دیده نمی‌شود.
+  useEffect(() => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (isStandalone) return;
+    const onBip = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as InstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", onBip);
+    return () => window.removeEventListener("beforeinstallprompt", onBip);
+  }, []);
+
+  const doInstall = () => {
+    const evt = installEvt;
+    setMore(false);
+    setInstallEvt(null);
+    evt?.prompt().catch(() => {});
+  };
 
   const tabSx = (active: boolean) => ({
     flex: 1,
@@ -183,14 +212,32 @@ export default function MobileTabBar() {
               {m.label}
             </ListItem>
           ))}
+          {/* فاز ۸۰ - نصب مستقیم PWA (وقتی مرورگر اجازه دهد) */}
+          {installEvt && (
+            <ListItem
+              component="button"
+              onClick={doInstall}
+              sx={{
+                borderRadius: 2, color: "#fff", fontWeight: 800, mt: 1,
+                bgcolor: "primary.main", width: "100%", textAlign: "right",
+                border: "none", cursor: "pointer", font: "inherit",
+                "&:hover": { bgcolor: "#6a2137" },
+              }}
+            >
+              ⬇️ نصب اپ روی گوشی (PWA)
+            </ListItem>
+          )}
           <ListItem
             component="a"
             href="/app/rosepsy-1.0.0.apk"
             onClick={() => setMore(false)}
             sx={{ borderRadius: 2, color: "primary.main", fontWeight: 800, mt: 1, bgcolor: "#faf0f3", "&:hover": { bgcolor: "#f3dce2" } }}
           >
-            ⬇️ دانلود اپ اندروید (APK)
+            📲 دانلود اپ اندروید (APK)
           </ListItem>
+          <Typography sx={{ fontSize: 11.5, color: "text.secondary", px: 1, mt: 1, lineHeight: 1.9 }}>
+            راهنما: در کروم منوی سه‌نقطه ← «Add to Home screen» و در آیفون دکمهٔ اشتراک ← «Add to Home Screen» — رزپسی مثل اپ واقعی تمام‌صفحه باز می‌شود.
+          </Typography>
         </List>
       </Drawer>
     </>

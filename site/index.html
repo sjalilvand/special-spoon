@@ -36,5 +36,14 @@
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // فاز ۸۰: ثبت سرویس‌ورکر PWA — کش آفلاین و سرعت بارهای بعدی روی موبایل.
+      // بعد از رویداد load ثبت می‌شود تا با رندر اول رقابت نکند؛ هر شکستی بی‌صدا نادیده گرفته می‌شود.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>

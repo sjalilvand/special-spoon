@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#7c2740" />
+  <title>رزپسی — بدون اتصال</title>
+  <style>
+    /* صفحهٔ آفلاین رزپسی — کاملاً خودبسنده (بدون فونت/عکس خارجی) تا خودش هم آفلاین کار کند */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: "Vazirmatn", "Segoe UI", Tahoma, Arial, sans-serif;
+      background: #fbf7f4;
+      color: #3d2530;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      background: #fff;
+      border: 1px solid #f3dce2;
+      border-radius: 24px;
+      padding: 36px 28px 30px;
+      box-shadow: 0 18px 50px rgba(124, 39, 64, .12);
+    }
+    .badge {
+      width: 84px; height: 84px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      background: #7c2740;
+      color: #fff;
+      font-size: 40px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 26px rgba(124, 39, 64, .30);
+    }
+    h1 { font-size: 20px; font-weight: 800; color: #7c2740; margin-bottom: 10px; }
+    p { font-size: 14.5px; line-height: 2; color: #6b5560; margin-bottom: 6px; }
+    .hint { font-size: 12.5px; color: #9a8790; margin-top: 10px; }
+    button {
+      margin-top: 22px;
+      width: 100%;
+      padding: 13px 0;
+      border: 0;
+      border-radius: 14px;
+      background: #7c2740;
+      color: #fff;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 22px rgba(124, 39, 64, .28);
+    }
+    button:active { transform: translateY(1px); }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #c9a0ac; margin-inline-start: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge">ر</div>
+    <h1>اتصال اینترنت در دسترس نیست</h1>
+    <p>الان نمی‌توانیم به سرور رزپسی وصل شویم.</p>
+    <p>صفحه‌هایی که قبلاً باز کرده‌اید از حافظهٔ گوشی باز می‌شوند<span class="dot"></span></p>
+    <p class="hint">به‌محض وصل‌شدن اینترنت، این صفحه خودکار دوباره بارگذاری می‌شود.</p>
+    <button type="button" onclick="location.reload()">تلاش دوباره</button>
+  </main>
+  <script>
+    // به‌محض برگشتن اتصال، خودکار بازگرد به سامانه
+    window.addEventListener('online', function () { location.reload(); });
+  </script>
+</body>
+</html>
