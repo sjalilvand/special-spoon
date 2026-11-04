@@ -166,7 +166,7 @@ export default function ClinicsPage() {
   return (
     <>
       <Header />
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 }, overflowX: "hidden" }}>
         <Typography variant="h4" fontWeight={900} color="primary" textAlign="center" gutterBottom>
           شبکهٔ کلینیک‌های شرکت رز
         </Typography>

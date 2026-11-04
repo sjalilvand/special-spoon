@@ -312,6 +312,7 @@ Write-Host "==> گام ۴: نسخهٔ موبایل (PWA) — manifest، آیکو
 
 $manifestJson = @'
 {
+  "id": "/",
   "name": "رزپسی | کلینیک مشاوره و روان‌درمانی",
   "short_name": "رزپسی",
   "description": "سامانهٔ نوبت‌دهی و مشاورهٔ رزپسی",
@@ -321,11 +322,11 @@ $manifestJson = @'
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "fa",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#fbf7f4",
+  "theme_color": "#7c2740",
   "icons": [
     { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
 '@
@@ -377,6 +378,19 @@ function Add-PwaFiles {
         $mPath = Join-Path $Dir 'manifest.webmanifest'
         $i192  = Join-Path $Dir 'app-icon-192.png'
         $i512  = Join-Path $Dir 'app-icon-512.png'
+        # فاز ۷۹: طرح رز از سورس (site\public) — اگر موجود بود کپی می‌شود؛ رسم فقط fallback است
+        $srcPub = Join-Path $AppRoot 'site\public'
+        $srcM   = Join-Path $srcPub 'manifest.webmanifest'
+        $src192 = Join-Path $srcPub 'app-icon-192.png'
+        $src512 = Join-Path $srcPub 'app-icon-512.png'
+        if ((Test-Path $srcM) -and (Test-Path $src192) -and (Test-Path $src512) -and
+            ($Dir.TrimEnd('\').ToLower() -ne $srcPub.TrimEnd('\').ToLower())) {
+            Copy-Item $srcM   $mPath -Force
+            Copy-Item $src192 $i192  -Force
+            Copy-Item $src512 $i512  -Force
+            Write-Ok ("{0}: manifest + آیکون 192/512 از سورس کپی شد (طرح رز)" -f $Label)
+            return $true
+        }
         [IO.File]::WriteAllText($mPath, $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
         $ok1 = New-RosepsyIcon -Size 192 -Path $i192
         $ok2 = New-RosepsyIcon -Size 512 -Path $i512

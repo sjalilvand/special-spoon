@@ -1,7 +1,7 @@
 import { Box, Button, Container, Stack, Typography } from "@mui/material";
 import { texts } from "../content/texts";
 
-const HERO_IMG = "/assets/img-12.png"; // بنر اصلی — از دارایی‌های موجود
+const HERO_IMG = "/assets/img-13.png"; // فاز ۷۹: img-12 عملاً سفیدِ خالی بود (بنر اصلی خراب) — طرح رز برند
 
 export default function Hero() {
   return (

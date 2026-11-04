@@ -2,7 +2,17 @@
 <html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- فاز ۷۹: viewport-fit=cover برای گوشی‌های ناچ‌دار (حالت standalone PWA) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- فاز ۷۹: متای PWA در سورس — با هر rebuild خودکار حاضر است (اسکریپت فقط fallback است) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/app-icon-192.png" />
+    <link rel="apple-touch-icon" href="/app-icon-192.png" />
+    <meta name="theme-color" content="#7c2740" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="رزپسی" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="description" content="کلینیک مشاوره و روان‌درمانی رزپسی — روان‌درمانی، مشاوره فردی و گروهی با تیمی از مشاوران متخصص، در محیطی امن و محرمانه." />
     <title>رزپسی | کلینیک مشاوره و روان‌درمانی</title>
   </head>

@@ -267,7 +267,7 @@ export default function PublicChatWidget() {
   return (
     <>
       {/* دکمهٔ شناور — پایین چپ (سایت راست‌به‌چپ) */}
-      <Box sx={{ position: "fixed", left: 18, bottom: 18, zIndex: 1400 }}>
+      <Box sx={{ position: "fixed", left: 18, bottom: { xs: 92, lg: 18 }, zIndex: 1400 }}>
         {open ? (
           <IconButton
             onClick={() => setOpen(false)}
@@ -291,7 +291,7 @@ export default function PublicChatWidget() {
         <Paper
           elevation={8}
           sx={{
-            position: "fixed", left: 16, bottom: 84, zIndex: 1400,
+            position: "fixed", left: 16, bottom: { xs: 158, lg: 84 }, zIndex: 1400,
             width: { xs: "calc(100vw - 32px)", sm: 380 },
             height: { xs: "calc(100dvh - 130px)", sm: 540 },
             maxHeight: 640, display: "flex", flexDirection: "column",

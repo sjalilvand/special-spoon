@@ -200,3 +200,17 @@ body { font-family: "Vazirmatn", Tahoma, sans-serif; background: #fbf7f4; color:
   0%,100% { box-shadow: 0 0 0 0 rgba(168,58,84,.45); }
   60%     { box-shadow: 0 0 0 7px rgba(168,58,84,0); }
 }
+
+/* ------------------------------------------------------------------ */
+/* فاز ۷۹ - تجربهٔ موبایل اپی (PWA)                                     */
+/* ------------------------------------------------------------------ */
+html { -webkit-text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+/* لنگان‌های # زیر هدر چسبان نروند */
+[id] { scroll-margin-top: 88px; }
+
+@media (max-width: 899.95px) {
+  /* کاهش هزینهٔ GPU بلورهای تزئینی روی گوشی‌های ضعیف‌تر (روانی اسکرول) */
+  .aurora span { filter: blur(44px); opacity: .5; }
+  .decor-blob { filter: blur(44px); }
+}
