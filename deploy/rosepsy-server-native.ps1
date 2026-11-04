@@ -169,6 +169,12 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
+# ۱.۰.۳۲: تشخیص به‌روزرسانی خودِ اسکریپت — پاورشِل نسخهٔ در حال اجرا را در حافظه نگه
+# می‌دارد؛ اگر همین اجرا با git pull نسخهٔ جدیدی از خود اسکریپت را دانلود کند،
+# بهبودهای وب (پورت جایگزین 8080، قوانین فایروال، تشخیص‌های جدید) تا «اجرای بعدی»
+# فعال نمی‌شوند. هش ابتدایی برای هشدار دقیق در Invoke-Upgrade ثبت می‌شود.
+try { $script:SelfHashAtStart = (Get-FileHash -Path $PSCommandPath -Algorithm SHA256).Hash } catch { $script:SelfHashAtStart = '' }
+
 # ---------- ثابت‌ها (نسخه‌های پین‌شده، هماهنگ با compose.yml) ----------
 $VER = @{
     pgInstaller = 'https://get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64.exe'
@@ -1673,6 +1679,17 @@ function Invoke-Upgrade {
     Assert-Admin
     Write-Step 'ارتقای Rosepsy (git + pip + مایگریشن + ساخت فرانت + ری‌استارت سرویس‌ها)'
     Get-AppRepo
+    # ۱.۰.۳۲: اگر همین اجرا، خودِ اسکریپت را به‌روزرسانی کرده باشد، نسخهٔ در حافظه قدیمی است
+    # (عارضهٔ واقعی v0.59.1: کاربر ارتقا زد، بیلد جدید اعمال شد اما Caddyfile جدید/فایروال/تشخیص‌ها
+    # در همان اجرا فعال نشدند). هشدار صریح، کاربر را به اجرای دوباره هدایت می‌کند.
+    try {
+        if ($script:SelfHashAtStart) {
+            $selfHashNow = (Get-FileHash -Path $PSCommandPath -Algorithm SHA256).Hash
+            if ($selfHashNow -ne $script:SelfHashAtStart) {
+                Write-Warn2 'اسکریپت استقرار در همین اجرا به‌روزرسانی شد (نسخهٔ جدید روی دیسک است). کد اپ همان اجرا اعمال می‌شود؛ برای فعال‌شدن بهبودهای وب‌سرور (پورت جایگزین 8080، قوانین فایروال، تشخیص‌های جدید) پس از پایان این اجرا، همین دستور ارتقا را یک بار دیگر اجرا کنید.'
+            }
+        }
+    } catch {}
     Install-PythonAndVenv
     if (-not $SkipFrontendBuild) { Install-NodeAndBuildFrontend }
     if (Test-Path "$AppDir\.env") { Copy-Item "$AppDir\.env" "$AppDir\backend\.env" -Force }

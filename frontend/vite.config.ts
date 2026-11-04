@@ -20,7 +20,11 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
-          "vendor-mui": ["@mui/material", "@mui/icons-material", "@emotion/react", "@emotion/styled"],
+          // فاز ۷۷: @mui/icons-material عمداً خارج از وندور است — اگر در وندور باشد،
+          // تمام آیکون‌های همهٔ ۵۰+ صفحه در بار اول eager دانلود می‌شوند؛ اکنون هر
+          // آیکون همراه صفحهٔ خودش (lazy) بارگذاری می‌شود و آیکون‌های مشترک Layout
+          // به‌صورت خودکار در chunk مشترک hoist می‌شوند.
+          "vendor-mui": ["@mui/material", "@emotion/react", "@emotion/styled"],
         },
       },
     },
