@@ -11,7 +11,8 @@
 #       → گوشی «افزودن به صفحهٔ اصلی» با آیکون رزپسی می‌دهد
 #    3) وارسی باندل‌های ساخته‌شده برای URL هاردکد (گزارش)
 #    4) همگام‌سازی APK اندروید (نسخهٔ 8080) از site\public\app به dist سروشده
-#    5) خودآزمایی کامل مسیرهای موبایل روی 8080
+#    5) انتظار برای بالا آمدن API بعد از ری‌استارت + خودآزمایی کامل مسیرهای موبایل روی 8080
+#       (اگر API بالا نیامد، انتهای لاگ سرویس هم چاپ می‌شود)
 #
 #  مصرف:
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1            (اصلاح)
@@ -39,6 +40,49 @@ $DomainRx  = '^(?:130\.185\.73\.157|.*\.sslip\.io)$'
 function Write-Ok    { param($m) Write-Host "  [OK]     $m" -ForegroundColor Green }
 function Write-Warn2 { param($m) Write-Host "  [هشدار]  $m" -ForegroundColor Yellow }
 function Write-Info  { param($m) Write-Host "  [i]      $m" -ForegroundColor Cyan }
+
+# --- سلامت API ---------------------------------------------------------
+# uvicorn بعد از ری‌استارت سرویس چند ثانیه‌ای طول می‌کشد آماده شود (init دیتابیس و …).
+# بدون این انتظار، خودآزماییِ بلافاصله بعد از ری‌استارت روی /api/v1/health خطای 502 می‌بیند
+# (Caddy به upstream که هنوز گوش نمی‌دهد وصل نمی‌شود) — عارضهٔ میدانی اجرای 2026-11-04.
+function Test-ApiUp {
+    try {
+        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/v1/health' -UseBasicParsing -TimeoutSec 4
+        return ($r.StatusCode -eq 200)
+    } catch { return $false }
+}
+function Wait-ApiUp {
+    param([int]$TimeoutSec = 90)
+    if (Test-ApiUp) { return $true }
+    Write-Host "  [i]      API در حال بالا آمدن است" -ForegroundColor Cyan -NoNewline
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 3
+        Write-Host "." -ForegroundColor Cyan -NoNewline
+        if (Test-ApiUp) { Write-Host ""; return $true }
+    }
+    Write-Host ""
+    return $false
+}
+function Show-ApiLogTail {
+    # اگر API بالا نیامد، انتهای جدیدترین لاگ سرویس را نشان بده (WinSW: C:\rosepsy\logs\rosepsy-api)
+    try {
+        $logDir = 'C:\rosepsy\logs\rosepsy-api'
+        if (Test-Path $logDir) {
+            $logs = @(Get-ChildItem $logDir -Filter '*.log' -File -ErrorAction SilentlyContinue)
+            if ($logs.Count -gt 0) {
+                $newest = $logs |
+                    Sort-Object LastWriteTime -Descending |
+                    Sort-Object @{Expression={ if ($_.Name -match '\.err\.') { 0 } elseif ($_.Name -match '\.out\.') { 1 } else { 2 } }} |
+                    Select-Object -First 1
+                Write-Warn2 ("انتهای لاگ {0}:" -f $newest.Name)
+                Get-Content $newest.FullName -Tail 12 -ErrorAction SilentlyContinue | ForEach-Object {
+                    Write-Host ("             {0}" -f $_) -ForegroundColor DarkGray
+                }
+            }
+        }
+    } catch { }
+}
 
 $TargetPort = 80
 if ($Mode -ne 'revert') { $TargetPort = $ExternalPort }
@@ -221,6 +265,11 @@ if ($Mode -eq 'fix' -and ($changedEnvs | Where-Object { $_ -match '\\backend\\|^
     try {
         Restart-Service rosepsy-api -Force -ErrorAction Stop
         Write-Ok "سرویس rosepsy-api ری‌استارت شد (اعمال .env جدید)"
+        # سرویس در SCM «Running» گزارش می‌شود ولی uvicorn هنوز در حال init است — صبر تا آماده شدن
+        if (-not (Wait-ApiUp -TimeoutSec 90)) {
+            Write-Warn2 "API بعد از ری‌استارت بالا نیامد — جزئیات در لاگ زیر"
+            Show-ApiLogTail
+        }
     } catch { Write-Warn2 "ری‌استارت rosepsy-api ناموفق: $($_.Exception.Message) — دستی ری‌استارت کنید" }
 }
 
@@ -423,6 +472,11 @@ elseif ($SiteRoot) {
 # ---------------------------------------------------------------
 Write-Host ""
 Write-Host "==> گام ۶: خودآزمایی (http://127.0.0.1:8080)" -ForegroundColor White
+# اگر API هنوز بالا نیامده باشد، /api/v1/health از مسیر Caddy خطای 502 می‌گیرد — اول صبر کن
+if (-not (Wait-ApiUp -TimeoutSec 90)) {
+    Write-Warn2 "API روی 127.0.0.1:8000 پاسخ نمی‌دهد — انتهای لاگ:"
+    Show-ApiLogTail
+}
 $tests = @(
     @{ U = '/';                                   Want = 'site' },
     @{ U = '/panel/';                             Want = 'panel' },
@@ -446,6 +500,13 @@ foreach ($t in $tests) {
         Write-Host "  $flag $($t.U) → $($resp.StatusCode) ($len بایت)" -ForegroundColor Green
     } catch {
         Write-Host "  [خطا]  $($t.U) → $($_.Exception.Message)" -ForegroundColor Red
+        if ($t.U -eq '/api/v1/health') {
+            if (Test-ApiUp) {
+                Write-Host "          (API مستقیم روی 8000 سالم است اما از مسیر Caddy پاسخ نمی‌گیرد — یک‌بار اجرا کنید: Restart-Service rosepsy-caddy" -ForegroundColor Yellow
+            } else {
+                Write-Host "          (سرویس API بالا نیست — وضعیت: Get-Service rosepsy-api | لاگ: C:\rosepsy\logs\rosepsy-api)" -ForegroundColor Yellow
+            }
+        }
     }
 }
 
