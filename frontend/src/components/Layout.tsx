@@ -68,6 +68,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // فاز ۵۹: کارتابل شخصی هر حساب — نقش‌ها، سطح دسترسی و کارهای در جریان
       { label: "کارتابل من", path: "/cartable", roles: ALL_STAFF, menuKey: "cartable", icon: <Inbox /> },
       { label: "داشبورد مدیر", code: "B24", path: "/admin-dashboard", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], menuKey: "admin-dashboard", icon: <QueryStats /> },
+      // فاز ۷۶: گزارش‌ساز و داشبوردساز — ابزار مدیریتی (مشاور عادی دادهٔ سازمان‌کل را نمی‌بیند)
+      { label: "گزارش‌ساز و داشبورد", path: "/report-builder", roles: ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN", "DPO"], menuKey: "report-builder", icon: <Insights /> },
       { label: "گزارش انطباق DPO", path: "/dpo-report", roles: ["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"], menuKey: "dpo-report", icon: <Gavel /> },
       // فاز ۵۲: چت آنلاین و مشاوره — همهٔ حساب‌های فعال (همکاران و متقاضیان)
       { label: "گفتگوی آنلاین", path: "/chat", roles: ["*"], menuKey: "chat", icon: <ChatBubbleRounded /> },

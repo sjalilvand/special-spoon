@@ -341,7 +341,8 @@ def otp_request(payload: OtpRequestPayload, request: Request, db: Session = Depe
     }
     if res["dev_code"] is not None:
         out["dev_code"] = res["dev_code"]
-        out["dev_notice"] = "حالت توسعه: کد به‌جای پیامک در پاسخ نمایش داده می‌شود"
+        # فاز ۷۶: علت نمایش کد — حالت توسعه یا پیکربندی‌نشدن سرویس پیامک
+        out["dev_notice"] = res.get("dev_notice") or "حالت توسعه: کد به‌جای پیامک در پاسخ نمایش داده می‌شود"
     return out
 
 

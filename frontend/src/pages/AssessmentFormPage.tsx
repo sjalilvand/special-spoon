@@ -257,6 +257,26 @@ export default function AssessmentFormPage() {
         )}
       </Box>
 
+      {/* فاز ۷۶: راهنمای وضعیت‌ها — پیش‌تر «پیش‌نویس/برگشتی» برای کاربر نامفهوم بود */}
+      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, bgcolor: "#fbf7fb" }}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="caption" color="text.secondary" fontWeight={700}>چرخهٔ وضعیت ارزیابی:</Typography>
+          {[
+            "پیش‌نویس (در حال تکمیل توسط شما)",
+            "نهایی (ثبت‌شده)",
+            "در انتظار بررسی (نزد مسئول فنی)",
+            "تأییدشده (بایگانی در پرونده)",
+          ].map((t) => (
+            <Chip key={t} size="small" variant="outlined" label={t} sx={{ cursor: "default" }} />
+          ))}
+          <Chip size="small" color="error" variant="outlined" label="برگشت‌خورده (نزد شما برای اصلاح)" />
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" mt={0.75} sx={{ lineHeight: 1.9 }}>
+          یعنی: فرم را کامل می‌کنید و «نهایی» می‌زنید → مسئول فنی آن را بازبینی می‌کند → یا تأیید می‌شود (بایگانی قطعی)
+          یا با ذکر دلیل به شما برمی‌گردد؛ در حالت برگشت، این کادر هشدار نارنجی را می‌بینید و پس از اصلاح دوباره نهایی می‌کنید. هیچ داده‌ای در برگشت حذف نمی‌شود.
+        </Typography>
+      </Paper>
+
       {status === "returned" && (
         <Alert severity="warning">
           این نسخه توسط مسئول فنی برگشت خورده است؛ پس از اصلاح، دوباره نهایی‌سازی کنید.

@@ -47,6 +47,25 @@ def _hash_code(mobile: str, code: str) -> str:
     return hashlib.sha256(f"{_PEPPER}:{mobile}:{code}".encode()).hexdigest()
 
 
+def sms_delivery_ready(s=None) -> bool:
+    """فاز ۷۶ (v0.59.0) - آیا کد از طریق پیامک واقعی به کاربر می‌رسد؟
+
+    فقط وقتی sms_enabled فعال است و آداپتور کلیددار واقعی (kavenegar/smsir)
+    پیکربندی شده باشد True است؛ در غیر این صورت کد باید در پاسخ API نمایش
+    داده شود تا جریان رزرو/ورود هرگز به بن‌بست «کد که دریافت نشد» نیفتد.
+    """
+    s = s or settings
+    try:
+        from app.services.integrations import active_sms_provider
+
+        if not getattr(s, "sms_enabled", False):
+            return False
+        provider, fallback = active_sms_provider(s)
+        return not (fallback or provider == "log")
+    except Exception:
+        return False
+
+
 def _gen_code() -> str:
     return f"{secrets.randbelow(1000000):06d}"
 
@@ -54,7 +73,9 @@ def _gen_code() -> str:
 def request_otp(db: Session, mobile: str, purpose: str, ip: str | None = None) -> dict:
     """صدور کد جدید؛ چالش‌های قبلی مصرف‌نشده باطل می‌شوند.
 
-    خروجی: {challenge, dev_code} — dev_code فقط در حالت توسعه.
+    خروجی: {challenge, dev_code, dev_notice} — dev_code فقط وقتی کد از
+    کانال دیگری (پیامک واقعی) قابل تحویل نیست: حالت توسعه یا پیکربندی‌نشدن
+    سرویس پیامک (فاز ۷۶ - رفع بن‌بست پرداخت رزرو آنلاین).
     """
     now = datetime.now(timezone.utc)
     # سقف درخواست: حداکثر OTP_REQUEST_MAX چالش در OTP_REQUEST_WINDOW_SECONDS
@@ -89,13 +110,24 @@ def request_otp(db: Session, mobile: str, purpose: str, ip: str | None = None) -
     db.commit()
 
     dev_code = None
+    dev_notice = None
     if settings.otp_dev_mode:
         dev_code = code
+        dev_notice = "حالت توسعه: کد به‌جای پیامک در پاسخ نمایش داده می‌شود"
         # الزام «نمایش در لاگ» از roadmap فاز ۲۶ - کد هرگز در audit ذخیره نمی‌شود
         print(f"[OTP-DEV] mobile={mobile} purpose={purpose} code={code}")
+    elif not sms_delivery_ready(settings):
+        # فاز ۷۶ (v0.59.0): هیچ کانال تحویل واقعی پیکربندی نشده است؛ اگر کد
+        # نمایش داده نشود کاربر هرگز نمی‌تواند تأیید شود و پرداخت آنلاین رزرو
+        # عملاً غیرممکن می‌شود (گزارش کاربر: «امکان ادامه در این صفحه نیست»).
+        dev_code = code
+        dev_notice = ("سرویس پیامک هنوز پیکربندی نشده است؛ کد تأیید به‌صورت "
+                      "مستقیم نمایش داده می‌شود. برای فعال‌سازی پیامک واقعی با پشتیبانی تماس بگیرید.")
+        print(f"[OTP-FALLBACK] sms-not-configured mobile={mobile} purpose={purpose}")
     _try_send_otp_sms(settings, mobile, code, purpose)
-    record_audit(db, action="auth.otp_requested", detail={"purpose": purpose, "ip": ip})
-    return {"challenge": ch, "dev_code": dev_code, "rate_limited": False}
+    record_audit(db, action="auth.otp_requested", detail={"purpose": purpose, "ip": ip,
+                                                          "channel": "dev" if dev_code else "sms"})
+    return {"challenge": ch, "dev_code": dev_code, "dev_notice": dev_notice, "rate_limited": False}
 
 
 def _try_send_otp_sms(settings, mobile: str, code: str, purpose: str) -> None:

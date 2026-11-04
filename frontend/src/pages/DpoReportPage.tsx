@@ -1,8 +1,10 @@
 import {
-  Alert, Box, Card, CardContent, Chip, CircularProgress, Divider,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
+  DialogContent, DialogTitle, Divider,
   Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Typography,
 } from "@mui/material";
+import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { errDetail } from "../api/client";
@@ -96,6 +98,7 @@ function CountTable({ rows, emptyText }: {
 
 export default function DpoReportPage() {
   const [days, setDays] = useState(30);
+  const [helpOpen, setHelpOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["dpo-report", days],
     queryFn: () => fetchDpoReport(days),
@@ -131,11 +134,18 @@ export default function DpoReportPage() {
               رضایت، دسترسی، امنیت فایل و کانال ایمیل — B41+ فاز ۲۷ (تجمیعی و بی‌نام، بند ۱۵)
             </Typography>
           </Box>
-          {data && (
-            <Typography variant="caption" sx={{ opacity: 0.8 }}>
-              تولید: {formatJalaliDateTime(data.generated_at)} — توسط {data.generated_by}
-            </Typography>
-          )}
+          <Stack direction="row" spacing={1} alignItems="center">
+            {data && (
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                تولید: {formatJalaliDateTime(data.generated_at)} — توسط {data.generated_by}
+              </Typography>
+            )}
+            <Button size="small" variant="outlined" startIcon={<HelpOutlineRoundedIcon />}
+              onClick={() => setHelpOpen(true)}
+              sx={{ color: "#fff", borderColor: "rgba(255,255,255,.5)", borderRadius: 99 }}>
+              این گزارش چیست؟
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
@@ -158,6 +168,19 @@ export default function DpoReportPage() {
           دریافت گزارش ناموفق بود: {errDetail(error)}
         </Alert>
       )}
+
+      {/* فاز ۷۶: راهنمای روان گزارش برای غیرمتخصص‌ها */}
+      <Alert severity="info" sx={{ borderRadius: 2.5 }}>
+        <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+          <b>این گزارش چه می‌گوید؟</b> نشان می‌دهد سامانهٔ شما در چهار حوزهٔ قانون حفاظت داده (رضایت افراد،
+          رهگیری دسترسی‌ها، امنیت فایل‌ها و سلامت کانال اعلان‌ها) چه وضعیتی دارد — همه به‌صورت تجمیعی و بی‌نام.
+          عدد غیرعادی (مثلاً ورود ناموفق زیاد یا فایل قرنطینه‌شده) یعنی آن مورد را بررسی کنید؛ بخش‌های بعدی همین صفحه جزئیات را نشان می‌دهد.
+          {" "}
+          <Button size="small" variant="text" onClick={() => setHelpOpen(true)} sx={{ verticalAlign: "baseline" }}>
+            توضیح کامل بخش‌ها
+          </Button>
+        </Typography>
+      </Alert>
 
       {data && (
         <>
@@ -270,6 +293,45 @@ export default function DpoReportPage() {
           </Grid>
         </>
       )}
+
+      {/* راهنمای کامل بخش‌های گزارش (فاز ۷۶) */}
+      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>گزارش انطباق DPO — توضیح سادهٔ بخش‌ها</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} divider={<Divider flexItem />}>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>هدف کلی:</b> این گزارش «کارت سلامت حفاظت داده» سامانه است. حسابرس یا مسئول حفاظت داده (DPO)
+              با دیدن آن می‌فهمد حقوق مراجعین (رضایت آگاهانه، امنیت فایل، شفافیت دسترسی‌ها) رعایت می‌شود یا نه.
+              هیچ نام یا دادهٔ بالینی در آن نیست؛ فقط آمار.
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>۱. رضایت‌نامه‌ها:</b> هر خدمت حساس (درمان، آزمون، اشتراک داده، اطلاع‌رسانی) باید رضایت کتبی داشته باشد.
+              «فعال» یعنی رضایت معتبرِ در جریان؛ «ابطال‌شده» یعنی فرد حق را پس گرفته و سامانه دیگر حق استفاده دارد/ندارد.
+              اگر «ثبت بدون نسخهٔ متن» بزرگ شد یعنی برخی رضایت‌ها به متن نسخه‌دار وصل نشده‌اند — قابل پیگیری است.
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>۲. دسترسی و رخدادها:</b> ثبت رخدادهای مهم امنیتی (ورود موفق/ناموفق، مشاهده و چاپ ارزیابی، آپلود/دانلود فایل).
+              «ورود ناموفق زیاد» می‌تواند نشانهٔ تلاش برای حدس رمز باشد؛ «مشاهدهٔ ارزیابی» نشان می‌دهد چه کسی چه سندی را باز کرده (بند ۱۱/۱۴ سند).
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>۳. امنیت فایل:</b> هر فایل آپلودی پیش از در دسترس‌قرارگرفتن، اسکن ویروس می‌شود. «تمیز» یعنی سالم،
+              «قرنطینه» یعنی مشکوک و مسیرش بسته شده. اگر برچسب «قواعد پایه» دیدید یعنی سرویس ClamAV در دسترس نیست و باید بررسی شود.
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>۴. کانال ایمیل اعلان‌ها:</b> وضعیت صف ارسال اعلان‌ها؛ «در صف» زیاد یعنی SMTP مشکل دارد، «ناموفق» یعنی آدرس‌ها/سرور ایراد دارد.
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 2 }}>
+              <b>۵. حساب‌ها و نشست‌ها:</b> تعداد حساب‌های فعال/غیرفعال/در انتظار و نشست‌های جاری — برای کشف حساب‌های بی‌استفاده یا نشست‌های مشکوک.
+            </Typography>
+            <Alert severity="success">
+              <Typography variant="caption" sx={{ lineHeight: 1.9 }}>
+                راهنمای عملی: هر ماه یک‌بار این گزارش را در بازهٔ ۳۰ روزه ببینید؛ سه چیز را حتماً چک کنید: ورود ناموفق،
+                فایل قرنطینه، و ایمیل‌های ناموفق. بقیهٔ اعداد در حالت عادی پایدارند.
+              </Typography>
+            </Alert>
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }

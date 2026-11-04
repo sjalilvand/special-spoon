@@ -179,3 +179,57 @@ export interface ScanBackendStatus {
 export async function fetchScanBackendStatus(): Promise<ScanBackendStatus> {
   return (await apiClient.get("/files/scan-status")).data;
 }
+
+// ---------------- فاز ۷۶ - گزارش‌ساز و داشبوردساز ----------------
+
+export interface ReportDatasetDim { key: string; title: string }
+export interface ReportDataset {
+  key: string;
+  title: string;
+  dims: ReportDatasetDim[];
+  metrics: ReportDatasetDim[];
+  filters: string[];
+}
+
+export interface ReportRow { key: string; label: string; value: number }
+
+export interface ReportResult {
+  dataset: string;
+  title: string;
+  group_by: string;
+  group_by_title: string;
+  metric: string;
+  metric_title: string;
+  rows: ReportRow[];
+  total: number;
+  generated_at: string;
+}
+
+export interface ReportQueryParams {
+  dataset: string;
+  group_by: string;
+  metric: string;
+  days?: number;
+  date_from?: string;
+  date_to?: string;
+  status?: string;
+  counselor_id?: string;
+  test_id?: string;
+  limit?: number;
+}
+
+export async function fetchReportDatasets(): Promise<{ items: ReportDataset[] }> {
+  return (await apiClient.get("/reports/datasets")).data;
+}
+
+export async function fetchReportQuery(params: ReportQueryParams): Promise<ReportResult> {
+  return (await apiClient.get("/reports/query", { params })).data;
+}
+
+/** نشانی خروجی CSV (دانلود مستقیم با توکن نشست - همان origin پنل) */
+export function reportCsvUrl(params: ReportQueryParams): string {
+  const qs = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== "") as [string, string][],
+  );
+  return `/api/v1/reports/query/export?${qs.toString()}`;
+}

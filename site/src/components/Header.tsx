@@ -140,6 +140,10 @@ export default function Header() {
             sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
             کلینیک‌ها
           </ListItem>
+          <ListItem component="a" href="/payment-rules" onClick={() => setOpen(false)}
+            sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
+            قوانین پرداخت و استرداد وجه
+          </ListItem>
           {texts.nav.map((n) => (
             <ListItem key={n.id} component="a" href={`#${n.id}`} onClick={() => setOpen(false)}
               sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>

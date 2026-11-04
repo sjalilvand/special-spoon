@@ -68,6 +68,8 @@ MENU_GROUPS: list[dict] = [
             MenuEntry(key="cartable", title="کارتابل من", path="/cartable", self_service=True),
             MenuEntry(key="admin-dashboard", title="داشبورد مدیر", path="/admin-dashboard",
                       prefixes=["/reports/admin-dashboard"]),
+            MenuEntry(key="report-builder", title="گزارش‌ساز و داشبورد", path="/report-builder",
+                      prefixes=["/reports/query", "/reports/datasets"]),
             MenuEntry(key="dpo-report", title="گزارش انطباق DPO", path="/dpo-report",
                       prefixes=["/compliance"]),
             MenuEntry(key="chat", title="گفتگوی آنلاین", path="/chat", self_service=True),
@@ -284,6 +286,10 @@ MENU_SEED: list[tuple[str, str, str]] = [
     *(_seed(r, "dashboard", "view") for r in ALL_STAFF),
     *(_seed(r, "cartable", "edit") for r in ALL_STAFF),
     _seed("ORG_MANAGER", "admin-dashboard", "edit"),
+    # فاز ۷۶: گزارش‌ساز و داشبوردساز — ابزار مدیریتی؛ مشاور عادی دادهٔ سازمان‌کل را نمی‌بیند
+    # (نقاط پایانی آن GET هستند؛ سطح «دیدن» برای اجرای گزارش کافی است)
+    *(_seed(r, "report-builder", "view")
+      for r in ("ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "DPO")),
     _seed("ORG_MANAGER", "dpo-report", "read"),
     _seed("DPO", "dpo-report", "read"),
     *(_seed(r, "chat", "edit") for r in SELF_ROLES),

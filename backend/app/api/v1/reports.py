@@ -465,3 +465,411 @@ def list_audit_events(
             "detail": (e.detail if include_detail else None),
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+# ---------------------------------------------------------------------------
+# فاز ۷۶ (v0.59.0) - گزارش‌ساز و داشبوردساز
+#
+# موتور تجمیع عمومی: هر «مجموعه‌داده» (dataset) روی یک مدل اصلی سوار است و
+# گروه‌بندی روی ابعاد مشخص (وضعیت/مشاور/روز/ماه/...) با سنجهٔ تعداد یا مبلغ
+# را پشتیبانی می‌کند. همهٔ نقاط پایانی GET هستند تا با ماتریس دسترسی منو
+# (سطح دیدن/خواندن) هم‌راستا بمانند؛ خروجی CSV با BOM برای Excel فارسی.
+# ---------------------------------------------------------------------------
+
+from sqlalchemy import String as SAString, cast as sa_cast  # noqa: E402
+
+from app.models.payment import Order, Payment  # noqa: E402
+from app.models.psych_test import PsychAttempt  # noqa: E402
+from app.models.reviews import CounselorReview  # noqa: E402
+
+REPORT_STAFF_ROLES = STAFF_ROLES + ("DPO",)
+
+_STATUS_LABELS: dict[str, str] = {
+    # نوبت
+    "scheduled": "برنامه‌ریزی‌شده", "done": "انجام‌شده", "cancelled": "لغوشده", "no_show": "عدم حضور",
+    # پرونده
+    "new": "جدید", "awaiting_assignment": "در انتظار تخصیص", "active": "فعال",
+    "suspended": "معلق", "closed": "بسته", "archived": "بایگانی",
+    # درخواست مشاوره
+    "in_review": "در حال بررسی", "converted": "تبدیل به پرونده",
+    # سفارش و پرداخت
+    "pending": "در انتظار پرداخت", "paid": "پرداخت‌شده", "failed": "ناموفق",
+    "initiated": "آغازشده", "success": "موفق",
+    # ارزیابی
+    "draft": "پیش‌نویس", "finalized": "نهایی", "pending_review": "در انتظار بررسی",
+    "returned": "برگشت‌خورده", "approved": "تأییدشده",
+    # کاربر
+    "active": "فعال", "disabled": "غیرفعال",
+}
+_KIND_LABELS: dict[str, str] = {
+    "service": "خدمت مشاوره", "topup": "شارژ کیف پول", "course": "دوره آموزشی", "exam": "آزمون",
+}
+_GATEWAY_LABELS: dict[str, str] = {"sandbox": "درگاه شبیه‌ساز", "zarinpal": "زرین‌پال", "wallet": "کیف پول"}
+_PRIORITY_LABELS: dict[str, str] = {"low": "کم", "normal": "معمولی", "high": "بالا", "urgent": "فوری"}
+_RATING_LABELS: dict[str, str] = {str(i): f"امتیاز {i} از ۵" for i in range(1, 6)}
+
+_DAY_LABEL = "روز (تقویم میلادی)"
+_MONTH_LABEL = "ماه"
+
+REPORT_DATASETS: dict[str, dict] = {
+    "appointments": {
+        "title": "نوبت‌ها",
+        "model": Appointment,
+        "date_field": Appointment.scheduled_at,
+        "dims": ["status", "counselor", "day", "month"],
+        "metrics": ["count", "amount"],
+        "amount_field": Appointment.price_amount,
+        "filters": ["status", "counselor_id"],
+        "labels": {"status": _STATUS_LABELS},
+    },
+    "sessions": {
+        "title": "جلسات درمان",
+        "model": SessionModel,
+        "date_field": SessionModel.occurred_at,
+        "dims": ["counselor", "day", "month"],
+        "metrics": ["count"],
+        "filters": ["counselor_id"],
+        "labels": {},
+    },
+    "cases": {
+        "title": "پرونده‌ها",
+        "model": Case,
+        "date_field": Case.created_at,
+        "dims": ["status", "priority", "counselor", "day", "month"],
+        "metrics": ["count"],
+        "filters": ["status", "counselor_id"],
+        "labels": {"status": _STATUS_LABELS, "priority": _PRIORITY_LABELS},
+    },
+    "consultations": {
+        "title": "درخواست‌های مشاوره (سایت)",
+        "model": ConsultationRequest,
+        "date_field": ConsultationRequest.created_at,
+        "dims": ["status", "day", "month"],
+        "metrics": ["count"],
+        "filters": ["status"],
+        "labels": {"status": _STATUS_LABELS},
+    },
+    "orders": {
+        "title": "سفارش‌ها (فروش)",
+        "model": Order,
+        "date_field": Order.created_at,
+        "dims": ["status", "kind", "day", "month"],
+        "metrics": ["count", "amount"],
+        "amount_field": Order.payable_amount,
+        "filters": ["status"],
+        "labels": {"status": _STATUS_LABELS, "kind": _KIND_LABELS},
+    },
+    "payments": {
+        "title": "پرداخت‌ها (درگاه‌ها)",
+        "model": Payment,
+        "date_field": Payment.paid_at,
+        "date_nullable": True,
+        "dims": ["status", "gateway", "day", "month"],
+        "metrics": ["count", "amount"],
+        "amount_field": Payment.amount,
+        "filters": ["status"],
+        "labels": {"status": _STATUS_LABELS, "gateway": _GATEWAY_LABELS},
+    },
+    "psych_attempts": {
+        "title": "آزمون‌های روان‌شناسی",
+        "model": PsychAttempt,
+        "date_field": PsychAttempt.created_at,
+        "dims": ["test", "day", "month"],
+        "metrics": ["count", "score_avg"],
+        "filters": ["test_id"],
+        "labels": {},
+    },
+    "assessments": {
+        "title": "ارزیابی‌های بالینی",
+        "model": Assessment,
+        "date_field": Assessment.created_at,
+        "dims": ["status", "day", "month"],
+        "metrics": ["count"],
+        "filters": ["status"],
+        "labels": {"status": _STATUS_LABELS},
+    },
+    "reviews": {
+        "title": "نظرات مشاوران (سایت)",
+        "model": CounselorReview,
+        "date_field": CounselorReview.created_at,
+        "dims": ["rating", "counselor", "day", "month"],
+        "metrics": ["count"],
+        "filters": ["counselor_id"],
+        "labels": {"rating": _RATING_LABELS},
+    },
+}
+
+_DIM_TITLES = {
+    "status": "وضعیت", "counselor": "مشاور", "priority": "اولویت", "kind": "نوع سفارش",
+    "gateway": "درگاه پرداخت", "rating": "امتیاز", "test": "آزمون",
+    "day": _DAY_LABEL, "month": _MONTH_LABEL,
+}
+_METRIC_TITLES = {"count": "تعداد", "amount": "مبلغ (ریال)", "score_avg": "میانگین نمره"}
+
+
+def _month_bucket(field):
+    """باکس ماهانه قابل‌حمل (PostgreSQL/SQLite): substr(CAST(date(col) AS varchar),1,7)."""
+    return func.substr(sa_cast(func.date(field), SAString), 1, 7)
+
+
+def _resolve_names(db: Session, kind: str, keys: list[str]) -> dict[str, str]:
+    """نام انسانی برای ابعاد شناسه‌دار (مشاور/آزمون)."""
+    out: dict[str, str] = {}
+    if kind == "counselor":
+        ids = [uuid.UUID(k) for k in keys if k]
+        if not ids:
+            return out
+        rows = db.execute(
+            select(Counselor.id, Counselor.first_name, Counselor.last_name).where(Counselor.id.in_(ids))
+        ).all()
+        for cid, fn, ln in rows:
+            out[str(cid)] = f"{fn or ''} {ln or ''}".strip() or str(cid)[:8]
+    elif kind == "test":
+        from app.models.psych_test import PsychTest
+        ids = [uuid.UUID(k) for k in keys if k]
+        if not ids:
+            return out
+        rows = db.execute(select(PsychTest.id, PsychTest.title).where(PsychTest.id.in_(ids))).all()
+        for tid, title in rows:
+            out[str(tid)] = title or str(tid)[:8]
+    return out
+
+
+def _require_report_access(actor) -> None:
+    if not (_roles(actor) & set(REPORT_STAFF_ROLES)):
+        raise HTTPException(status_code=403, detail="دسترسی به گزارش‌ساز مجاز نیست")
+
+
+@router.get("/reports/datasets")
+def report_datasets(actor=Depends(get_current_user)) -> dict:
+    """فهرست مجموعه‌داده‌های گزارش‌ساز + ابعاد/سنجه‌های هرکدام (برای فرم‌ساز پنل)."""
+    _require_report_access(actor)
+    items = []
+    for key, ds in REPORT_DATASETS.items():
+        items.append({
+            "key": key,
+            "title": ds["title"],
+            "dims": [{"key": d, "title": _DIM_TITLES.get(d, d)} for d in ds["dims"]],
+            "metrics": [{"key": m, "title": _METRIC_TITLES.get(m, m)} for m in ds["metrics"]],
+            "filters": ds["filters"],
+        })
+    return {"items": items}
+
+
+def _run_report(
+    db: Session,
+    dataset: str,
+    group_by: str,
+    metric: str = "count",
+    days: int = 30,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+    counselor_id: str | None = None,
+    test_id: str | None = None,
+    limit: int = 200,
+) -> dict:
+    ds = REPORT_DATASETS.get(dataset)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="مجموعه‌دادهٔ گزارش یافت نشد")
+    if group_by not in ds["dims"]:
+        raise HTTPException(status_code=422, detail=f"بعد «{group_by}» برای این مجموعه‌داده مجاز نیست")
+    if metric not in ds["metrics"]:
+        raise HTTPException(status_code=422, detail=f"سنجهٔ «{metric}» برای این مجموعه‌داده مجاز نیست")
+
+    model = ds["model"]
+    date_field = ds["date_field"]
+    conds = []
+    until = None
+    if date_from or date_to:
+        try:
+            if date_from:
+                frm = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+                conds.append(date_field >= frm)
+            if date_to:
+                until = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc)
+                conds.append(date_field <= until)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="قالب تاریخ نامعتبر است (نمونه: 2025-01-31)")
+    else:
+        frm = datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 3650)))
+        conds.append(date_field >= frm)
+
+    # زمانی که ستون تاریخ nullable است (مثل paid_at) ردیف‌های خالی از فیلتر روز/ماه کنار گذاشته می‌شوند
+    if ds.get("date_nullable"):
+        conds.append(date_field.isnot(None))
+
+    if status and "status" in ds["filters"]:
+        conds.append(model.status.in_([s.strip() for s in status.split(",") if s.strip()]))
+    if counselor_id and "counselor_id" in ds["filters"]:
+        try:
+            conds.append(_counselor_col(ds) == uuid.UUID(counselor_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="شناسهٔ مشاور نامعتبر است")
+    if test_id and "test_id" in ds["filters"]:
+        try:
+            conds.append(model.test_id == uuid.UUID(test_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="شناسهٔ آزمون نامعتبر است")
+
+    # عبارت بعد گروه‌بندی
+    if group_by == "status":
+        dim = model.status
+        label_map = ds["labels"].get("status", {})
+        resolver = None
+    elif group_by == "priority":
+        dim = model.priority
+        label_map = ds["labels"].get("priority", {})
+        resolver = None
+    elif group_by == "kind":
+        dim = model.kind
+        label_map = ds["labels"].get("kind", {})
+        resolver = None
+    elif group_by == "gateway":
+        dim = model.gateway
+        label_map = ds["labels"].get("gateway", {})
+        resolver = None
+    elif group_by == "rating":
+        dim = sa_cast(model.rating, SAString)
+        label_map = ds["labels"].get("rating", {})
+        resolver = None
+    elif group_by == "counselor":
+        dim = _counselor_col(ds)
+        label_map = {}
+        resolver = "counselor"
+    elif group_by == "test":
+        dim = model.test_id
+        label_map = {}
+        resolver = "test"
+    elif group_by == "day":
+        dim = func.date(date_field)
+        label_map = {}
+        resolver = None
+    else:  # month
+        dim = _month_bucket(date_field)
+        label_map = {}
+        resolver = None
+
+    if metric == "count":
+        agg = func.count()
+    elif metric == "amount":
+        agg = func.coalesce(func.sum(ds["amount_field"]), 0)
+    else:  # score_avg
+        agg = func.avg(model.score)
+
+    rows = db.execute(
+        select(dim.label("k"), agg.label("v"))
+        .where(*conds)
+        .group_by(dim)
+        .order_by(func.count() if metric == "count" else agg)
+        .limit(max(1, min(limit, 500)))
+    ).all()
+    rows = list(rows)
+    # نزولی‌سازی در پایتون (ترتیب ارزش نزولی برای نمودارها)
+    rows.sort(key=lambda r: float(r.v or 0), reverse=True)
+
+    name_map = _resolve_names(db, resolver, [str(r.k) for r in rows]) if resolver else {}
+
+    items = []
+    for r in rows:
+        k = r.k
+        key = str(k) if k is not None else "—"
+        if resolver:
+            label = name_map.get(key) or key[:8]
+        elif key in label_map:
+            label = label_map[key]
+        elif key == "—":
+            label = "نامشخص/بدون مقدار"
+        else:
+            label = key
+        value = float(r.v or 0)
+        items.append({
+            "key": key,
+            "label": label,
+            "value": round(value, 1) if metric == "score_avg" else int(value),
+        })
+    total = sum(int(i["value"]) for i in items) if metric != "score_avg" else (
+        round(sum(float(i["value"]) for i in items) / len(items), 1) if items else 0
+    )
+    return {
+        "dataset": dataset,
+        "title": ds["title"],
+        "group_by": group_by,
+        "group_by_title": _DIM_TITLES.get(group_by, group_by),
+        "metric": metric,
+        "metric_title": _METRIC_TITLES.get(metric, metric),
+        "rows": items,
+        "total": total,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _counselor_col(ds: dict):
+    """ستون شناسهٔ مشاور برای هر مجموعه‌داده."""
+    model = ds["model"]
+    if hasattr(model, "counselor_id"):
+        return model.counselor_id
+    if hasattr(model, "primary_counselor_id"):
+        return model.primary_counselor_id
+    raise HTTPException(status_code=422, detail="این مجموعه‌داده فیلتر مشاور ندارد")
+
+
+@router.get("/reports/query")
+def report_query(
+    dataset: str,
+    group_by: str = "status",
+    metric: str = "count",
+    days: int = Query(default=30, ge=1, le=3650),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
+    status: str | None = Query(default=None, max_length=400),
+    counselor_id: str | None = Query(default=None, max_length=64),
+    test_id: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    actor=Depends(get_current_user),
+) -> dict:
+    """اجرای یک گزارش تجمیعی دلخواه (گزارش‌ساز - فاز ۷۶)."""
+    _require_report_access(actor)
+    return _run_report(db, dataset, group_by, metric, days, date_from, date_to,
+                       status, counselor_id, test_id, limit)
+
+
+@router.get("/reports/query/export")
+def report_query_export(
+    dataset: str,
+    group_by: str = "status",
+    metric: str = "count",
+    days: int = Query(default=30, ge=1, le=3650),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
+    status: str | None = Query(default=None, max_length=400),
+    counselor_id: str | None = Query(default=None, max_length=64),
+    test_id: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    actor=Depends(get_current_user),
+) -> Response:
+    """خروجی CSV همان گزارش — سازگار با Excel فارسی (BOM + جداسازی کاما)."""
+    _require_report_access(actor)
+    data = _run_report(db, dataset, group_by, metric, days, date_from, date_to,
+                       status, counselor_id, test_id, limit)
+    import csv as _csv
+    import io as _io
+
+    buf = _io.StringIO()
+    buf.write("\ufeff")  # BOM برای نمایش درست فارسی در Excel
+    w = _csv.writer(buf)
+    w.writerow(["مجموعه‌داده", data["title"]])
+    w.writerow(["گروه‌بندی", data["group_by_title"]])
+    w.writerow(["سنجه", data["metric_title"]])
+    w.writerow(["جمع", data["total"]])
+    w.writerow([])
+    w.writerow(["ردیف", "برچسب", "مقدار"])
+    for i, row in enumerate(data["rows"], 1):
+        w.writerow([i, row["label"], row["value"]])
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="rosepsy-report.csv"'},
+    )

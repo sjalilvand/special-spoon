@@ -6,11 +6,11 @@
 // رزرو پرداخت‌شده). جریان رزرو: انتخاب روز/ساعت → نگهداشت اسلات → فرم
 // اطلاعات + کد یک‌بارمصرف → پرداخت آنلاین → بازگشت از درگاه به /booking/result.
 import {
-  Alert, Avatar, Box, Button, Chip, CircularProgress, Container, Divider, FormControl,
-  InputLabel, LinearProgress, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Alert, Avatar, Box, Button, Chip, CircularProgress, Collapse, Container, Divider, FormControl,
+  InputLabel, LinearProgress, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from "@mui/material";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   createBookingHold, fetchBookingSlots, fetchCounselorReviews, fetchPublicCounselor,
   fetchPublicServices, postConsultation, postCounselorReview, releaseBookingHold,
@@ -85,6 +85,9 @@ function Stars({ value, size = 18 }: { value: number | null; size?: number }) {
 export default function SpecialistPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // فاز ۷۶: توکن دعوت ثبت‌نظر از لینک اختصاصی (?rt=...) به‌صورت خودکار پر می‌شود
+  const [searchParams] = useSearchParams();
+  const urlReviewToken = searchParams.get("rt") ?? "";
   const [profile, setProfile] = useState<(PublicCounselor & { degree: string | null }) | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [days, setDays] = useState<SlotDay[] | null>(null);
@@ -116,6 +119,7 @@ export default function SpecialistPage() {
   const [otpCode, setOtpCode] = useState("");
   const [otpToken, setOtpToken] = useState<string | null>(null);
   const [otpDevCode, setOtpDevCode] = useState<string | null>(null);
+  const [otpDevNotice, setOtpDevNotice] = useState<string | null>(null);
   const [otpBusy, setOtpBusy] = useState(false);
 
   // فرم ثبت نظر
@@ -124,6 +128,7 @@ export default function SpecialistPage() {
   const [rvComment, setRvComment] = useState("");
   const [rvMsg, setRvMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [rvBusy, setRvBusy] = useState(false);
+  const [rvManual, setRvManual] = useState(false);
 
   const loadSlots = async (counselorId: string) => {
     setDays(null); setDay(null); setSlot(null);
@@ -137,6 +142,11 @@ export default function SpecialistPage() {
   const loadReviews = (counselorId: string) => {
     fetchCounselorReviews(counselorId).then(setReviews).catch(() => setReviews(null));
   };
+
+  // فاز ۷۶: اگر کاربر با لینک دعوت (?rt=) آمده باشد، توکن خودکار پر می‌شود
+  useEffect(() => {
+    if (urlReviewToken) setRvToken(urlReviewToken);
+  }, [urlReviewToken]);
 
   useEffect(() => {
     if (!id) { setNotFound(true); return; }
@@ -228,6 +238,7 @@ export default function SpecialistPage() {
       const res = await requestOtp(mobile.trim());
       setOtpSent(true);
       setOtpDevCode(res.dev_code ?? null);
+      setOtpDevNotice(res.dev_notice ?? null);
       setOtpToken(null);
     } catch (err) {
       setError((err as Error).message || "خطا در ارسال کد تأیید");
@@ -299,7 +310,7 @@ export default function SpecialistPage() {
   const submitReview = async (e: FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    if (!rvToken.trim()) { setRvMsg({ kind: "err", text: "توکن ثبت نظر (از صفحهٔ نتیجهٔ پرداخت) را وارد کنید" }); return; }
+    if (!rvToken.trim()) { setRvMsg({ kind: "err", text: "لینک دعوت ثبت نظر یافت نشد؛ پس از پرداخت موفق از صفحهٔ نتیجه وارد شوید" }); return; }
     if (rvRating < 1) { setRvMsg({ kind: "err", text: "امتیاز ستاره‌ها را انتخاب کنید" }); return; }
     setRvBusy(true); setRvMsg(null);
     try {
@@ -590,8 +601,12 @@ export default function SpecialistPage() {
                       )}
                     </Stack>
                     {otpDevCode && (
-                      <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
-                        کد توسعه: {otpDevCode}
+                      <Alert severity={otpDevNotice ? "info" : "info"} sx={{ mt: 1.5, borderRadius: 2 }}>
+                        {otpDevNotice ? `${otpDevNotice}` : "کد توسعه:"}
+                        <Box component="code" dir="ltr" sx={{
+                          display: "inline-block", ml: 1, px: 1, borderRadius: 1,
+                          bgcolor: "#f6eef1", fontWeight: 800, fontSize: 14, letterSpacing: 2,
+                        }}>{otpDevCode}</Box>
                       </Alert>
                     )}
                   </Paper>
@@ -614,8 +629,20 @@ export default function SpecialistPage() {
                     sx={{ borderRadius: 99, fontWeight: 800, py: 1.4 }}>
                     {busy ? "در حال ثبت…" : `پرداخت آنلاین و ثبت نهایی${selectedService?.price_amount ? ` (${fmtPrice(selectedService.price_amount, selectedService.price_currency)})` : ""}`}
                   </Button>
+                  {!otpToken && (
+                    <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
+                      برای فعال‌شدن دکمهٔ پرداخت، ابتدا شمارهٔ موبایل خود را با کد یک‌بارمصرف تأیید کنید.
+                    </Typography>
+                  )}
                   <Typography variant="caption" color="text.secondary" textAlign="center">
                     پرداخت از طریق درگاه امن زرین‌پال انجام می‌شود؛ پس از پرداخت موفق، نوبت شما قطعی می‌شود.
+                  </Typography>
+                  <Typography variant="caption" textAlign="center" display="block">
+                    پیش از پرداخت،{" "}
+                    <Link href="/payment-rules" underline="hover" fontWeight={700}>
+                      قوانین پرداخت و استرداد وجه
+                    </Link>{" "}
+                    را ببینید.
                   </Typography>
                 </Stack>
               </Box>
@@ -693,11 +720,11 @@ export default function SpecialistPage() {
               </Stack>
             )}
 
-            {/* فرم ثبت نظر (توکن از صفحهٔ نتیجهٔ پرداخت) */}
+            {/* فرم ثبت نظر (فاز ۷۶: توکن از لینک دعوت ?rt= به‌صورت خودکار) */}
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fdf7f8", borderColor: "#f0d9df" }}>
               <Typography fontWeight={800} mb={1.5}>ثبت نظر و امتیاز شما</Typography>
               <Typography variant="body2" color="text.secondary" mb={2}>
-                فقط کاربرانی که رزرو پرداخت‌شده دارند می‌توانند نظر ثبت کنند. توکن دعوت پس از پرداخت موفق، در صفحهٔ نتیجه نمایش داده می‌شود.
+                فقط کاربرانی که رزرو پرداخت‌شده دارند می‌توانند نظر ثبت کنند؛ پس از پرداخت موفق، لینک اختصاصی ثبت نظر در صفحهٔ نتیجه فعال می‌شود و نیازی به واردکردن کد دستی نیست.
               </Typography>
               <Box component="form" onSubmit={submitReview}>
                 <Stack spacing={2}>
@@ -718,8 +745,25 @@ export default function SpecialistPage() {
                       </Box>
                     ))}
                   </Stack>
-                  <TextField size="small" label="توکن ثبت نظر" value={rvToken} dir="ltr"
-                    onChange={(e) => setRvToken(e.target.value)} inputProps={{ maxLength: 64 }} />
+                  {urlReviewToken ? (
+                    <Alert severity="success" sx={{ borderRadius: 2 }}>
+                      دعوت‌نامهٔ ثبت نظر شما شناسایی شد ✓ — فقط امتیاز و متن نظر را وارد کنید (این دعوت برای یک نوبت یک‌بار قابل استفاده است).
+                    </Alert>
+                  ) : (
+                    <>
+                      <Alert severity="info" sx={{ borderRadius: 2 }}>
+                        برای ثبت نظر، پس از پایان پرداخت روی دکمهٔ «ثبت نظر و امتیاز» در صفحهٔ نتیجه بزنید؛ به‌صورت خودکار به همین صفحه با دعوت‌نامهٔ آماده برمی‌گردید.
+                      </Alert>
+                      <Button size="small" variant="text" onClick={() => setRvManual((v) => !v)} sx={{ alignSelf: "flex-start" }}>
+                        {rvManual ? "بستن ورود دستی" : "توکن دعوت را دستی دارید؟"}
+                      </Button>
+                      <Collapse in={rvManual}>
+                        <TextField size="small" label="توکن دعوت (دستی)" value={rvToken} dir="ltr"
+                          onChange={(e) => setRvToken(e.target.value)} inputProps={{ maxLength: 64 }}
+                          sx={{ maxWidth: 420 }} />
+                      </Collapse>
+                    </>
+                  )}
                   <TextField label="متن نظر (اختیاری)" value={rvComment} multiline minRows={2}
                     onChange={(e) => setRvComment(e.target.value)} inputProps={{ maxLength: 1000 }} />
                   {rvMsg && (

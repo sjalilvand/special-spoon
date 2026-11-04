@@ -179,3 +179,69 @@ export function ChartCard({ title, desc, children, accent }: {
     </Paper>
   );
 }
+
+// ---------------- فاز ۷۶ - گزارش‌ساز: نمودار میله‌ای عمودی ----------------
+
+const BAR_PALETTE = ["#b04a5a", "#7a5c8a", "#2e7d32", "#1565c0", "#ed8c37", "#c62828", "#00838f", "#6d4c41", "#5c6bc0", "#c99a5b"];
+
+/** نمودار میله‌ای عمودی با برچسب ارزش - برای نتایج گزارش‌ساز (توزیع‌ها) */
+export function BarChart({
+  items, height = 230, color = "#b04a5a",
+}: {
+  items: { label: string; value: number }[];
+  height?: number;
+  color?: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const n = items.length;
+  if (!n) {
+    return (
+      <Typography variant="caption" color="text.secondary" display="block" py={4} textAlign="center">
+        داده‌ای برای نمایش نیست.
+      </Typography>
+    );
+  }
+  const maxV = Math.max(...items.map((d) => d.value), 1);
+  const labelH = 34, valH = 18, plotH = height - labelH - valH;
+  const slot = 100 / n;
+  return (
+    <Box sx={{ position: "relative" }}>
+      <svg viewBox={`0 0 100 ${height}`} width="100%" height={height} preserveAspectRatio="none"
+        style={{ display: "block" }} onMouseLeave={() => setHover(null)}>
+        {[0.25, 0.5, 0.75, 1].map((g) => (
+          <line key={g} x1={0} x2={100} y1={valH + plotH * (1 - g)} y2={valH + plotH * (1 - g)}
+            stroke="#eee2e6" strokeWidth={0.4} />
+        ))}
+        {items.map((it, i) => {
+          const h = Math.max(1.5, (it.value / maxV) * plotH);
+          const w = slot * 0.56;
+          const x = slot * i + (slot - w) / 2;
+          const y = valH + plotH - h;
+          const c = items.length <= BAR_PALETTE.length ? BAR_PALETTE[i % BAR_PALETTE.length] : color;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)}>
+              <rect x={x} y={y} width={w} height={h} rx={1.2}
+                fill={c} opacity={hover === null || hover === i ? 1 : 0.45} />
+              <text x={x + w / 2} y={height - 8} textAnchor="middle"
+                fontSize={4.4} fill="#6b5560">
+                {it.label.length > 14 ? `${it.label.slice(0, 13)}…` : it.label}
+              </text>
+              <text x={x + w / 2} y={y - 1.6} textAnchor="middle"
+                fontSize={4.6} fontWeight={700} fill="#3d2a33">
+                {it.value.toLocaleString("fa-IR")}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <Box sx={{
+          position: "absolute", top: 4, insetInlineStart: 4, bgcolor: "rgba(61,42,51,.94)",
+          color: "#fff", px: 1.2, py: 0.6, borderRadius: 1.5, fontSize: 12, pointerEvents: "none",
+        }}>
+          {items[hover].label}: <b>{items[hover].value.toLocaleString("fa-IR")}</b>
+        </Box>
+      )}
+    </Box>
+  );
+}

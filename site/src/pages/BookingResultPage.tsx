@@ -8,7 +8,7 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Container, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
 import { postCounselorReview } from "../api";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -104,8 +104,13 @@ export default function BookingResultPage() {
               <Typography variant="body1" color="text.secondary" mb={2}>
                 {success
                   ? "نوبت شما قطعی شد؛ پذیرش در زمان مقرر منتظر شماست."
-                  : "در صورت کسر وجه، مبلغ حداکثر تا ۷۲ ساعت به حساب شما بازمی‌گردد. می‌توانید دوباره تلاش کنید."}
+                  : "در صورت کسر وجه، مبلغ حداکثر تا ۷۲ ساعت به حساب شما بازمی‌گردد. جزئیات کامل در صفحهٔ قوانین پرداخت و استرداد وجه آمده است. می‌توانید دوباره تلاش کنید."}
               </Typography>
+              {!success && (
+                <Button variant="outlined" component={RouterLink} to="/payment-rules" sx={{ mb: 2, borderRadius: 99 }}>
+                  مشاهدهٔ قوانین پرداخت و استرداد وجه
+                </Button>
+              )}
 
               {success && req && (
                 <Chip color="primary" variant="outlined" sx={{ fontWeight: 700, letterSpacing: 1, mb: 2 }}
@@ -144,8 +149,18 @@ export default function BookingResultPage() {
                       {busy ? "در حال ثبت…" : "ثبت نظر و امتیاز"}
                     </Button>
                   )}
+                  {!done && counselorId && (
+                    <Button
+                      variant="outlined"
+                      component={RouterLink}
+                      to={`/specialist/${encodeURIComponent(counselorId)}?rt=${encodeURIComponent(token)}#reviews`}
+                      sx={{ borderRadius: 99, mt: 0.5 }}
+                    >
+                      ثبت نظر در صفحهٔ متخصص
+                    </Button>
+                  )}
                   <Typography variant="caption" color="text.secondary" display="block" mt={1} textAlign="center">
-                    توکن دعوت شما: <Box component="code" dir="ltr" sx={{ fontSize: 11 }}>{token.slice(0, 12)}…</Box> (این توکن برای یک نوبت یک‌بار قابل استفاده است)
+                    دعوت‌نامهٔ ثبت نظر شما فعال است و فقط برای همین نوبت یک‌بار قابل استفاده است.
                   </Typography>
                 </Box>
               )}

@@ -55,6 +55,7 @@ export default function Footer() {
                 { href: "#counselors", label: "مشاوران" },
                 { href: "#academy", label: "آکادمی رز" },
                 { href: "/booking", label: "رزرو نوبت آنلاین" },
+                { href: "/payment-rules", label: "قوانین پرداخت و استرداد وجه" },
                 { href: "/panel/", label: "ورود به سامانه مدیریت" },
               ].map((l) => (
                 <a key={l.href} href={l.href} style={{ color: "#f2cdd5", textDecoration: "none", fontSize: 14 }}>

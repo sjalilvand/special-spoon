@@ -15,5 +15,14 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    // فاز ۷۶: تقسیم وندور — بهبود سرعت بارگذاری پنل در موبایل با کش پایدار
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
+          "vendor-mui": ["@mui/material", "@mui/icons-material", "@emotion/react", "@emotion/styled"],
+        },
+      },
+    },
   },
 });

@@ -42,6 +42,7 @@ import OrdersPage from "../pages/OrdersPage";
 import ProcessesPage from "../pages/ProcessesPage";
 import ProcessMonitoringPage from "../pages/ProcessMonitoringPage";
 import ReviewsPage from "../pages/ReviewsPage";
+import ReportBuilderPage from "../pages/ReportBuilderPage";
 import ServicesPage from "../pages/ServicesPage";
 import SupervisorCasesPage from "../pages/SupervisorCasesPage";
 import TopicsPage from "../pages/TopicsPage";
@@ -97,6 +98,10 @@ export default function AppRoutes() {
       } />
       <Route path="/dpo-report" element={
         <ProtectedRoute roles={["ORG_MANAGER", "SYSTEM_ADMIN", "DPO"]}><Layout><DpoReportPage /></Layout></ProtectedRoute>
+      } />
+      {/* فاز ۷۶: گزارش‌ساز و داشبوردساز */}
+      <Route path="/report-builder" element={
+        <ProtectedRoute roles={["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN", "DPO"]}><Layout><ReportBuilderPage /></Layout></ProtectedRoute>
       } />
       <Route path="/audit-events" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN"]}><Layout><AuditEventsPage /></Layout></ProtectedRoute>
