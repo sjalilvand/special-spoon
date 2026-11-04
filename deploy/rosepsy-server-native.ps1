@@ -122,7 +122,7 @@
 #  سرویس ویندوزی بومی نصب می‌شوند؛ دانلودها ترجیحاً از GitHub Releases.
 #
 #  جدول پورت‌ها (قابل تغییر با پارامترها؛ همهٔ سرویس‌های داخلی فقط 127.0.0.1):
-#     80 / 443        Caddy           عمومی (وب + API)  <- تنها پورت‌های عمومی
+#     80 / 443 / 8080 Caddy           عمومی (وب + API؛ 8080 پورت جایگزین موبایل)
 #     8000            uvicorn API     127.0.0.1   -ApiPort
 #     5432            PostgreSQL      127.0.0.1   -DbPort
 #     6379            Redis           127.0.0.1   -RedisPort
@@ -154,6 +154,9 @@ param(
     [int]$ClamavPort = 3310,
     [int]$WebHttpPort = 80,
     [int]$WebHttpsPort = 443,
+    # ۱.۰.۳۱: پورت وب جایگزین (موبایل) — وقتی فایروال شرکت هاستینگ 80/443 را بسته باشد،
+    # معمولاً یک پورت غیراستاندارد با یک قانون ساده در پنل هاستینگ باز می‌شود.
+    [int]$AltWebPort = 8080,
     [string]$PipIndexUrl = '',
     [string]$NpmRegistry = '',
     [switch]$SkipFrontendBuild,
@@ -1154,11 +1157,17 @@ function New-CaddyfileContent([string]$siteAddr, [string]$tlsNote) {
 # $tlsNote
 # برای اجرای «برنامه‌های دیگر» روی همین سرور، بلوک‌های جدید با زیردامنهٔ sslip.io اضافه کنید؛ مثال:
 #   app2.130.185.73.157.sslip.io {  root * C:\apps2  file_server  }
+#
+# ۱.۰.۳۱: بدنهٔ پیکربندی در snippet مشترک «rosepsy_site» تعریف شده و روی دو پورت سرو می‌شود:
+#   - پورت 80 (استاندارد)
+#   - پورت جایگزین $AltWebPort — اگر فایروال «شرکت هاستینگ» پورت‌های 80/443 را بسته باشد
+#     (عارضهٔ میدانی: موبایل ERR_CONNECTION_TIMED_OUT می‌بیند)، با باز کردن یک پورت
+#     غیراستاندارد در پنل هاستینگ، دسترسی فوری از آدرس http://<دامنه>:$AltWebPort/ برقرار می‌شود.
 {
         admin off
 }
 
-$siteAddr {
+(rosepsy_site) {
         encode gzip zstd
         request_body {
                 max_size 15MB
@@ -1223,6 +1232,14 @@ $siteAddr {
                 file_server
         }
 }
+
+$siteAddr {
+        import rosepsy_site
+}
+
+:$AltWebPort {
+        import rosepsy_site
+}
 "@
     return $c
 }
@@ -1266,6 +1283,21 @@ function Update-CaddyfileFromTemplate {
     Write-Ok ("Caddyfile با قالب فعلی هم‌راستا شد: {0} (redir درستِ /panel اکنون فعال است)" -f $caddyPath)
 }
 
+
+# ۱.۰.۳۱: فایروال ویندوز برای پورت‌های عمومی وب — idempotent و در هر دو حالت setup و
+# upgrade اجرا می‌شود (قبلاً فقط در setup اجرا می‌شد و پورت جایگزین در ارتقا باز نمی‌شد).
+# توجه: این قوانین فقط فایروال «ویندوز» را باز می‌کنند؛ اگر شرکت هاستینگ پورت را در
+# فایروال خودش (پنل کاربری) نبسته باشد، باید آنجا هم/فقط آنجا باز شود.
+function Ensure-WebFirewallRules {
+    foreach ($wp in @($WebHttpPort, $WebHttpsPort, $AltWebPort) | Select-Object -Unique) {
+        try {
+            if (-not (Get-NetFirewallRule -DisplayName "Rosepsy Web $wp" -ErrorAction SilentlyContinue)) {
+                New-NetFirewallRule -DisplayName "Rosepsy Web $wp" -Direction Inbound -Protocol TCP -LocalPort $wp -Action Allow -Profile Any | Out-Null
+            }
+            Write-Ok ("فایروال ویندوز: پورت {0} باز است" -f $wp)
+        } catch { Write-Warn2 "فایروال: $($_.Exception.Message)" }
+    }
+}
 
 function Install-Caddy {
     Write-Step 'گام ۸: Caddy - تنها پورت‌های عمومی همین سرور (80/443)'
@@ -1320,15 +1352,8 @@ function Install-Caddy {
     New-WinSvc -Name 'rosepsy-caddy' -DisplayName 'Rosepsy Web (Caddy)' `
         -Description 'وب‌سرور + ریورس‌پروکسی API + TLS خودکار' `
         -Exe "$caddyDir\caddy.exe" -ArgsStr ("run --config `"$EtcDir\Caddyfile`" --adapter caddyfile") -WorkDir $caddyDir
-    # فایروال: فقط پورت‌های عمومی وب
-    foreach ($wp in @($WebHttpPort, $WebHttpsPort) | Select-Object -Unique) {
-        try {
-            if (-not (Get-NetFirewallRule -DisplayName "Rosepsy Web $wp" -ErrorAction SilentlyContinue)) {
-                New-NetFirewallRule -DisplayName "Rosepsy Web $wp" -Direction Inbound -Protocol TCP -LocalPort $wp -Action Allow -Profile Any | Out-Null
-            }
-            Write-Ok ("فایروال: پورت عمومی {0} باز شد (فقط همین دو پورت عمومی‌اند)" -f $wp)
-        } catch { Write-Warn2 "فایروال: $($_.Exception.Message)" }
-    }
+    # فایروال: پورت‌های عمومی وب (شامل پورت جایگزین موبایل)
+    Ensure-WebFirewallRules
     try { Start-WinSvc 'rosepsy-caddy' } catch { Write-Warn2 "caddy هنوز بالا نیامد: $($_.Exception.Message)" }
 }
 
@@ -1566,14 +1591,28 @@ function Invoke-HealthAndSummary {
     if ($apiOk) { Write-Ok 'API سالم است (/api/v1/health = 200)' }
     else { Write-Warn2 'API هنوز پاسخ نمی‌دهد - لاگ: C:\rosepsy\logs\rosepsy-api' }
     if ($Domain) {
-        try {
-            $r2 = Invoke-WebRequest -Uri ("https://{0}/api/v1/health" -f $Domain) -UseBasicParsing -TimeoutSec 20
-            Write-Ok ("HTTPS عمومی سالم است: https://{0}" -f $Domain)
-        } catch { Write-Warn2 'HTTPS هنوز آماده نیست (گواهی Let''s Encrypt تا چند دقیقه صادر می‌شود؛ بعداً تست کنید)' }
+        # ۱.۰.۳۱: وارسی گوش‌دهی واقعی Caddy + پیام دقیق فایروال هاستینگ.
+        # هشدار قدیمی «گواهی تا چند دقیقه صادر می‌شود» گمراه‌کننده بود: اگر پورت
+        # 80/443 در فایروال «شرکت هاستینگ» بسته باشد (عارضهٔ میدانی همین سرور —
+        # 3389/8082/8083 از بیرون بازند اما 80/443 پاسخ نمی‌دهند)، هیچ گواهی‌ای
+        # صادر نمی‌شود و مرورگر موبایل ERR_CONNECTION_TIMED_OUT می‌بیند.
+        # (تست «از داخل سرور به IP عمومی خودش» به‌دلیل اتصال محلی، همیشه موفق
+        # نشان داده می‌شود و فایروال هاستینگ را تشخیص نمی‌دهد؛ لذا گوش‌دهی داخلی
+        # وارسی و راهنمای فایروال هاستینگ چاپ می‌شود.)
+        $listenPorts = @(Get-NetTCPListener -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort -Unique)
+        foreach ($wp in @($WebHttpPort, $AltWebPort)) {
+            if ($listenPorts -contains $wp) { Write-Ok ("Caddy روی پورت {0} گوش می‌دهد" -f $wp) }
+            else { Write-Warn2 ("Caddy روی پورت {0} گوش نمی‌دهد - سرویس rosepsy-caddy و لاگ آن را بررسی کنید" -f $wp) }
+        }
+        if ($listenPorts -notcontains $WebHttpsPort) {
+            Write-Warn2 'TLS فعال نیست (قالب فعلی فقط HTTP روی 80/8080 است). برای HTTPS: ابتدا در پنل شرکت هاستینگ TCP 443 و 80 را باز کنید، سپس deploy\windows\rosepsy-server-tls.ps1 را اجرا کنید.'
+        }
+        Write-Host '  [یادآوری] اگر از بیرون (موبایل) خطای ERR_CONNECTION_TIMED_OUT می‌بینید، مشکل از فایروال شرکت هاستینگ است نه سرور: در پنل هاستینگ قانون Allow برای TCP 80 و 443 و 8080 ثبت کنید.' -ForegroundColor Yellow
     }
     Write-Host ''
     Write-Host '========================= جمع‌بندی استقرار =========================' -ForegroundColor Cyan
-    Write-Host ("  دامنه/وب        : https://{0}   (پنل: /panel/)" -f $Domain)
+    Write-Host ("  دامنه/وب        : http://{0}   (پنل: /panel/)" -f $Domain)
+    Write-Host ("  وب جایگزین موبایل: http://{0}:{1}/   (اگر TCP {1} در پنل هاستینگ باز شود)" -f $Domain, $AltWebPort)
     Write-Host ("  API داخلی       : http://127.0.0.1:{0}/api/v1" -f $ApiPort)
     Write-Host ("  PostgreSQL      : 127.0.0.1:{0}  (سرویس rosepsy-pg)" -f $DbPort)
     # رفع اشکال ۱.۰.۱۴: در حالت upgrade، متغیرهای RedisOk/ClamOk هرگز ست نمی‌شوند (فقط در setup ست می‌شوند)
@@ -1591,9 +1630,10 @@ function Invoke-HealthAndSummary {
     Write-Host '===================================================================' -ForegroundColor Cyan
     Write-Host ''
     Write-Host 'قدم‌های بعدی پیشنهادی:' -ForegroundColor White
-    Write-Host ("  1) ساخت ادمین:   Push-Location {0}\backend; & `"{1}`" create_admin.py; Pop-Location" -f $AppDir, $VenvPy)
-    Write-Host '  2) بازبینی .env (درگاه پرداخت، SMTP، OTP_DEV_MODE=false در عملیات)'
-    Write-Host '  3) وضعیت پورت‌ها برای برنامه‌های بعدی شما: -Mode status یا -Mode doctor'
+    Write-Host ("  1) دسترسی موبایل/اینترنت: در پنل شرکت هاستینگ قانون Allow برای TCP 80 و 443 و {0} ثبت کنید (علت ERR_CONNECTION_TIMED_OUT موبایل، بسته‌بودن پورت‌ها در فایروال هاستینگ است)" -f $AltWebPort)
+    Write-Host ("  2) ساخت ادمین:   Push-Location {0}\backend; & `"{1}`" create_admin.py; Pop-Location" -f $AppDir, $VenvPy)
+    Write-Host '  3) بازبینی .env (درگاه پرداخت، SMTP، OTP_DEV_MODE=false در عملیات)'
+    Write-Host '  4) وضعیت پورت‌ها برای برنامه‌های بعدی شما: -Mode status یا -Mode doctor'
 }
 
 # ---------- ارکستراتور setup ----------
@@ -1671,6 +1711,8 @@ function Invoke-Upgrade {
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
     # ۱.۰.۲۱: هم‌راستاسازی Caddyfile با قالب فعلی (خودترمیمی؛ شامل redir /panel)
     Update-CaddyfileFromTemplate
+    # ۱.۰.۳۱: پورت جایگزین موبایل باید در فایروال ویندوز هم باز باشد (idempotent)
+    Ensure-WebFirewallRules
     foreach ($s in 'rosepsy-api','rosepsy-caddy') {
         if (Get-Service -Name $s -ErrorAction SilentlyContinue) {
             Restart-Service $s

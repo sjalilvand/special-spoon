@@ -1,68 +1,86 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { CircularProgress } from "@mui/material";
+import { Box, CircularProgress } from "@mui/material";
 import Layout from "../components/Layout";
 import GlobalErrorBoundary from "../components/GlobalErrorBoundary";
 import { useAuth } from "../auth/AuthContext";
-import AccountingPage from "../pages/AccountingPage";
-import ActivatePage from "../pages/ActivatePage";
-import AdminDashboardPage from "../pages/AdminDashboardPage";
-import ApplicantsPage from "../pages/ApplicantsPage";
-import AssessmentFormPage from "../pages/AssessmentFormPage";
-import AuditEventsPage from "../pages/AuditEventsPage";
-import BranchMapPage from "../pages/BranchMapPage";
-import BranchesPage from "../pages/BranchesPage";
-import CaseDetailPage from "../pages/CaseDetailPage";
-import CasesPage from "../pages/CasesPage";
-import ChangePasswordPage from "../pages/ChangePasswordPage";
-import ConsultationRequestsPage from "../pages/ConsultationRequestsPage";
-import CounselorWorklistPage from "../pages/CounselorWorklistPage";
-import CounselorsPage from "../pages/CounselorsPage";
-import DashboardPage from "../pages/DashboardPage";
-import DpoReportPage from "../pages/DpoReportPage";
-import ImportsPage from "../pages/ImportsPage";
-import InvoicePage from "../pages/InvoicePage";
-import Level3AlertsPage from "../pages/Level3AlertsPage";
-import NotificationsPage from "../pages/NotificationsPage";
-import LoginPage from "../pages/LoginPage";
-import SupportPage from "../pages/SupportPage";
-import PsychTestCenterPage from "../pages/PsychTestCenterPage";
-import PsychAttemptsPage from "../pages/PsychAttemptsPage";
-import CounselingFilesPage from "../pages/CounselingFilesPage";
-import PsychTestRunPage from "../pages/PsychTestRunPage";
-import AssistantPage from "../pages/AssistantPage";
-import OrganizationsPage from "../pages/OrganizationsPage";
-import OrgProgramsPage from "../pages/OrgProgramsPage";
-import OrgProgramWorkdeskPage from "../pages/OrgProgramWorkdeskPage";
-import OrgExamResultsPage from "../pages/OrgExamResultsPage";
-import LearningPage from "../pages/LearningPage";
-import IntegrationsPage from "../pages/IntegrationsPage";
-import MyAssessmentsPage from "../pages/MyAssessmentsPage";
-import MyPanelPage from "../pages/MyPanelPage";
-import OrdersPage from "../pages/OrdersPage";
-import ProcessesPage from "../pages/ProcessesPage";
-import ProcessMonitoringPage from "../pages/ProcessMonitoringPage";
-import ReviewsPage from "../pages/ReviewsPage";
-import ReportBuilderPage from "../pages/ReportBuilderPage";
-import ServicesPage from "../pages/ServicesPage";
-import SupervisorCasesPage from "../pages/SupervisorCasesPage";
-import TopicsPage from "../pages/TopicsPage";
-import UsersPage from "../pages/UsersPage";
-import RolesPermissionsPage from "../pages/RolesPermissionsPage";
-import ChatPage from "../pages/ChatPage";
-import PublicChatsPage from "../pages/PublicChatsPage";
-// فاز ۶۱: فرم‌ساز و نظرسنجی + تماس تلفنی
-import FormBuilderPage from "../pages/FormBuilderPage";
-import FormResponsesPage from "../pages/FormResponsesPage";
-import MyFormsPage from "../pages/MyFormsPage";
-import FormFillPage from "../pages/FormFillPage";
-import VerificationReviewsPage from "../pages/VerificationReviewsPage";
-import WalletPage from "../pages/WalletPage";
-import CartablePage from "../pages/CartablePage";
 import ProtectedRoute from "./ProtectedRoute";
+
+// فاز ۷۷ — تقسیم کد در سطح مسیر (Route-level code splitting):
+// پیش از این، کد هر ۵۰+ صفحه در یک chunk واحد (~۱٫۱ مگابایت) بارگذاری می‌شد و
+// در موبایل/اینترنت کند، ورود به پنل بسیار کند بود. اکنون هر صفحه فقط هنگام
+// ورود به همان مسیر دانلود می‌شود، در کش مرورگر (Cache-Control immutable)
+// می‌ماند و ورود اولیه چند برابر سریع‌تر است.
+// LoginPage عمداً eager می‌ماند تا اولین رنگ‌آمیزی صفحهٔ ورود بدون انتظار اضافه باشد.
+import LoginPage from "../pages/LoginPage";
+
+const ActivatePage = lazy(() => import("../pages/ActivatePage"));
+const AccountingPage = lazy(() => import("../pages/AccountingPage"));
+const AdminDashboardPage = lazy(() => import("../pages/AdminDashboardPage"));
+const ApplicantsPage = lazy(() => import("../pages/ApplicantsPage"));
+const AssessmentFormPage = lazy(() => import("../pages/AssessmentFormPage"));
+const AuditEventsPage = lazy(() => import("../pages/AuditEventsPage"));
+const BranchMapPage = lazy(() => import("../pages/BranchMapPage"));
+const BranchesPage = lazy(() => import("../pages/BranchesPage"));
+const CaseDetailPage = lazy(() => import("../pages/CaseDetailPage"));
+const CasesPage = lazy(() => import("../pages/CasesPage"));
+const ChangePasswordPage = lazy(() => import("../pages/ChangePasswordPage"));
+const ConsultationRequestsPage = lazy(() => import("../pages/ConsultationRequestsPage"));
+const CounselorWorklistPage = lazy(() => import("../pages/CounselorWorklistPage"));
+const CounselorsPage = lazy(() => import("../pages/CounselorsPage"));
+const DashboardPage = lazy(() => import("../pages/DashboardPage"));
+const DpoReportPage = lazy(() => import("../pages/DpoReportPage"));
+const ImportsPage = lazy(() => import("../pages/ImportsPage"));
+const InvoicePage = lazy(() => import("../pages/InvoicePage"));
+const Level3AlertsPage = lazy(() => import("../pages/Level3AlertsPage"));
+const NotificationsPage = lazy(() => import("../pages/NotificationsPage"));
+const SupportPage = lazy(() => import("../pages/SupportPage"));
+const PsychTestCenterPage = lazy(() => import("../pages/PsychTestCenterPage"));
+const PsychAttemptsPage = lazy(() => import("../pages/PsychAttemptsPage"));
+const CounselingFilesPage = lazy(() => import("../pages/CounselingFilesPage"));
+const PsychTestRunPage = lazy(() => import("../pages/PsychTestRunPage"));
+const AssistantPage = lazy(() => import("../pages/AssistantPage"));
+const OrganizationsPage = lazy(() => import("../pages/OrganizationsPage"));
+const OrgProgramsPage = lazy(() => import("../pages/OrgProgramsPage"));
+const OrgProgramWorkdeskPage = lazy(() => import("../pages/OrgProgramWorkdeskPage"));
+const OrgExamResultsPage = lazy(() => import("../pages/OrgExamResultsPage"));
+const LearningPage = lazy(() => import("../pages/LearningPage"));
+const IntegrationsPage = lazy(() => import("../pages/IntegrationsPage"));
+const MyAssessmentsPage = lazy(() => import("../pages/MyAssessmentsPage"));
+const MyPanelPage = lazy(() => import("../pages/MyPanelPage"));
+const OrdersPage = lazy(() => import("../pages/OrdersPage"));
+const ProcessesPage = lazy(() => import("../pages/ProcessesPage"));
+const ProcessMonitoringPage = lazy(() => import("../pages/ProcessMonitoringPage"));
+const ReviewsPage = lazy(() => import("../pages/ReviewsPage"));
+const ReportBuilderPage = lazy(() => import("../pages/ReportBuilderPage"));
+const ServicesPage = lazy(() => import("../pages/ServicesPage"));
+const SupervisorCasesPage = lazy(() => import("../pages/SupervisorCasesPage"));
+const TopicsPage = lazy(() => import("../pages/TopicsPage"));
+const UsersPage = lazy(() => import("../pages/UsersPage"));
+const RolesPermissionsPage = lazy(() => import("../pages/RolesPermissionsPage"));
+const ChatPage = lazy(() => import("../pages/ChatPage"));
+const PublicChatsPage = lazy(() => import("../pages/PublicChatsPage"));
+// فاز ۶۱: فرم‌ساز و نظرسنجی + تماس تلفنی
+const FormBuilderPage = lazy(() => import("../pages/FormBuilderPage"));
+const FormResponsesPage = lazy(() => import("../pages/FormResponsesPage"));
+const MyFormsPage = lazy(() => import("../pages/MyFormsPage"));
+const FormFillPage = lazy(() => import("../pages/FormFillPage"));
+const VerificationReviewsPage = lazy(() => import("../pages/VerificationReviewsPage"));
+const WalletPage = lazy(() => import("../pages/WalletPage"));
+const CartablePage = lazy(() => import("../pages/CartablePage"));
 
 const CASE_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR"];
 const STAFF_ROLES = ["ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "SYSTEM_ADMIN"];
 const CLINICAL_ROLES = ["COUNSELOR", "TECHNICAL_SUPERVISOR"];
+
+/** فاز ۷۷: نشانگر بارگذاری هنگام دانلود chunk صفحهٔ جدید */
+function PageFallback() {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", mt: 12 }}>
+      <CircularProgress />
+    </Box>
+  );
+}
 
 function RoleRedirect() {
   const { user, loading } = useAuth();
@@ -76,6 +94,7 @@ export default function AppRoutes() {
   return (
     /* فاز ۵۱: مرز خطای سراسری — کرش رندر هر مسیر به‌جای صفحهٔ سفید، پیام فارسی دارد */
     <GlobalErrorBoundary>
+    <Suspense fallback={<PageFallback />}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivatePage />} />
@@ -318,6 +337,7 @@ export default function AppRoutes() {
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
     </GlobalErrorBoundary>
   );
 }
