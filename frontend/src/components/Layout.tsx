@@ -155,8 +155,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "کاربران", path: "/users", roles: ["SYSTEM_ADMIN"], menuKey: "users", icon: <GroupAdd /> },
       { label: "نقش‌ها و دسترسی‌ها", path: "/roles-permissions", roles: ["SYSTEM_ADMIN"], menuKey: "roles-permissions", icon: <ShieldRounded /> },
       { label: "رخدادهای امنیتی", path: "/audit-events", roles: ["SYSTEM_ADMIN"], menuKey: "audit-events", icon: <Description /> },
-      { label: "راهنمای سامانه", path: `${import.meta.env.BASE_URL}user-guide.html`, roles: ["*"], icon: <HelpOutline /> },
-      { label: "گزارش پیشرفت پروژه", path: `${import.meta.env.BASE_URL}project-status.html`, roles: ["*"], icon: <MenuBook /> },
+      // فاز ۸۲: دو لینک ایستا کلیددار شدند — ماتریس «نقش‌ها و دسترسی‌ها» حالا
+      // نمایش منوی آن‌ها را برای هر نقش کنترل می‌کند (کلید غایب = پنهان).
+      { label: "راهنمای سامانه", path: `${import.meta.env.BASE_URL}user-guide.html`, roles: ["*"], menuKey: "system-guide", icon: <HelpOutline /> },
+      { label: "گزارش پیشرفت پروژه", path: `${import.meta.env.BASE_URL}project-status.html`, roles: ["*"], menuKey: "project-progress", icon: <MenuBook /> },
     ],
   },
 ];

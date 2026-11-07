@@ -185,11 +185,17 @@ MENU_GROUPS: list[dict] = [
                       public_prefixes=["/rbac/me/permissions"]),
             MenuEntry(key="audit-events", title="رخدادهای امنیتی", path="/audit-events",
                       prefixes=["/audit-events"]),
+            # فاز ۸۲: دو لینک ایستا (فایل HTML مستقل، تب جدید) — تا فاز ۸۱ بیرونِ
+            # ماتریس بودند و برای همه اجباری دیده می‌شدند؛ اکنون کلیددار شدند.
+            # self_service=True: فایل HTML ایستا هستند و APIای برای دروازه‌بانی
+            # ندارند — ماتریس فقط «نمایش منو» را کنترل می‌کند.
+            MenuEntry(key="system-guide", title="راهنمای سامانه",
+                      path="/user-guide.html", self_service=True),
+            MenuEntry(key="project-progress", title="گزارش پیشرفت پروژه",
+                      path="/project-status.html", self_service=True),
         ],
     },
 ]
-
-# لینک‌های ایستا (راهنما/گزارش پیشرفت) جزو ماتریس نیستند — برای همه دیده می‌شوند
 
 ALL_MENU_ENTRIES: list[MenuEntry] = [
     item for group in MENU_GROUPS for item in group["items"]
@@ -369,4 +375,9 @@ MENU_SEED: list[tuple[str, str, str]] = [
     _seed("ORG_MANAGER", "audit-events", "read"),
     _seed("DPO", "audit-events", "read"),
     # users / roles-permissions فقط SYSTEM_ADMIN → بدون ردیف
+    # ── فاز ۸۲: لینک‌های ایستا ── تا دیروز بیرون ماتریس و برای همه دیده می‌شدند؛
+    # پیش‌فرض «دیدن» برای همهٔ نقش‌ها تا هیچ‌کس بعد از استقرار چیزی را از دست ندهد
+    # (مدیر از ماتریس می‌تواند برای هر نقش بردارد).
+    *(_seed(r, "system-guide", "view") for r in SELF_ROLES),
+    *(_seed(r, "project-progress", "view") for r in SELF_ROLES),
 ]
