@@ -96,6 +96,8 @@ from app.models.psych_test import (
     PsychStatus,
     PsychTest,
 )
+# فاز ۸۴: ویرایشگر صفحات عمومی سایت — مدل محتوا
+from app.models.site_content import SITE_PAGE_KEYS, SITE_PAGE_TITLES, SitePageContent
 from app.models.support import (
     Complaint,
     ComplaintStatus,
@@ -172,4 +174,6 @@ __all__ = [
     "PublicChatSession", "PublicChatMessage",
     "UserCounselingFile",
     "FormTemplate", "FormResponse", "CallSession", "FIELD_TYPES", "FORM_KINDS",
+    # فاز ۸۴: ویرایشگر صفحات عمومی سایت
+    "SitePageContent", "SITE_PAGE_KEYS", "SITE_PAGE_TITLES",
 ]

@@ -4,6 +4,7 @@ import { Box, CircularProgress } from "@mui/material";
 import HomePage from "./pages/HomePage";
 import MobileTabBar from "./components/MobileTabBar";
 import PublicChatWidget from "./components/PublicChatWidget";
+import { SiteContentProvider, useSiteContentVersion } from "./SiteContentProvider";
 
 // فاز ۷۶ (v0.59.0) - تقسیم کد (code-splitting): هر صفحه در chunk جداگانه
 // ساخته می‌شود تا حجم بار اول در موبایل به‌شدت کم شود و ورود به سایت سریع‌تر باشد.
@@ -23,7 +24,21 @@ function PageFallback() {
 }
 
 export default function App() {
+  return (
+    // فاز ۸۴ — محتوای ویرایش‌شدهٔ ادمین (ویرایشگر صفحات عمومی) بعد از اولین
+    // رندر واکشی و در جا اعمال می‌شود؛ Provider فقط در صورت تغییرِ واقعی،
+    // درخت را دوباره رندر می‌کند (بدون فلش، بدون remount).
+    <SiteContentProvider>
+      <SiteShell />
+    </SiteContentProvider>
+  );
+}
+
+function SiteShell() {
   const location = useLocation();
+  // اشتراک در نسخهٔ محتوا: با bump شدن نسخه، این کامپوننت و کل درخت زیرین
+  // دوباره رندر می‌شوند و متن‌های جدید از همان اشیاء ماژول خوانده می‌شود.
+  useSiteContentVersion();
 
   // فاز ۷۹ - اسکرول به بخش‌ها برای لینک‌های # (مثل «خدمات» تب‌بار موبایل /#services).
   // چون صفحات lazy هستند، چند بار تلاش می‌کنیم تا المان بعد از لود چانک پیدا شود.

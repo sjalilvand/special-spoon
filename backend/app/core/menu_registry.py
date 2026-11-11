@@ -199,6 +199,14 @@ MENU_GROUPS: list[dict] = [
             # فقط «نمایش منو» را کنترل می‌کند.
             MenuEntry(key="psych-form-builder", title="فرم‌ساز آزمون‌ها",
                       path="/psych-tests/builder", self_service=True),
+            # فاز ۸۴: ویرایشگر محتوای صفحات عمومی سایت (مثل وردپرس) — ویرایش و
+            # انتشار متن «خانه/روان‌درمانی/قوانین پرداخت» بدون تغییر کد. این API
+            # واقعی است (نه self_service): ماتریس خودش مسیرهای /site-content را
+            # گیت می‌کند؛ endpoint عمومی /site-content/public با public_prefixes
+            # همیشه باز است (اپ site بدون توکن صدا می‌زند).
+            MenuEntry(key="site-content-editor", title="ویرایشگر صفحات عمومی",
+                      path="/site-content", prefixes=["/site-content"],
+                      public_prefixes=["/site-content/public"]),
         ],
     },
 ]
@@ -390,4 +398,7 @@ MENU_SEED: list[tuple[str, str, str]] = [
     # مسیر فرم‌ساز ProtectedRoute خودش SYSTEM_ADMIN/ORG_MANAGER است و
     # SYSTEM_ADMIN بدون ردیف همیشه کامل است (bypass).
     _seed("ORG_MANAGER", "psych-form-builder", "view"),
+    # ── فاز ۸۴: ویرایشگر صفحات عمومی سایت ── فقط مدیر سازمان با سطح «ویرایش»
+    # (چون PUT/POST ماتریس‌محور است)؛ SYSTEM_ADMIN بدون ردیف همیشه کامل است.
+    _seed("ORG_MANAGER", "site-content-editor", "edit"),
 ]

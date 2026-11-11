@@ -39,6 +39,8 @@ const SupportPage = lazyRetry(() => import("../pages/SupportPage"));
 const PsychTestCenterPage = lazyRetry(() => import("../pages/PsychTestCenterPage"));
 const PsychAttemptsPage = lazyRetry(() => import("../pages/PsychAttemptsPage"));
 const PsychTestBuilderPage = lazyRetry(() => import("../pages/PsychTestBuilderPage"));
+// فاز ۸۴: ویرایشگر صفحات عمومی سایت (CMS وردپرسی‌وار)
+const SiteContentEditorPage = lazyRetry(() => import("../pages/SiteContentEditorPage"));
 const CounselingFilesPage = lazyRetry(() => import("../pages/CounselingFilesPage"));
 const PsychTestRunPage = lazyRetry(() => import("../pages/PsychTestRunPage"));
 const AssistantPage = lazyRetry(() => import("../pages/AssistantPage"));
@@ -252,6 +254,12 @@ export default function AppRoutes() {
       <Route path="/psych-tests/builder" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
           <Layout><PsychTestBuilderPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۸۴ - ویرایشگر صفحات عمومی سایت: پیش‌نویس/انتشار محتوای home/psycho/payment-rules */}
+      <Route path="/site-content" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
+          <Layout><SiteContentEditorPage /></Layout>
         </ProtectedRoute>
       } />
       {/* فاز ۳۵ - B25–B27: دستیار هوشمند (D07) */}

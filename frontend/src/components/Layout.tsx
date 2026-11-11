@@ -23,6 +23,7 @@ import CorporateFareRoundedIcon from "@mui/icons-material/CorporateFareRounded";
 import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
 import SettingsSuggestRoundedIcon from "@mui/icons-material/SettingsSuggestRounded";
 import EditNoteIcon from "@mui/icons-material/EditNote";
+import DesignServicesRoundedIcon from "@mui/icons-material/DesignServicesRounded";
 import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
 import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
@@ -153,6 +154,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // فاز ۸۳ج: فرم‌ساز گرافیکی ابزارهای آزمون — لانچر انتخاب ابزار سپس ویرایش
       // کامل (مشخصات/سؤال‌ها/تفسیرها/مقیاس‌ها) + پیش‌نمایش زنده قبل از اعمال
       { label: "فرم‌ساز آزمون‌ها", path: "/psych-tests/builder", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], menuKey: "psych-form-builder", icon: <EditNoteIcon /> },
+      // فاز ۸۴: ویرایشگر صفحات عمومی سایت — پیش‌نویس/انتشار محتوا مثل وردپرس
+      { label: "ویرایشگر صفحات عمومی", path: "/site-content", roles: ["ORG_MANAGER", "SYSTEM_ADMIN"], menuKey: "site-content-editor", icon: <DesignServicesRoundedIcon /> },
       { label: "پشتیبانی", code: "B23", path: "/support", roles: [...ALL_STAFF, "APPLICANT"], menuKey: "support", icon: <SupportAgent /> },
       { label: "دستیار هوشمند", path: "/assistant", roles: [...ALL_STAFF, "APPLICANT"], menuKey: "assistant", icon: <Forum /> },
       { label: "یکپارچه‌سازی‌ها", code: "B28", path: "/integrations", roles: ["SYSTEM_ADMIN", "ORG_MANAGER"], menuKey: "integrations", icon: <Web /> },
