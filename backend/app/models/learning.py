@@ -92,7 +92,12 @@ class Content(Base):
 
 # ---------------------------------------------------------------- B34
 class Course(Base):
-    """B34 - دوره آموزشی روی دسته B32؛ رایگان یا پولی (سفارش kind='course')."""
+    """B34 - دوره آموزشی روی دسته B32؛ رایگان یا پولی (سفارش kind='course').
+
+    فاز ۸۶ - آکادمی عمومی: cover_image_url و trailer_url برای ویترین
+    «آکادمی رز» در سایت عمومی (trailer ویدیوی معرفی است و برای همه
+    بازدیدکنندگان عمومی است؛ ویدیوی جلسات جداگانه کنترل دسترسی دارد).
+    """
 
     __tablename__ = "courses"
     __table_args__ = (
@@ -116,6 +121,9 @@ class Course(Base):
     currency: Mapped[str] = mapped_column(String(3), default="IRR")
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)  # NULL = بی‌نهایت
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # فاز ۸۶ - ویترین آکادمی عمومی
+    cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    trailer_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -126,12 +134,21 @@ class Course(Base):
 
 
 class CourseSession(Base):
-    """B34 - جلسات برنامه‌ریزی‌شده دوره."""
+    """B34 - جلسات برنامه‌ریزی‌شده دوره.
+
+    فاز ۸۶ - ویدیوی جلسه برای «آکادمی رز»:
+    - ``video_url`` آدرس mp4 یا embed (آپارات/یوتیوب)؛ هرگز در خروجی
+      عمومی جزئیات دوره نمی‌رود — فقط از endpoint کنترل‌شدهٔ دسترسی.
+    - ``is_free`` جلسهٔ پیش‌نمایش رایگان (برای همهٔ بازدیدکنندگان).
+    - ``release_after_days`` انتشار پلکانی: ویدیو N روز پس از فعال‌شدن
+      ثبت‌نام باز می‌شود (۰ = بلافاصله پس از خرید).
+    """
 
     __tablename__ = "course_sessions"
     __table_args__ = (
         CheckConstraint("duration_minutes > 0", name="ck_course_sessions_duration"),
         CheckConstraint("sort_order >= 0", name="ck_course_sessions_sort_nonneg"),
+        CheckConstraint("release_after_days >= 0", name="ck_course_sessions_release_nonneg"),
         Index("ix_course_sessions_course", "course_id"),
     )
 
@@ -143,12 +160,22 @@ class CourseSession(Base):
     session_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration_minutes: Mapped[int] = mapped_column(Integer, default=90)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # فاز ۸۶ - ویدیو و کنترل آزادسازی
+    video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    release_after_days: Mapped[int] = mapped_column(Integer, default=0)
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CourseEnrollment(Base):
     """B34 - ثبت‌نام کاربر در دوره؛ یکتا per (course, user)؛ pending → active
-    با پرداخت سفارش kind='course' (اثر جانبی verify) یا اقدام مدیر."""
+    با پرداخت سفارش kind='course' (اثر جانبی verify) یا اقدام مدیر.
+
+    فاز ۸۶ - سبد خرید: یک سفارش می‌تواند چند دوره داشته باشد؛ بنابراین
+    unique بودن ``order_id`` برداشته شده است (مهاجرت ۰۰۵۱) و قید یکتایی
+    (course_id, user_id) همچنان برقرار است.
+    """
 
     __tablename__ = "course_enrollments"
     __table_args__ = (
@@ -169,9 +196,10 @@ class CourseEnrollment(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(20), default=EnrollmentStatus.PENDING)
+    # فاز ۸۶: unique=True برداشته شد — یک سفارش سبد خرید چند ثبت‌نام دارد
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"),
-        nullable=True, unique=True,
+        nullable=True,
     )
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -304,4 +332,59 @@ class Certificate(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------- فاز ۸۶ — آکادمی رز
+class AcademyOrderItem(Base):
+    """فاز ۸۶ - ردیف سفارش سبد خرید آکادمی: یک سفارش kind='course' می‌تواند
+    چند دوره داشته باشد (پرداخت واحد درگاه). قیمت snapshot لحظه checkout است
+    (B07: قیمت گذشته تغییر نمی‌کند)."""
+
+    __tablename__ = "academy_order_items"
+    __table_args__ = (
+        CheckConstraint("price_amount >= 0", name="ck_academy_order_items_price_nonneg"),
+        Index("ix_academy_order_items_order", "order_id"),
+        Index("ix_academy_order_items_course", "course_id"),
+        UniqueConstraint("order_id", "course_id", name="uq_academy_order_item"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False
+    )
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(300))  # snapshot عنوان دوره
+    price_amount: Mapped[int] = mapped_column(Numeric(16, 2), default=0)
+    currency: Mapped[str] = mapped_column(String(3), default="IRR")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AcademyWatchProgress(Base):
+    """فاز ۸۶ - وضعیت تماشای جلسه توسط کاربر سایت (mark as watched)؛
+    یکتا per (user, session)؛ upsert از endpoint کنترل‌شده."""
+
+    __tablename__ = "academy_watch_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "session_id", name="uq_academy_watch_progress"),
+        Index("ix_academy_watch_progress_user", "user_id"),
+        Index("ix_academy_watch_progress_course", "course_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_sessions.id", ondelete="RESTRICT"), nullable=False
+    )
+    watched: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

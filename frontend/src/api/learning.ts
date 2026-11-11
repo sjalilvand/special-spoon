@@ -43,6 +43,11 @@ export interface CourseSession {
   session_date: string;
   duration_minutes: number;
   sort_order: number;
+  // فاز ۸۶ - ویدیو/پیش‌نمایش رایگان/انتشار پلکانی (خروجی پنل)
+  video_url?: string | null;
+  is_free?: boolean;
+  release_after_days?: number;
+  description?: string | null;
 }
 
 export interface Course {
@@ -59,6 +64,8 @@ export interface Course {
   is_free: boolean;
   capacity: number | null;
   starts_at: string | null;
+  cover_image_url?: string | null;
+  trailer_url?: string | null;
   enrolled_count?: number;
   remaining_capacity?: number | null;
   sessions?: CourseSession[];
@@ -108,6 +115,16 @@ export async function createCourseSession(
   return r.data;
 }
 
+// فاز ۸۶ - ویرایش جلسه (ویدیو/رایگان/انتشار پلکانی)
+export async function updateCourseSession(
+  courseId: string,
+  sessionId: string,
+  payload: Record<string, unknown>,
+): Promise<CourseSession> {
+  const r = await apiClient.patch<CourseSession>(`/courses/${courseId}/sessions/${sessionId}`, payload);
+  return r.data;
+}
+
 export async function deleteCourseSession(courseId: string, sessionId: string): Promise<void> {
   await apiClient.delete(`/courses/${courseId}/sessions/${sessionId}`);
 }
@@ -122,6 +139,48 @@ export async function updateEnrollment(
   payload: Record<string, unknown>,
 ): Promise<{ id: string; status: string; certificates: Certificate[] }> {
   const r = await apiClient.patch(`/enrollments/${id}`, payload);
+  return r.data;
+}
+
+// ---------------------------------------------------------------- فاز ۸۶ - فروش آکادمی
+export interface AcademySaleItemRow {
+  course_id: string;
+  title: string;
+  price_amount: number;
+}
+
+export interface AcademySaleOrder {
+  id: string;
+  order_number: string;
+  kind: "course" | "exam";
+  title: string;
+  status: "pending" | "paid" | "cancelled" | "failed";
+  amount: number;
+  payable_amount: number;
+  currency: string;
+  buyer: { id: string; display_name: string | null; mobile: string | null; username: string | null };
+  created_at: string | null;
+  invoice_number: string | null;
+  payment: { gateway: string; status: string; paid_at: string | null } | null;
+  items: AcademySaleItemRow[];
+}
+
+export interface AcademySalesSummary {
+  paid_count: number;
+  paid_total: number;
+  pending_count: number;
+  pending_total: number;
+  failed_count: number;
+  cancelled_count: number;
+}
+
+export async function fetchSales(
+  params?: Record<string, unknown>,
+): Promise<{ items: AcademySaleOrder[]; summary: AcademySalesSummary }> {
+  const r = await apiClient.get<{ items: AcademySaleOrder[]; summary: AcademySalesSummary }>(
+    "/sales",
+    { params },
+  );
   return r.data;
 }
 

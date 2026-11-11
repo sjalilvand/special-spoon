@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +11,7 @@ from app.db.base import Base
 class OtpPurpose:
     BOOKING = "booking"
     LOGIN = "login"
+    ACADEMY = "academy"  # فاز ۸۶ - ورود خریدار آکادمی رز
 
 
 class OtpChallenge(Base):
@@ -23,7 +24,7 @@ class OtpChallenge(Base):
 
     __tablename__ = "otp_challenges"
     __table_args__ = (
-        CheckConstraint("purpose IN ('booking','login')", name="ck_otp_purpose"),
+        CheckConstraint("purpose IN ('booking','login','academy')", name="ck_otp_purpose"),
         CheckConstraint("attempts >= 0", name="ck_otp_attempts"),
     )
 

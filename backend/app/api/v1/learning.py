@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_roles
 from app.models.learning import (
+    AcademyOrderItem,
     AttemptStatus,
     Certificate,
     Content,
@@ -35,7 +36,7 @@ from app.models.learning import (
     ExamQuestion,
     PublishStatus,
 )
-from app.models.payment import Order, OrderStatus
+from app.models.payment import Invoice, Order, OrderStatus, Payment
 from app.models.topics import Topic
 from app.models.user import User
 from app.services import learning as learn
@@ -95,6 +96,9 @@ def _course_out(db: Session, c: Course, *, with_stats: bool = True) -> dict:
         "is_free": int(c.price_amount) == 0,
         "capacity": c.capacity,
         "starts_at": c.starts_at.isoformat() if c.starts_at else None,
+        # فاز ۸۶ - ویترین آکادمی
+        "cover_image_url": c.cover_image_url,
+        "trailer_url": c.trailer_url,
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
     if with_stats:
@@ -118,6 +122,11 @@ def _course_out(db: Session, c: Course, *, with_stats: bool = True) -> dict:
                 "session_date": s.session_date.isoformat(),
                 "duration_minutes": s.duration_minutes,
                 "sort_order": s.sort_order,
+                # فاز ۸۶ - ویدیو/رایگان/انتشار پلکانی (خروجی پنل؛ عمومی نیست)
+                "video_url": s.video_url,
+                "is_free": bool(s.is_free),
+                "release_after_days": int(s.release_after_days or 0),
+                "description": s.description,
             }
             for s in sessions
         ]
@@ -343,6 +352,8 @@ class CourseCreate(BaseModel):
     price_amount: int = Field(default=0, ge=0)
     capacity: int | None = Field(default=None, ge=1)
     starts_at: datetime | None = None
+    cover_image_url: str | None = Field(default=None, max_length=500)
+    trailer_url: str | None = Field(default=None, max_length=500)
 
 
 class CourseUpdate(BaseModel):
@@ -354,13 +365,32 @@ class CourseUpdate(BaseModel):
     price_amount: int | None = Field(default=None, ge=0)
     capacity: int | None = Field(default=None, ge=1)
     starts_at: datetime | None = None
+    cover_image_url: str | None = Field(default=None, max_length=500)
+    trailer_url: str | None = Field(default=None, max_length=500)
 
 
 class SessionCreate(BaseModel):
     title: str = Field(min_length=2, max_length=300)
-    session_date: datetime
+    session_date: datetime | None = None  # فاز ۸۶: خالی = الان (دورهٔ ویدیویی)
     duration_minutes: int = Field(default=90, gt=0)
     sort_order: int = Field(default=0, ge=0)
+    video_url: str | None = Field(default=None, max_length=500)
+    is_free: bool = False
+    release_after_days: int = Field(default=0, ge=0)
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class SessionUpdate(BaseModel):
+    """فاز ۸۶ - ویرایش جلسه (ویدیو/رایگان/انتشار پلکانی/عنوان/...)."""
+
+    title: str | None = Field(default=None, min_length=2, max_length=300)
+    session_date: datetime | None = None
+    duration_minutes: int | None = Field(default=None, gt=0)
+    sort_order: int | None = Field(default=None, ge=0)
+    video_url: str | None = Field(default=None, max_length=500)
+    is_free: bool | None = None
+    release_after_days: int | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=1000)
 
 
 class StaffEnroll(BaseModel):
@@ -407,6 +437,8 @@ def create_course(
         price_amount=payload.price_amount,
         capacity=payload.capacity,
         starts_at=payload.starts_at,
+        cover_image_url=payload.cover_image_url,
+        trailer_url=payload.trailer_url,
         created_by=actor.id,
     )
     db.add(c)
@@ -443,6 +475,11 @@ def update_course(
         c.capacity = payload.capacity
     if payload.starts_at is not None:
         c.starts_at = payload.starts_at
+    # فاز ۸۶ - ویترین آکادمی
+    for field in ("cover_image_url", "trailer_url"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(c, field, value.strip() or None)
     db.commit()
     db.refresh(c)
     return _course_out(db, c)
@@ -486,9 +523,13 @@ def create_session(
     s = CourseSession(
         course_id=course_id,
         title=payload.title.strip(),
-        session_date=payload.session_date,
+        session_date=payload.session_date or datetime.now(timezone.utc),
         duration_minutes=payload.duration_minutes,
         sort_order=payload.sort_order,
+        video_url=(payload.video_url.strip() or None) if payload.video_url else None,
+        is_free=payload.is_free,
+        release_after_days=payload.release_after_days,
+        description=payload.description,
     )
     db.add(s)
     db.commit()
@@ -500,6 +541,50 @@ def create_session(
         "session_date": s.session_date.isoformat(),
         "duration_minutes": s.duration_minutes,
         "sort_order": s.sort_order,
+        "video_url": s.video_url,
+        "is_free": bool(s.is_free),
+        "release_after_days": int(s.release_after_days or 0),
+        "description": s.description,
+    }
+
+
+@router.patch("/courses/{course_id}/sessions/{session_id}")
+def update_session(
+    course_id: uuid.UUID,
+    session_id: uuid.UUID,
+    payload: SessionUpdate,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """فاز ۸۶ - ویرایش جلسه؛ ویدیو/پرچم رایگان/انتشار پلکانی."""
+    s = db.get(CourseSession, session_id)
+    if s is None or s.course_id != course_id:
+        raise HTTPException(status_code=404, detail="جلسه یافت نشد")
+    data = payload.model_dump(exclude_unset=True)
+    if "title" in data and data["title"] is not None:
+        s.title = data["title"].strip()
+    if "session_date" in data and data["session_date"] is not None:
+        s.session_date = data["session_date"]
+    for field in ("duration_minutes", "sort_order", "release_after_days", "is_free"):
+        if data.get(field) is not None:
+            setattr(s, field, data[field])
+    if "video_url" in data:
+        s.video_url = (data["video_url"].strip() or None) if isinstance(data["video_url"], str) else data["video_url"]
+    if "description" in data:
+        s.description = data["description"]
+    db.commit()
+    db.refresh(s)
+    return {
+        "id": str(s.id),
+        "course_id": str(s.course_id),
+        "title": s.title,
+        "session_date": s.session_date.isoformat(),
+        "duration_minutes": s.duration_minutes,
+        "sort_order": s.sort_order,
+        "video_url": s.video_url,
+        "is_free": bool(s.is_free),
+        "release_after_days": int(s.release_after_days or 0),
+        "description": s.description,
     }
 
 
@@ -670,6 +755,89 @@ def _enroll_user(db: Session, course: Course, user_id: uuid.UUID, actor_id: uuid
             else None
         ),
     }
+
+
+# ================================================================ فاز ۸۶ — فروش آکادمی
+@router.get("/sales")
+def learning_sales(
+    kind: str = Query(default="all", pattern="^(all|course|exam)$"),
+    status: str | None = Query(default=None, max_length=20),
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*VIEW_ROLES)),
+) -> dict:
+    """مدیریت فروش دوره/آزمون — سفارش‌های kind='course'/'exam' با خریدار،
+    ردیف‌های سبد، وضعیت پرداخت و فاکتور + جمع‌بندی درآمد."""
+    q = (
+        select(Order)
+        .where(Order.kind.in_(("course", "exam")))
+        .order_by(Order.created_at.desc())
+        .limit(300)
+    )
+    if kind != "all":
+        q = q.where(Order.kind == kind)
+    if status:
+        if status not in OrderStatus.ALL:
+            raise HTTPException(status_code=422, detail="وضعیت نامعتبر است")
+        q = q.where(Order.status == status)
+    orders = db.scalars(q).all()
+
+    def _buyer(user_id):
+        u = db.get(User, user_id)
+        return {"id": str(user_id), "display_name": u.display_name if u else None,
+                "mobile": u.mobile if u else None, "username": u.username if u else None}
+
+    items = []
+    for o in orders:
+        rows = db.scalars(select(AcademyOrderItem).where(AcademyOrderItem.order_id == o.id)).all()
+        payment = db.scalars(
+            select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc())
+        ).first()
+        invoice = db.scalars(select(Invoice).where(Invoice.order_id == o.id)).first()
+        items.append(
+            {
+                "id": str(o.id),
+                "order_number": o.order_number,
+                "kind": o.kind,
+                "title": o.title,
+                "status": o.status,
+                "amount": int(o.amount),
+                "payable_amount": int(o.payable_amount),
+                "currency": o.currency,
+                "buyer": _buyer(o.owner_user_id),
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "invoice_number": invoice.invoice_number if invoice else None,
+                "payment": (
+                    {"gateway": payment.gateway, "status": payment.status,
+                     "paid_at": payment.paid_at.isoformat() if payment.paid_at else None}
+                    if payment else None
+                ),
+                "items": [
+                    {"course_id": str(r.course_id), "title": r.title, "price_amount": int(r.price_amount)}
+                    for r in rows
+                ],
+            }
+        )
+
+    agg = db.execute(
+        select(Order.status, func.count(), func.coalesce(func.sum(Order.payable_amount), 0))
+        .where(Order.kind.in_(("course", "exam")))
+        .group_by(Order.status)
+    ).all()
+    summary = {
+        "paid_count": 0, "paid_total": 0,
+        "pending_count": 0, "pending_total": 0,
+        "failed_count": 0, "cancelled_count": 0,
+    }
+    for st, cnt, total in agg:
+        if st == "paid":
+            summary["paid_count"], summary["paid_total"] = int(cnt), int(total)
+        elif st == "pending":
+            summary["pending_count"], summary["pending_total"] = int(cnt), int(total)
+        elif st == "failed":
+            summary["failed_count"] = int(cnt)
+        elif st == "cancelled":
+            summary["cancelled_count"] = int(cnt)
+    return {"items": items, "summary": summary}
 
 
 # ================================================================ B35 آزمون

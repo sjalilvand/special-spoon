@@ -470,14 +470,19 @@ def gateway_callback_redirect(
     """بازگشت مرورگر کاربر از درگاه (زرین‌پال با GET و پارامتر status=OK/NOK
     برمی‌گردد). تأیید قطعی همان مسیر verify سمت سرور است؛ سپس رزرو عمومی
     متصل به سفارش «پرداخت‌شده» می‌شود و توکن ثبت نظر صادر می‌گردد.
-    پاسخ: ریدایرکت ۳۰۳ به صفحهٔ نتیجهٔ سایت (/booking/result)."""
+    پاسخ: ریدایرکت ۳۰۳ به صفحهٔ نتیجهٔ سایت (/booking/result)؛ فاز ۸۶ -
+    سفارش‌های آکادمی (kind='course'/'exam') به /academy/pay/result می‌روند."""
     approve = (status or "OK").upper() != "NOK"
     state = "failed"
     req_id = None
     token = None
+    academy_order_id = None
     try:
         payment, result = pay.verify_payment(db, authority, approve=approve)
         order = db.get(Order, payment.order_id)
+        if result.ok and order is not None and order.kind in ("course", "exam"):
+            # فاز ۸۶ — سفارش آکادمی: نتیجه به صفحهٔ آکادمی می‌رود (بدون منطق رزرو)
+            academy_order_id = str(order.id)
         if result.ok and order is not None and not (result.payload or {}).get("idempotent"):
             _notify_payment(db, payment, order)
         if result.ok and order is not None:
@@ -516,12 +521,18 @@ def gateway_callback_redirect(
                 req_id = str(cr.id)
     except pay.GatewayError:
         state = "failed"
+    base = get_settings().public_base_url.rstrip("/")
+    if academy_order_id is not None:
+        # فاز ۸۶ — نتیجهٔ خرید آکادمی: صفحهٔ اختصاصی آکادمی (بدون پارامترهای رزرو)
+        return RedirectResponse(
+            url=f"{base}/academy/pay/result?{urlencode({'state': state, 'order': academy_order_id})}",
+            status_code=303,
+        )
     params = {"state": state, "gateway": gateway}
     if req_id:
         params["req"] = req_id
     if token:
         params["token"] = token
-    base = get_settings().public_base_url.rstrip("/")
     return RedirectResponse(url=f"{base}/booking/result?{urlencode(params)}", status_code=303)
 
 

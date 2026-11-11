@@ -9,12 +9,12 @@ import { FormEvent, useState } from "react";
 import { errDetail } from "../api/client";
 import { fetchTopics, Topic } from "../api/topics";
 import {
-  Certificate, ContentItem, Course, CourseSession, Exam, Enrollment, ExamQuestion,
-  createContent, createCourse, createCourseSession, createExam, createExamQuestion,
-  deleteContent, deleteCourse, deleteCourseSession, deleteExam, deleteExamQuestion,
-  fetchCertificates, fetchContents, fetchCourses, fetchEnrollments,
-  fetchExamQuestions, fetchExams, issueCertificate, revokeCertificate, updateContent,
-  updateCourse, updateEnrollment, updateExam, verifyCertificate,
+  AcademySaleOrder, Certificate, ContentItem, Course, CourseSession, Exam,
+  Enrollment, ExamQuestion, createContent, createCourse, createCourseSession, createExam,
+  createExamQuestion, deleteContent, deleteCourse, deleteCourseSession, deleteExam,
+  deleteExamQuestion, fetchCertificates, fetchContents, fetchCourses, fetchEnrollments,
+  fetchExamQuestions, fetchExams, fetchSales, issueCertificate, revokeCertificate, updateContent,
+  updateCourse, updateCourseSession, updateEnrollment, updateExam, verifyCertificate,
 } from "../api/learning";
 
 type MutVars = { kind: string; id?: string; payload?: Record<string, unknown> };
@@ -48,6 +48,7 @@ export default function LearningPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [enrollCourse, setEnrollCourse] = useState<Course | null>(null);
   const [sessionCourse, setSessionCourse] = useState<Course | null>(null);
+  const [editCourse, setEditCourse] = useState<Course | null>(null);
   const [questionExam, setQuestionExam] = useState<Exam | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
   const [verifyNumber, setVerifyNumber] = useState("");
@@ -58,6 +59,7 @@ export default function LearningPage() {
   const courses = useQuery({ queryKey: ["courses"], queryFn: () => fetchCourses(true), enabled: tab === 1 });
   const exams = useQuery({ queryKey: ["exams"], queryFn: () => fetchExams(true), enabled: tab === 2 });
   const certificates = useQuery({ queryKey: ["certificates"], queryFn: () => fetchCertificates(), enabled: tab === 3 });
+  const sales = useQuery({ queryKey: ["sales"], queryFn: () => fetchSales(), enabled: tab === 4 });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["contents"] });
@@ -66,6 +68,7 @@ export default function LearningPage() {
     qc.invalidateQueries({ queryKey: ["certificates"] });
     qc.invalidateQueries({ queryKey: ["enrollments"] });
     qc.invalidateQueries({ queryKey: ["exam-questions"] });
+    qc.invalidateQueries({ queryKey: ["sales"] });
   };
 
   // محتوا
@@ -86,6 +89,12 @@ export default function LearningPage() {
       if (kind === "update") return updateCourse(id!, payload!);
       if (kind === "delete") return deleteCourse(id!);
       if (kind === "session") return createCourseSession(id!, payload!);
+      if (kind === "edit-session")
+        return updateCourseSession(
+          id!,
+          (payload as { session_id: string }).session_id,
+          (payload as { fields: Record<string, unknown> }).fields,
+        );
       return deleteCourseSession(id!, (payload as { session_id: string }).session_id);
     },
     onSuccess: (_d, v) => {
@@ -152,7 +161,7 @@ export default function LearningPage() {
   return (
     <Stack spacing={2}>
       <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
-        <Typography variant="h6" fontWeight={800}>محتوا و دوره‌ها (B33–B36)</Typography>
+        <Typography variant="h6" fontWeight={800}>محتوا و دوره‌ها (B33–B36) + فروش آکادمی</Typography>
         <Chip size="small" label="روی دسته‌بندی B32" variant="outlined" />
         <Box flexGrow={1} />
         {tab === 0 && <Button variant="contained" onClick={() => setCreateOpen(true)}>محتوای جدید</Button>}
@@ -162,11 +171,12 @@ export default function LearningPage() {
       </Box>
 
       <Paper sx={{ p: 1.5 }}>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Tab label="محتوا (B33)" onClick={() => setTab(0)} />
           <Tab label="دوره‌ها (B34)" onClick={() => setTab(1)} />
           <Tab label="آزمون‌ها (B35)" onClick={() => setTab(2)} />
           <Tab label="گواهی‌ها (B36)" onClick={() => setTab(3)} />
+          <Tab label="فروش آکادمی" onClick={() => setTab(4)} />
         </Stack>
       </Paper>
 
@@ -229,13 +239,14 @@ export default function LearningPage() {
                   <TableCell>{statusChip(c.status)}</TableCell>
                   <TableCell>{fa(c.sessions?.length ?? 0)} جلسه</TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={0.5}>
+                    <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
                       <Button size="small" variant="outlined"
                         disabled={c.status === "published"}
                         onClick={() => courseMut.mutate({ kind: "update", id: c.id, payload: { status: "published" } })}>
                         انتشار
                       </Button>
-                      <Button size="small" onClick={() => setSessionCourse(c)}>جلسات</Button>
+                      <Button size="small" onClick={() => setEditCourse(c)}>ویرایش</Button>
+                      <Button size="small" onClick={() => setSessionCourse(c)}>جلسات و ویدیو</Button>
                       <Button size="small" onClick={() => setEnrollCourse(c)}>ثبت‌نام‌ها</Button>
                       <Button size="small" color="error"
                         onClick={() => courseMut.mutate({ kind: "delete", id: c.id })}>حذف</Button>
@@ -334,6 +345,58 @@ export default function LearningPage() {
         </Stack>
       )}
 
+      {/* ---------------- فاز ۸۶ - فروش آکادمی ---------------- */}
+      {tab === 4 && (
+        <Stack spacing={2}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" }, gap: 1.5 }}>
+            {[
+              { label: "درآمد تأییدشده", value: `${fa(sales.data?.summary.paid_total ?? 0)} ریال`, color: "#2e7d32" },
+              { label: "سفارش پرداخت‌شده", value: fa(sales.data?.summary.paid_count ?? 0), color: "#556b2f" },
+              { label: "در انتظار پرداخت", value: fa(sales.data?.summary.pending_count ?? 0), color: "#ed6c02" },
+              { label: "ناموفق/لغوشده", value: fa((sales.data?.summary.failed_count ?? 0) + (sales.data?.summary.cancelled_count ?? 0)), color: "#d32f2f" },
+            ].map((c) => (
+              <Paper key={c.label} sx={{ p: 2, textAlign: "center" }}>
+                <Typography variant="caption" color="text.secondary">{c.label}</Typography>
+                <Typography variant="h6" fontWeight={800} sx={{ color: c.color, mt: 0.5 }}>{c.value}</Typography>
+              </Paper>
+            ))}
+          </Box>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>سفارش</TableCell><TableCell>نوع</TableCell><TableCell>خریدار</TableCell>
+                  <TableCell>ردیف‌ها</TableCell><TableCell>مبلغ</TableCell><TableCell>وضعیت</TableCell>
+                  <TableCell>درگاه</TableCell><TableCell>فاکتور</TableCell><TableCell>تاریخ</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(sales.data?.items ?? []).map((o: AcademySaleOrder) => (
+                  <TableRow key={o.id}>
+                    <TableCell><code>{o.order_number}</code></TableCell>
+                    <TableCell>{o.kind === "course" ? "دوره" : "آزمون"}</TableCell>
+                    <TableCell>{o.buyer.display_name ?? o.buyer.mobile ?? "—"}<br />
+                      <Typography variant="caption" color="text.secondary" dir="ltr">{o.buyer.mobile ?? ""}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      {o.items.length
+                        ? o.items.map((it) => it.title).join(" + ")
+                        : (o.kind === "exam" ? "دسترسی آزمون" : "—")}
+                    </TableCell>
+                    <TableCell>{fa(o.payable_amount)} ریال</TableCell>
+                    <TableCell>{statusChip(o.status)}</TableCell>
+                    <TableCell>{o.payment ? `${o.payment.gateway} (${o.payment.status === "success" ? "موفق" : o.payment.status === "failed" ? "ناموفق" : "در جریان"})` : "—"}</TableCell>
+                    <TableCell><code>{o.invoice_number ?? "—"}</code></TableCell>
+                    <TableCell>{o.created_at ? o.created_at.slice(0, 10) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {!sales.data?.items?.length && <TableRow><TableCell colSpan={9}>فروشی ثبت نشده است</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      )}
+
       {/* ---------------- دیالوگ ایجاد محتوا/دوره/آزمون ---------------- */}
       <CreateDialog
         open={createOpen}
@@ -347,10 +410,21 @@ export default function LearningPage() {
         }}
       />
 
+      {/* ویرایش دوره (فاز ۸۶) */}
+      {editCourse && (
+        <EditCourseDialog
+          course={editCourse}
+          topics={topicsList}
+          onClose={() => setEditCourse(null)}
+          onSubmit={(payload) => courseMut.mutate({ kind: "update", id: editCourse.id, payload })}
+        />
+      )}
+
       {/* جلسات دوره */}
       {sessionCourse && (
         <SessionsDialog course={sessionCourse} onClose={() => setSessionCourse(null)}
           onAdd={(payload) => courseMut.mutate({ kind: "session", id: sessionCourse.id, payload })}
+          onEdit={(sessionId, fields) => courseMut.mutate({ kind: "edit-session", id: sessionCourse.id, payload: { session_id: sessionId, fields } })}
           onDelete={(sessionId) => courseMut.mutate({ kind: "del-session", id: sessionCourse.id, payload: { session_id: sessionId } })}
         />
       )}
@@ -400,10 +474,13 @@ function CreateDialog({ open, tab, topics, onClose, onSubmit }: {
   const [body, setBody] = useState("");
   const [price, setPrice] = useState("0");
   const [capacity, setCapacity] = useState("");
+  const [summary, setSummary] = useState("");
+  const [cover, setCover] = useState("");
+  const [trailer, setTrailer] = useState("");
   const [passPercent, setPassPercent] = useState("60");
   const [maxAttempts, setMaxAttempts] = useState("1");
   const [duration, setDuration] = useState("30");
-  const label = tab === 0 ? "محتوای جدید" : tab === 1 ? "دوره جدید" : "آزمون جدید";
+  const label = tab === 0 ? "محتوای جدید" : tab === 1 ? "دوره جدید (آکادمی رز)" : "آزمون جدید";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -413,6 +490,9 @@ function CreateDialog({ open, tab, topics, onClose, onSubmit }: {
     if (tab === 1) {
       base.price_amount = Number(price) || 0;
       if (capacity) base.capacity = Number(capacity);
+      if (summary.trim()) base.summary = summary.trim();
+      if (cover.trim()) base.cover_image_url = cover.trim();
+      if (trailer.trim()) base.trailer_url = trailer.trim();
     }
     if (tab === 2) {
       base.pass_percent = Number(passPercent) || 60;
@@ -421,6 +501,7 @@ function CreateDialog({ open, tab, topics, onClose, onSubmit }: {
     }
     onSubmit(base);
     setSlug(""); setTitle(""); setTopicId(""); setBody(""); setPrice("0"); setCapacity("");
+    setSummary(""); setCover(""); setTrailer("");
   };
 
   return (
@@ -440,6 +521,13 @@ function CreateDialog({ open, tab, topics, onClose, onSubmit }: {
             )}
             {tab === 1 && (
               <>
+                <TextField label="خلاصه ویترین (حداکثر ۵۰۰ نویسه)" value={summary}
+                  onChange={(e) => setSummary(e.target.value)} multiline minRows={2} />
+                <TextField label="آدرس تصویر جلد (اختیاری — برای ویترین آکادمی)" value={cover}
+                  onChange={(e) => setCover(e.target.value)} dir="ltr"
+                  placeholder="https://... یا /api/v1/site-content/images/..." />
+                <TextField label="آدرس ویدیوی معرفی/تریلر (اختیاری — mp4 یا embed آپارات)" value={trailer}
+                  onChange={(e) => setTrailer(e.target.value)} dir="ltr" />
                 <TextField label="قیمت (ریال — ۰ = رایگان)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
                 <TextField label="ظرفیت (خالی = بی‌نهایت)" type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
               </>
@@ -462,15 +550,21 @@ function CreateDialog({ open, tab, topics, onClose, onSubmit }: {
   );
 }
 
-// ---------------------------------------------------------------- جلسات دوره
-function SessionsDialog({ course, onClose, onAdd, onDelete }: {
+// ---------------------------------------------------------------- جلسات دوره (فاز ۸۶: ویدیو)
+function SessionsDialog({ course, onClose, onAdd, onEdit, onDelete }: {
   course: Course;
   onClose: () => void;
   onAdd: (payload: Record<string, unknown>) => void;
+  onEdit: (sessionId: string, fields: Record<string, unknown>) => void;
   onDelete: (sessionId: string) => void;
 }) {
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [isFree, setIsFree] = useState(false);
+  const [releaseDays, setReleaseDays] = useState("0");
+  const [desc, setDesc] = useState("");
+  const [editing, setEditing] = useState<CourseSession | null>(null);
   const qc = useQueryClient();
   const sessionsQuery = useQuery({
     queryKey: ["courses"],
@@ -479,38 +573,174 @@ function SessionsDialog({ course, onClose, onAdd, onDelete }: {
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onAdd({ title: title.trim(), session_date: new Date(when).toISOString() });
-    setTitle(""); setWhen("");
+    const payload: Record<string, unknown> = {
+      title: title.trim(),
+      duration_minutes: 90,
+      is_free: isFree,
+      release_after_days: Number(releaseDays) || 0,
+    };
+    if (when) payload.session_date = new Date(when).toISOString();
+    if (videoUrl.trim()) payload.video_url = videoUrl.trim();
+    if (desc.trim()) payload.description = desc.trim();
+    onAdd(payload);
+    setTitle(""); setWhen(""); setVideoUrl(""); setIsFree(false); setReleaseDays("0"); setDesc("");
     void qc;
   };
+  const submitEdit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    onEdit(editing.id, {
+      title: editing.title,
+      duration_minutes: editing.duration_minutes,
+      video_url: editing.video_url ?? "",
+      is_free: !!editing.is_free,
+      release_after_days: editing.release_after_days ?? 0,
+      description: editing.description ?? "",
+    });
+    setEditing(null);
+  };
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
       <form onSubmit={submit}>
-        <DialogTitle>جلسات دوره «{course.title}»</DialogTitle>
+        <DialogTitle>
+          جلسات و ویدیوهای دوره «{course.title}»{" "}
+          <Chip size="small" label="پخش فقط برای خریدار یا جلسهٔ رایگان" variant="outlined" />
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
             <Table size="small">
-              <TableHead><TableRow><TableCell>عنوان</TableCell><TableCell>زمان</TableCell><TableCell> </TableCell></TableRow></TableHead>
+              <TableHead>
+                <TableRow>
+                  <TableCell>عنوان</TableCell><TableCell>ویدیو</TableCell><TableCell>رایگان</TableCell>
+                  <TableCell>انتشار پس از خرید</TableCell><TableCell> </TableCell>
+                </TableRow>
+              </TableHead>
               <TableBody>
                 {(sessionsQuery.data ?? []).map((s: CourseSession) => (
                   <TableRow key={s.id}>
                     <TableCell>{s.title}</TableCell>
-                    <TableCell>{new Date(s.session_date).toLocaleString("fa-IR")}</TableCell>
-                    <TableCell><Button size="small" color="error" onClick={() => onDelete(s.id)}>حذف</Button></TableCell>
+                    <TableCell>{s.video_url ? <Chip size="small" color="success" label="دارد" variant="outlined" /> : <Chip size="small" label="—" variant="outlined" />}</TableCell>
+                    <TableCell>{s.is_free ? <Chip size="small" color="warning" label="پیش‌نمایش" /> : "—"}</TableCell>
+                    <TableCell>{(s.release_after_days ?? 0) > 0 ? `${fa(s.release_after_days)} روز` : "بلافاصله"}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5}>
+                        <Button size="small" onClick={() => setEditing(s)}>ویرایش</Button>
+                        <Button size="small" color="error" onClick={() => onDelete(s.id)}>حذف</Button>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 ))}
-                {!sessionsQuery.data?.length && <TableRow><TableCell colSpan={3}>جلسه‌ای ثبت نشده</TableCell></TableRow>}
+                {!sessionsQuery.data?.length && <TableRow><TableCell colSpan={5}>جلسه‌ای ثبت نشده</TableCell></TableRow>}
               </TableBody>
             </Table>
             <TextField required label="عنوان جلسه" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <TextField required label="زمان جلسه" type="datetime-local" value={when}
-              onChange={(e) => setWhen(e.target.value)}
-              InputLabelProps={{ shrink: true }} />
+            <TextField label="ویدیوی جلسه — آدرس mp4 یا embed آپارات/یوتیوب (برای دورهٔ ویدیویی)" value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)} dir="ltr"
+              placeholder="https://www.aparat.com/video/video/embed/... یا https://.../lesson-01.mp4" />
+            <Stack direction="row" spacing={2} alignItems="center" useFlexGap flexWrap="wrap">
+              <Button variant={isFree ? "contained" : "outlined"} size="small"
+                color={isFree ? "warning" : "primary"}
+                onClick={() => setIsFree(!isFree)}>
+                {isFree ? "پیش‌نمایش رایگان ✓" : "پیش‌نمایش رایگان؟"}
+              </Button>
+              <TextField label="انتشار پلکانی (روز پس از خرید — ۰ = بلافاصله)" type="number"
+                value={releaseDays} onChange={(e) => setReleaseDays(e.target.value)} size="small" sx={{ width: 320 }} />
+            </Stack>
+            <TextField label="توضیح جلسه (اختیاری)" value={desc} onChange={(e) => setDesc(e.target.value)} multiline minRows={2} />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>بستن</Button>
           <Button type="submit" variant="contained">افزودن جلسه</Button>
+        </DialogActions>
+      </form>
+
+      {/* ویرایش جلسه */}
+      <Dialog open={!!editing} onClose={() => setEditing(null)} maxWidth="sm" fullWidth>
+        {editing && (
+          <form onSubmit={submitEdit}>
+            <DialogTitle>ویرایش جلسه «{editing.title}»</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} mt={1}>
+                <TextField label="عنوان" value={editing.title}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+                <TextField label="آدرس ویدیو (mp4 یا embed)" value={editing.video_url ?? ""} dir="ltr"
+                  onChange={(e) => setEditing({ ...editing, video_url: e.target.value })} />
+                <Button variant={editing.is_free ? "contained" : "outlined"} size="small"
+                  color={editing.is_free ? "warning" : "primary"}
+                  onClick={() => setEditing({ ...editing, is_free: !editing.is_free })}>
+                  {editing.is_free ? "پیش‌نمایش رایگان ✓" : "پیش‌نمایش رایگان؟"}
+                </Button>
+                <TextField label="انتشار پلکانی (روز پس از خرید)" type="number"
+                  value={editing.release_after_days ?? 0}
+                  onChange={(e) => setEditing({ ...editing, release_after_days: Number(e.target.value) || 0 })} />
+                <TextField label="توضیح" value={editing.description ?? ""}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })} multiline minRows={2} />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setEditing(null)}>انصراف</Button>
+              <Button type="submit" variant="contained">ذخیره</Button>
+            </DialogActions>
+          </form>
+        )}
+      </Dialog>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------- ویرایش دوره (فاز ۸۶)
+function EditCourseDialog({ course, topics, onClose, onSubmit }: {
+  course: Course;
+  topics: Topic[];
+  onClose: () => void;
+  onSubmit: (payload: Record<string, unknown>) => void;
+}) {
+  const [title, setTitle] = useState(course.title);
+  const [summary, setSummary] = useState(course.summary ?? "");
+  const [description, setDescription] = useState(course.description ?? "");
+  const [price, setPrice] = useState(String(course.price_amount));
+  const [capacity, setCapacity] = useState(course.capacity != null ? String(course.capacity) : "");
+  const [cover, setCover] = useState(course.cover_image_url ?? "");
+  const [trailer, setTrailer] = useState(course.trailer_url ?? "");
+  const [topicId, setTopicId] = useState(course.topic_id ?? "");
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const payload: Record<string, unknown> = {
+      title: title.trim(),
+      summary: summary.trim() || null,
+      description: description.trim() || null,
+      price_amount: Number(price) || 0,
+      cover_image_url: cover.trim(),
+      trailer_url: trailer.trim(),
+    };
+    if (capacity) payload.capacity = Number(capacity);
+    if (topicId) payload.topic_id = topicId;
+    onSubmit(payload);
+  };
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <form onSubmit={submit}>
+        <DialogTitle>ویرایش دوره «{course.title}»</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <TextField required label="عنوان" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <TextField label="خلاصه ویترین" value={summary} onChange={(e) => setSummary(e.target.value)} multiline minRows={2} />
+            <TextField label="توضیح کامل (صفحهٔ دوره)" value={description} onChange={(e) => setDescription(e.target.value)} multiline minRows={4} />
+            <TextField label="آدرس تصویر جلد" value={cover} onChange={(e) => setCover(e.target.value)} dir="ltr" />
+            <TextField label="آدرس ویدیوی معرفی/تریلر" value={trailer} onChange={(e) => setTrailer(e.target.value)} dir="ltr" />
+            <TextField label="قیمت (ریال — ۰ = رایگان)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <TextField label="ظرفیت (خالی = بی‌نهایت)" type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+            <TextField select label="دسته موضوعی" value={topicId} onChange={(e) => setTopicId(e.target.value)}>
+              <MenuItem value="">— بدون دسته —</MenuItem>
+              {topics.map((t) => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>انصراف</Button>
+          <Button type="submit" variant="contained">ذخیره</Button>
         </DialogActions>
       </form>
     </Dialog>

@@ -1,4 +1,5 @@
-import { Box, Card, CardContent, Chip, Container, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, Container, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import Reveal from "./Reveal";
 import SectionTitle from "./SectionTitle";
 import { texts } from "../content/texts";
@@ -47,6 +48,19 @@ export default function Academy() {
             </Card>
             </Reveal>
           ))}
+        </Box>
+
+        {/* فاز ۸۶ - لینک به ویترین فروش دوره‌ها (آکادمی رز) */}
+        <Box sx={{ textAlign: "center", mt: { xs: 3.5, md: 5 } }}>
+          <Button
+            component={RouterLink}
+            to="/academy"
+            variant="contained"
+            size="large"
+            sx={{ borderRadius: 999, px: 4, fontWeight: 800 }}
+          >
+            مشاهده دوره‌های آکادمی رز
+          </Button>
         </Box>
       </Container>
     </Box>

@@ -14,6 +14,12 @@ const ClinicsPage = lazy(() => import("./pages/ClinicsPage"));
 const PsychotherapyPage = lazy(() => import("./pages/PsychotherapyPage"));
 const SpecialistPage = lazy(() => import("./pages/SpecialistPage"));
 const PaymentRulesPage = lazy(() => import("./pages/PaymentRulesPage"));
+// فاز ۸۶ - آکادمی رز: ویترین فروش دوره + سبد خرید + درگاه بانکی + پخش ویدیو
+const AcademyPage = lazy(() => import("./pages/AcademyPage"));
+const AcademyCoursePage = lazy(() => import("./pages/AcademyCoursePage"));
+const AcademyCartPage = lazy(() => import("./pages/AcademyCartPage"));
+const AcademyPayResultPage = lazy(() => import("./pages/AcademyPayResultPage"));
+const AcademyMyPage = lazy(() => import("./pages/AcademyMyPage"));
 
 function PageFallback() {
   return (
@@ -71,6 +77,12 @@ function SiteShell() {
           <Route path="/services/psychotherapy" element={<PsychotherapyPage />} />
           {/* فاز ۷۶ - قوانین پرداخت و استرداد وجه */}
           <Route path="/payment-rules" element={<PaymentRulesPage />} />
+          {/* فاز ۸۶ - آکادمی رز */}
+          <Route path="/academy" element={<AcademyPage />} />
+          <Route path="/academy/c/:slug" element={<AcademyCoursePage />} />
+          <Route path="/academy/cart" element={<AcademyCartPage />} />
+          <Route path="/academy/pay/result" element={<AcademyPayResultPage />} />
+          <Route path="/academy/my" element={<AcademyMyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -80,6 +80,20 @@ export default function Header() {
             ))}
 
             <Button
+              href="/academy"
+              className="nav-link"
+              sx={{
+                color: "text.primary",
+                display: { xs: "none", lg: "inline-flex" },
+                fontWeight: 600,
+                fontSize: 14.5,
+                "&:hover": { color: "primary.main", bgcolor: "transparent" },
+              }}
+            >
+              آکادمی
+            </Button>
+
+            <Button
               href="/clinics"
               className="nav-link"
               sx={{
@@ -136,6 +150,10 @@ export default function Header() {
           </IconButton>
         </Stack>
         <List sx={{ mb: 2 }}>
+          <ListItem component="a" href="/academy" onClick={() => setOpen(false)}
+            sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
+            آکادمی (دوره‌های آموزشی)
+          </ListItem>
           <ListItem component="a" href="/clinics" onClick={() => setOpen(false)}
             sx={{ borderRadius: 2, color: "text.primary", fontWeight: 600, mb: 0.5, "&:hover": { bgcolor: "#faf0f3" } }}>
             کلینیک‌ها

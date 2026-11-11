@@ -38,6 +38,8 @@ from app.api.v1.imports import router as imports_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.processes import router as processes_router
 from app.api.v1.learning import router as learning_router
+# فاز ۸۶: آکادمی رز — ویترین عمومی دوره + سبد خرید + درگاه بانکی
+from app.api.v1.academy import router as academy_router
 from app.api.v1.me import router as me_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.org import router as org_router
@@ -168,6 +170,8 @@ _ROUTERS: list[tuple[object, list[str] | None]] = [
     (discounts_router, None),
     (refunds_router, None),
     (learning_router, None),
+    # فاز ۸۶: آکادمی رز — GET عمودی عمومی؛ auth/cart/video با توکن خود سایت
+    (academy_router, None),
     (support_router, None),
     (provinces_router, None),
     (psych_tests_router, None),

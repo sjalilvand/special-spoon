@@ -75,6 +75,8 @@ from app.models.referral import Referral
 from app.models.refund import Refund, RefundRequest, RefundRequestStatus
 from app.models.reviews import CounselorReview
 from app.models.learning import (
+    AcademyOrderItem,
+    AcademyWatchProgress,
     AttemptStatus,
     Certificate,
     Content,

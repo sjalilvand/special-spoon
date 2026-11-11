@@ -308,16 +308,19 @@ def _settle_order_side_effects(db: Session, order: Order, payment: Payment) -> N
                 note=f"شارژ کیف پول - سفارش {order.order_number}",
                 created_by=order.owner_user_id,
             )
-        elif getattr(order, "kind", "service") == "course" and order.course_id is not None:
+        elif getattr(order, "kind", "service") == "course":
             # فاز ۳۴ - B34: فعال‌سازی ثبت‌نام دوره پس از پرداخت موفق (pending → active)
+            # فاز ۸۶ - سبد خرید: یک سفارش می‌تواند چند دوره داشته باشد؛ همه
+            # ثبت‌نام‌های pending همین سفارش فعال می‌شوند (نه فقط اولین).
             from datetime import datetime, timezone as _tz
             from app.models.learning import CourseEnrollment, EnrollmentStatus
-            enr = db.scalars(
+            enrs = db.scalars(
                 select(CourseEnrollment).where(CourseEnrollment.order_id == order.id)
-            ).first()
-            if enr is not None and enr.status == EnrollmentStatus.PENDING:
-                enr.status = EnrollmentStatus.ACTIVE
-                enr.activated_at = datetime.now(_tz.utc)
+            ).all()
+            for enr in enrs:
+                if enr.status == EnrollmentStatus.PENDING:
+                    enr.status = EnrollmentStatus.ACTIVE
+                    enr.activated_at = datetime.now(_tz.utc)
         # kind='exam': دسترسی آزمون با سفارش پرداخت‌شده کنترل می‌شود؛ رکورد اضافه لازم نیست
     except Exception:
         db.rollback()

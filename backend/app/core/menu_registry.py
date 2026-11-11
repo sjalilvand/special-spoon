@@ -116,7 +116,11 @@ MENU_GROUPS: list[dict] = [
             MenuEntry(key="topics", title="دسته‌بندی موضوعی", path="/topics",
                       prefixes=["/topics"], public_prefixes=["/topics/public"]),
             MenuEntry(key="learning", title="محتوا و دوره‌ها", path="/learning",
-                      prefixes=["/learning"]),
+                      prefixes=["/learning"],
+                      # فاز ۸۶: آکادمی رز — مسیرهای عمومی سایت (ویترین/سبد/ویدیو)
+                      # هرگز دروازهٔ ماتریس پنل را از سر نمی‌گذرانند؛ امنیت
+                      # endpoint به endpoint (توکن OTP سایت / خروجی عمومی) است.
+                      public_prefixes=["/academy"]),
             MenuEntry(key="psych-tests", title="مرکز آزمون روان‌شناسی", path="/psych-tests",
                       self_service=True),
             MenuEntry(key="psych-attempts", title="آزمون‌های برگزارشده", path="/psych-attempts",
