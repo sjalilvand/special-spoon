@@ -31,6 +31,7 @@ from app.models.psych_test import (
     PsychAttempt,
     PsychInterpretation,
     PsychQuestion,
+    PsychScale,
     PsychStatus,
     PsychTest,
 )
@@ -156,6 +157,7 @@ def _attempt_out(a: PsychAttempt, db: Session | None = None) -> dict:
         "case_id": str(a.case_id) if a.case_id else None,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
+    return out
 
 
 # ---------------------------------------------------------------- schemas
