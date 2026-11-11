@@ -6,8 +6,9 @@ page_key دارد و دو سند جدا:
 - published_content: سند منتشرشده که GET عمومی برمی‌گرداند.
 
 اگر ردیفی نبود یا سندی منتشر نشده بود، اپ site به متن‌های پیش‌فرضِ داخل باندل
-خودش (site/src/content/texts.ts و psycho.ts و payRules.ts) برمی‌گردد — یعنی
-بدون این جدول هم سایت کامل است و ویرایش ادمین فقط «بازنویسیِ روی پیش‌فرض» است.
+خودش (site/src/content/texts.ts و psycho.ts و payRules.ts و clinics.ts و
+specialist.ts) برمی‌گردد — یعنی بدون این جدول هم سایت کامل است و ویرایش ادمین
+فقط «بازنویسیِ روی پیش‌فرض» است.
 """
 import uuid
 from datetime import datetime
@@ -20,12 +21,15 @@ from app.db.base import Base
 
 # کلیدهای مجاز صفحات — هماهنگ با اپ site (content/override.ts) و فایل
 # app/data/site_content_defaults.json (متن‌های پیش‌فرض برای ویرایشگر پنل)
-SITE_PAGE_KEYS = ("home", "psycho", "payment-rules")
+# فاز ۸۵: «clinics» و «specialist» هم اضافه شدند (بدون تغییر DDL — کلید رشته‌ای است)
+SITE_PAGE_KEYS = ("home", "psycho", "payment-rules", "clinics", "specialist")
 
 SITE_PAGE_TITLES = {
     "home": "صفحهٔ اصلی سایت",
     "psycho": "صفحهٔ روان‌درمانی",
     "payment-rules": "قوانین پرداخت و استرداد وجه",
+    "clinics": "شبکهٔ کلینیک‌های رز",
+    "specialist": "صفحهٔ متخصص و رزرو نوبت",
 }
 
 

@@ -21,6 +21,8 @@ const outPath = resolve(root, "backend", "app", "data", "site_content_defaults.j
 const { texts } = await import(`${siteContent}/texts.ts`);
 const { psycho } = await import(`${siteContent}/psycho.ts`);
 const { payRules } = await import(`${siteContent}/payRules.ts`);
+const { clinics } = await import(`${siteContent}/clinics.ts`);
+const { specialist } = await import(`${siteContent}/specialist.ts`);
 
 const doc = {
   _readme:
@@ -28,6 +30,8 @@ const doc = {
   home: texts,
   psycho: psycho,
   "payment-rules": payRules,
+  clinics: clinics,
+  specialist: specialist,
 };
 
 mkdirSync(dirname(outPath), { recursive: true });

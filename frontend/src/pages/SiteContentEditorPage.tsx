@@ -9,12 +9,12 @@
 // امنیت: متن‌های پیش‌فرض از backend (تولیدشده از site/src/content) می‌آید؛
 // «بازنشانی» ردیف را حذف می‌کند و سایت به متن‌های پیش‌فرض کد برمی‌گردد.
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent,
+  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogContentText, DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Paper,
   Select, Snackbar, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { errDetail } from "../api/client";
 import {
   SiteContentPageDetail,
@@ -24,6 +24,7 @@ import {
   resetSiteContent,
   revertSiteContentDraft,
   saveSiteContentDraft,
+  uploadSiteImage,
 } from "../api/siteContent";
 import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
 import ArrowDownwardRoundedIcon from "@mui/icons-material/ArrowDownwardRounded";
@@ -34,6 +35,7 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PublishRoundedIcon from "@mui/icons-material/PublishRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 
 type Doc = Record<string, unknown>;
@@ -69,6 +71,23 @@ const FIELD_LABELS: Record<string, string> = {
   hours: "ساعات کاری", points: "نکات", download: "متن دکمهٔ دانلود", qrHint: "راهنمای QR",
   qrSub: "زیرنویس QR", installNote: "یادداشت نصب", button: "متن دکمه", items: "موارد بند",
   n: "شماره/عدد",
+  // فاز ۸۵ — صفحهٔ کلینیک‌ها (counselorsTitle از برچسب‌های خانه استفاده می‌کند)
+  cardTitleTemplate: "قالب عنوان کارت ({province} جایگزین می‌شود)",
+  counselorsEmpty: "پیام نبودِ مشاور",
+  bookBtn: "دکمهٔ رزرو", bookNote: "یادداشت دکمهٔ رزرو",
+  pickTitle: "عنوان حالت انتخاب کلینیک", pickHint: "راهنمای انتخاب کلینیک",
+  bookingCta: "دکمهٔ رزرو آنلاین", errorText: "پیام خطای دریافت داده",
+  // فاز ۸۵ — صفحهٔ متخصص
+  bookingTitle: "عنوان پنل رزرو", infoStepTitle: "عنوان گام اطلاعات",
+  stepDay: "گام ۱ — روز", stepTime: "گام ۲ — ساعت", stepService: "گام ۳ — خدمت",
+  serviceLabel: "برچسب انتخاب خدمت", noSlots: "پیام نبودِ نوبت آزاد",
+  noServices: "پیام نبودِ خدمات", continueBtn: "دکمهٔ ادامه و پرداخت",
+  redirectingTitle: "عنوان انتقال به درگاه", redirectingSub: "زیرعنوان انتقال به درگاه",
+  reviewsTitle: "عنوان نظرات کاربران", reviewsEmpty: "پیام نبودِ نظر",
+  reviewsLoadError: "پیام خطای بارگذاری نظرات", reviewFormTitle: "عنوان فرم ثبت نظر",
+  reviewFormIntro: "متن راهنمای فرم ثبت نظر", reviewSubmitBtn: "دکمهٔ ثبت نظر",
+  payRulesLink: "متن لینک قوانین پرداخت", payNote: "یادداشت پرداخت",
+  notFoundTitle: "پیام مشاور نیافته", notFoundBtn: "دکمهٔ بازگشت",
 };
 
 function labelFor(key: string): string {
@@ -106,6 +125,35 @@ function StringField({
   label, value, onChange,
 }: { label: string; value: string; onChange: (v: string) => void }) {
   const multiline = value.length > 60 || value.includes("\n");
+  // فاز ۸۵ — فیلد تصویری: پیش‌نمایش + آپلود مستقیم از پنل (بدون دست‌کاری کد)
+  const isImage = looksLikeImagePath(value);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+
+  const doUpload = async (f: File | undefined) => {
+    if (!f) return;
+    setUploadErr(null);
+    if (!["image/png", "image/jpeg", "image/webp"].includes(f.type)) {
+      setUploadErr("فقط تصاویر PNG و JPG و WEBP پذیرفته می‌شود");
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      setUploadErr("حجم تصویر بیش از ۱۰ مگابایت است");
+      return;
+    }
+    setUploading(true);
+    try {
+      const res = await uploadSiteImage(f);
+      onChange(res.url);
+    } catch (e) {
+      setUploadErr(errDetail(e) || "آپلود تصویر ناموفق بود");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   return (
     <Box>
       <TextField
@@ -113,16 +161,34 @@ function StringField({
         multiline={multiline} rows={multiline ? 4 : 1}
         onChange={(e) => onChange(e.target.value)}
       />
-      {looksLikeImagePath(value) && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+      {isImage && (
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
           <Box
             component="img" src={value} alt={label}
-            sx={{ height: 56, borderRadius: 1, border: "1px solid", borderColor: "divider" }}
+            sx={{ height: 56, borderRadius: 1, border: "1px solid", borderColor: "divider", maxWidth: 200, objectFit: "cover" }}
           />
+          <input
+            ref={fileRef} type="file" hidden
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => doUpload(e.target.files?.[0])}
+          />
+          <Button
+            size="small" variant="outlined"
+            startIcon={uploading ? <CircularProgress size={14} /> : <UploadFileRoundedIcon fontSize="small" />}
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? "در حال آپلود…" : "آپلود تصویر"}
+          </Button>
           <Typography variant="caption" color="text.secondary">
-            تصویر — مسیر فایل روی سرور یا URL کامل
+            PNG/JPG/WEBP تا ۱۰MB — پس از آپلود، نشانی جدید جایگزین می‌شود
           </Typography>
         </Stack>
+      )}
+      {uploadErr && (
+        <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+          {uploadErr}
+        </Typography>
       )}
     </Box>
   );

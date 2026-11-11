@@ -22,6 +22,7 @@ import type {
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { texts } from "../content/texts";
+import { specialist } from "../content/specialist";
 
 function faDayLabel(iso: string): string {
   try {
@@ -341,8 +342,8 @@ export default function SpecialistPage() {
       <Box>
         <Header />
         <Container sx={{ py: 10, textAlign: "center", minHeight: "50vh" }}>
-          <Typography variant="h6" fontWeight={800} mb={2}>مشاور یافت نشد یا فعال نیست</Typography>
-          <Button variant="contained" onClick={() => navigate("/booking")}>بازگشت به فهرست مشاوران</Button>
+          <Typography variant="h6" fontWeight={800} mb={2}>{specialist.notFoundTitle}</Typography>
+          <Button variant="contained" onClick={() => navigate("/booking")}>{specialist.notFoundBtn}</Button>
         </Container>
         <Footer />
       </Box>
@@ -420,7 +421,7 @@ export default function SpecialistPage() {
               <Box sx={{ textAlign: "center", flexShrink: 0 }}>
                 <Button variant="contained" size="large" sx={{ borderRadius: 99, px: 4, fontWeight: 800 }}
                   onClick={() => document.getElementById("booking-panel")?.scrollIntoView({ behavior: "smooth" })}>
-                  رزرو نوبت
+                  {specialist.bookBtn}
                 </Button>
               </Box>
             </Stack>
@@ -433,25 +434,25 @@ export default function SpecialistPage() {
             p: { xs: 2.5, md: 4 }, borderRadius: 4, border: "1px solid #f3dce2", mb: 3,
           }}>
             <Typography variant="h6" fontWeight={800} mb={2}>
-              📅 {infoStep ? "اطلاعات شما" : "انتخاب زمان و خدمت"}
+              📅 {infoStep ? specialist.infoStepTitle : specialist.bookingTitle}
             </Typography>
 
             {redirecting && (
               <Stack spacing={2} py={4} alignItems="center">
                 <CircularProgress sx={{ color: "primary.main" }} />
-                <Typography fontWeight={700}>در حال انتقال به درگاه پرداخت…</Typography>
-                <Typography variant="body2" color="text.secondary">پس از تکمیل پرداخت، به صفحهٔ نتیجهٔ رزرو بازمی‌گردید.</Typography>
+                <Typography fontWeight={700}>{specialist.redirectingTitle}</Typography>
+                <Typography variant="body2" color="text.secondary">{specialist.redirectingSub}</Typography>
               </Stack>
             )}
 
             {!redirecting && !infoStep && (
               <>
                 {/* نوار روزها */}
-                <Typography variant="body2" fontWeight={700} color="text.secondary" mb={1}>۱. روز را انتخاب کنید</Typography>
+                <Typography variant="body2" fontWeight={700} color="text.secondary" mb={1}>{specialist.stepDay}</Typography>
                 {days === null ? (
                   <Stack alignItems="center" py={3}><CircularProgress size={28} sx={{ color: "primary.main" }} /></Stack>
                 ) : days.length === 0 ? (
-                  <Typography color="text.secondary" py={2}>در حال حاضر نوبت آزادی برای این مشاور نیست.</Typography>
+                  <Typography color="text.secondary" py={2}>{specialist.noSlots}</Typography>
                 ) : (
                   <Stack direction="row" spacing={1} sx={{ overflowX: "auto", pb: 1, mb: 2 }}>
                     {days.map((d) => {
@@ -481,7 +482,7 @@ export default function SpecialistPage() {
                 {day && (
                   <>
                     <Typography variant="body2" fontWeight={700} color="text.secondary" mb={1}>
-                      ۲. ساعت را انتخاب کنید — {faDayLabel(day.date)}
+                      {specialist.stepTime} — {faDayLabel(day.date)}
                     </Typography>
                     <Stack spacing={1.5} mb={2.5}>
                       {slotGroups.map((g) => (
@@ -517,14 +518,14 @@ export default function SpecialistPage() {
                 )}
 
                 {/* انتخاب خدمت */}
-                <Typography variant="body2" fontWeight={700} color="text.secondary" mb={1}>۳. خدمت موردنظر</Typography>
+                <Typography variant="body2" fontWeight={700} color="text.secondary" mb={1}>{specialist.stepService}</Typography>
                 {services.length === 0 ? (
-                  <Typography color="text.secondary" mb={2}>فهرست خدمات بارگذاری نشده است.</Typography>
+                  <Typography color="text.secondary" mb={2}>{specialist.noServices}</Typography>
                 ) : (
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} mb={2}>
                     <FormControl size="small" sx={{ minWidth: 280 }}>
-                      <InputLabel>انتخاب خدمت</InputLabel>
-                      <Select value={serviceId} label="انتخاب خدمت" onChange={(e) => setServiceId(e.target.value)}>
+                      <InputLabel>{specialist.serviceLabel}</InputLabel>
+                      <Select value={serviceId} label={specialist.serviceLabel} onChange={(e) => setServiceId(e.target.value)}>
                         {services.map((s) => (
                           <MenuItem key={s.id} value={s.id}>{s.title}</MenuItem>
                         ))}
@@ -545,11 +546,11 @@ export default function SpecialistPage() {
                   disabled={!slot || !serviceId || days === null || days.length === 0}
                   onClick={proceedToInfo}
                 >
-                  ادامه و پرداخت آنلاین
+                  {specialist.continueBtn}
                 </Button>
                 {!slot && (
                   <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
-                    ابتدا روز و ساعت و سپس خدمت را انتخاب کنید
+                    {specialist.pickHint}
                   </Typography>
                 )}
               </>
@@ -635,12 +636,12 @@ export default function SpecialistPage() {
                     </Typography>
                   )}
                   <Typography variant="caption" color="text.secondary" textAlign="center">
-                    پرداخت از طریق درگاه امن زرین‌پال انجام می‌شود؛ پس از پرداخت موفق، نوبت شما قطعی می‌شود.
+                    {specialist.payNote}
                   </Typography>
                   <Typography variant="caption" textAlign="center" display="block">
                     پیش از پرداخت،{" "}
                     <Link href="/payment-rules" underline="hover" fontWeight={700}>
-                      قوانین پرداخت و استرداد وجه
+                      {specialist.payRulesLink}
                     </Link>{" "}
                     را ببینید.
                   </Typography>
@@ -651,7 +652,7 @@ export default function SpecialistPage() {
 
           {/* ---------------- نظرات کاربران ---------------- */}
           <Paper elevation={0} sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 4, border: "1px solid #f3dce2" }} id="reviews">
-            <Typography variant="h6" fontWeight={800} mb={2}>⭐ نظرات کاربران</Typography>
+            <Typography variant="h6" fontWeight={800} mb={2}>⭐ {specialist.reviewsTitle}</Typography>
 
             {reviews && (
               <Stack direction={{ xs: "column", sm: "row" }} spacing={3} mb={3}>
@@ -685,10 +686,10 @@ export default function SpecialistPage() {
             <Divider sx={{ mb: 2 }} />
 
             {reviews === null ? (
-              <Typography color="text.secondary">نظرات بارگذاری نشده است.</Typography>
+              <Typography color="text.secondary">{specialist.reviewsLoadError}</Typography>
             ) : reviews.items.length === 0 ? (
               <Typography color="text.secondary" mb={3}>
-                هنوز نظری برای این مشاور ثبت نشده است؛ اولین نفر باشید.
+                {specialist.reviewsEmpty}
               </Typography>
             ) : (
               <Stack spacing={2} mb={3}>
@@ -722,9 +723,9 @@ export default function SpecialistPage() {
 
             {/* فرم ثبت نظر (فاز ۷۶: توکن از لینک دعوت ?rt= به‌صورت خودکار) */}
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fdf7f8", borderColor: "#f0d9df" }}>
-              <Typography fontWeight={800} mb={1.5}>ثبت نظر و امتیاز شما</Typography>
+              <Typography fontWeight={800} mb={1.5}>{specialist.reviewFormTitle}</Typography>
               <Typography variant="body2" color="text.secondary" mb={2}>
-                فقط کاربرانی که رزرو پرداخت‌شده دارند می‌توانند نظر ثبت کنند؛ پس از پرداخت موفق، لینک اختصاصی ثبت نظر در صفحهٔ نتیجه فعال می‌شود و نیازی به واردکردن کد دستی نیست.
+                {specialist.reviewFormIntro}
               </Typography>
               <Box component="form" onSubmit={submitReview}>
                 <Stack spacing={2}>
@@ -772,7 +773,7 @@ export default function SpecialistPage() {
                     </Alert>
                   )}
                   <Button type="submit" variant="outlined" disabled={rvBusy} sx={{ alignSelf: "flex-start", borderRadius: 99, fontWeight: 700 }}>
-                    ثبت نظر
+                    {specialist.reviewSubmitBtn}
                   </Button>
                 </Stack>
               </Box>

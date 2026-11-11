@@ -15,8 +15,15 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { fetchClinicsMap } from "../api";
 import type { MapClinic } from "../api";
+import { clinics } from "../content/clinics";
 
 const faNum = (n: number) => n.toLocaleString("fa-IR");
+
+/** عنوان کارت/تولتیپ از قالب ویرایش‌پذیر — {province} جایگزین می‌شود */
+function clinicTitle(province: string | null): string {
+  const p = province || "—";
+  return (clinics.cardTitleTemplate || "کلینیک رز — استان {province}").replace("{province}", p);
+}
 
 function pinIcon(count: number) {
   return L.divIcon({
@@ -50,7 +57,7 @@ function ClinicCard({ c }: { c: MapClinic }) {
     <Paper elevation={3} sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 3, border: "1px solid #f3dce2" }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
         <Typography variant="h6" fontWeight={800} color="primary">
-          کلینیک رز — استان {c.province || c.city}
+          {clinicTitle(c.province || c.city)}
         </Typography>
         <Chip size="small" color="primary" label={`${faNum(c.counselor_count)} مشاور`} />
       </Stack>
@@ -76,12 +83,12 @@ function ClinicCard({ c }: { c: MapClinic }) {
 
       <Divider sx={{ my: 1.5 }} />
       <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
-        مشاوران این کلینیک ({faNum(c.counselor_count)})
+        {clinics.counselorsTitle} ({faNum(c.counselor_count)})
       </Typography>
       {/* فاز ۶۷: موبایل و رتبه از نمایش عمومی حذف شد (کسی نباید ببیند)؛
           برای مشاوران واجد شرط رزرو، دکمهٔ «رزرو نوبت» نمایش داده می‌شود. */}
       {c.counselors.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">مشاوری برای این کلینیک ثبت نشده است.</Typography>
+        <Typography variant="body2" color="text.secondary">{clinics.counselorsEmpty}</Typography>
       ) : (
         <Stack spacing={0.8} sx={{ mt: 1 }}>
           {c.counselors.map((x, i) => (
@@ -97,14 +104,14 @@ function ClinicCard({ c }: { c: MapClinic }) {
                     href={`/specialist/${encodeURIComponent(x.id)}`}
                     sx={{ height: 26, minWidth: 0, px: 1.2, fontSize: 12, whiteSpace: "nowrap" }}
                   >
-                    رزرو نوبت
+                    {clinics.bookBtn}
                   </Button>
                 )}
               </Stack>
             </Stack>
           ))}
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-            دکمهٔ «رزرو نوبت» فقط برای مشاوران دارای مجوز معتبر فعال است؛ برای هماهنگی با سایر مشاوران با خود کلینیک تماس بگیرید.
+            {clinics.bookNote}
           </Typography>
         </Stack>
       )}
@@ -122,7 +129,7 @@ export default function ClinicsPage() {
 
   // بارگذاری داده
   useEffect(() => {
-    fetchClinicsMap().then((xs) => setItems(xs)).catch(() => setError("خطا در دریافت کلینیک‌ها"));
+    fetchClinicsMap().then((xs) => setItems(xs)).catch(() => setError(clinics.errorText));
   }, []);
 
   // ساخت نقشه + نشانگرها (به‌محض در دست بودن داده — div نقشه شرطی است)
@@ -142,7 +149,7 @@ export default function ClinicsPage() {
       if (c.latitude == null || c.longitude == null) continue;
       const m = L.marker([c.latitude, c.longitude], { icon: pinIcon(c.counselor_count) });
       m.on("click", () => setSelected(c));
-      m.bindTooltip(`کلینیک رز — ${c.province || c.city}`, { direction: "top" });
+      m.bindTooltip(clinicTitle(c.province || c.city), { direction: "top" });
       m.addTo(group);
     }
     mapRef.current = map;
@@ -168,10 +175,10 @@ export default function ClinicsPage() {
       <Header />
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 }, overflowX: "hidden" }}>
         <Typography variant="h4" fontWeight={900} color="primary" textAlign="center" gutterBottom>
-          شبکهٔ کلینیک‌های شرکت رز
+          {clinics.title}
         </Typography>
         <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 3 }}>
-          روی نشانگر هر استان کلیک کنید تا مشخصات کامل کلینیک و مشاوران آن نمایش داده شود.
+          {clinics.subtitle}
         </Typography>
 
         {error && <Typography color="error" textAlign="center">{error}</Typography>}
@@ -215,11 +222,10 @@ export default function ClinicsPage() {
               ) : (
                 <Paper elevation={0} sx={{ p: 4, textAlign: "center", border: "1px dashed #e0c3cd", borderRadius: 3, bgcolor: "#fdf7f9" }}>
                   <Typography variant="h6" fontWeight={800} color="primary" gutterBottom>
-                    یک کلینیک انتخاب کنید
+                    {clinics.pickTitle}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    روی نشانگر روی نقشه یا نام استان از فهرست کلیک کنید؛ کارت کامل مشخصات کلینیک و
-                    مشاوران آن در همین قسمت نمایش داده می‌شود.
+                    {clinics.pickHint}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     مجموع مشاوران فعال: {faNum(items.reduce((s, x) => s + x.counselor_count, 0))} نفر در {faNum(items.length)} استان
@@ -232,7 +238,7 @@ export default function ClinicsPage() {
 
         <Stack alignItems="center" sx={{ mt: 5 }}>
           <Button href="/booking" variant="contained" size="large" sx={{ px: 4 }}>
-            رزرو نوبت آنلاین
+            {clinics.bookingCta}
           </Button>
         </Stack>
       </Container>

@@ -135,6 +135,28 @@ def store(data: bytes, s: Settings | None = None) -> tuple[str, str, str, bool]:
     return "local", key, sha, fb
 
 
+def store_at_key(data: bytes, key: str, s: Settings | None = None) -> tuple[str, bool]:
+    """ذخیره با «کلید قطعی» (deterministic) — فاز ۸۵ برای تصاویر عمومی سایت.
+
+    برخلاف store() که کلید یکتا می‌سازد، اینجا کلید از قبل معلوم است
+    (site_content/<sha24>.<ext>) تا سرو عمومی بدون جدول مپینگ ممکن باشد و
+    آپلود تکراریِ همان تصویر idempotent باشد. خروجی: (پروایدر واقعی، fallback؟)
+    خطای آداپتور S3 → ذخیره محلی با همان کلید (fail-soft مثل store).
+    """
+    s = s or get_settings()
+    backend, fb = active_backend(s)
+    if backend == "s3":
+        try:
+            _s3_put(s, key, data)
+            return "s3", False
+        except Exception:
+            fs.save_bytes_at_key(s.upload_dir, key, data)
+            return "local", True
+
+    fs.save_bytes_at_key(s.upload_dir, key, data)
+    return "local", fb
+
+
 def open_bytes(upload_dir: str, provider: str, storage_key: str, s: Settings | None = None) -> bytes:
     """خواندن محتوا از پروایدرِ ردیف فایل (منبع حقیقت دانلود)."""
     s = s or get_settings()

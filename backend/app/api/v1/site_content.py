@@ -15,21 +15,44 @@
 منبع «متن‌های پیش‌فرض» برای ویرایشگر پنل: app/data/site_content_defaults.json که
 از site/src/content/*.ts تولید می‌شود (deploy/gen_site_content_defaults.mjs) —
 تک‌منبع حقیقت متن‌ها همان فایل‌های site است.
+
+فاز ۸۵ — تصاویر عمومی سایت (بنر/تصویر کارت‌ها):
+- POST /site-content/admin/images        آپلود تصویر (فقط ادمین؛ Pillow-verify +
+  حذف فراداده + اسکن AV؛ png/jpeg/webp؛ سقف حجم آپلود سرور)
+- GET  /site-content/images/{fname}      سرو عمومی تصویر آپلودشده (بدون احراز؛
+  public_prefixes؛ نام فایل = sha24.png/jpg/webp — content-addressed، یعنی
+  آپلود تکراری idempotent و کش‌پذیر با Cache-Control immutable)
+تصاویر عمومیِ سایت نیستند محرمانه — هر آدرس آپلودشده از نظر طراحی برای عموم است.
 """
+import hashlib
+import io
 import json
+import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
+from app.core.config import get_settings
 from app.models.site_content import SITE_PAGE_KEYS, SITE_PAGE_TITLES, SitePageContent
 from app.models.user import User
+from app.services import av_scan
+from app.services import file_storage as fs
+from app.services import object_storage as objstore
 from app.services.audit import record_audit
+from app.services.image_sanitizer import strip_image_metadata
+
+try:  # Pillow وابستگی رسمی requirements است؛ گارد فقط برای محیط‌های ناقص
+    from PIL import Image as PILImage
+except Exception:  # pragma: no cover
+    PILImage = None  # type: ignore[assignment]
 
 router = APIRouter(tags=["site-content"])
 
@@ -37,6 +60,13 @@ MANAGE_ROLES = ("SYSTEM_ADMIN", "ORG_MANAGER")
 
 # سقف حجم هر سند صفحه — محتوای متنی است؛ ۵۱۲KB بسیار بزرگ‌تر از نیاز واقعی
 MAX_DOC_BYTES = 512 * 1024
+
+# فاز ۸۵ — تصاویر عمومی: فقط png/jpeg/webp (هماهنگ با allowed_mime_types؛
+# SVG پذیرفته نمی‌شود چون inline سرو می‌شود و بردار XSS دارد؛ GIF هم نیست)
+IMAGE_MIMES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+# نام فایل قابل سرو: فقط الگوی تولیدی خودمان — «پیمایش مسیر» ناممکن است
+IMAGE_NAME_RE = re.compile(r"^([0-9a-f]{24})\.(png|jpg|webp)$")
+_EXT_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
 
 _DEFAULTS_CACHE: dict[str, Any] | None = None
 
@@ -257,3 +287,130 @@ def reset_page(
         entity_id=page_key,
     )
     return _detail(db, None, page_key)
+
+
+# ---------------------------------------------------------------------------
+# فاز ۸۵ — تصاویر عمومی سایت (بنر/تصویر کارت‌ها)
+# ---------------------------------------------------------------------------
+
+def _verify_image(data: bytes, mime: str) -> None:
+    """اعتبارسنجی محتوای واقعی تصویر با Pillow — جلوگیری از جعل mime.
+
+    فایل HTML/اسکریپت با content_type جعلی image/png نباید ذخیره شود.
+    """
+    if PILImage is None:
+        # محیط ناقص: حداقل امضای بایت را چک می‌کنیم (magic bytes)
+        sig = {
+            "image/png": data[:8] == b"\x89PNG\r\n\x1a\n",
+            "image/jpeg": data[:2] == b"\xff\xd8",
+            "image/webp": data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+        }.get(mime, False)
+        if not sig:
+            raise HTTPException(status_code=422, detail="محتوای فایل با نوع اعلام‌شده مطابقت ندارد")
+        return
+    try:
+        img = PILImage.open(io.BytesIO(data))
+        img.load()
+    except Exception:
+        raise HTTPException(status_code=422, detail="فایل ارسالی تصویر معتبری نیست")
+    expected = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}.get(mime)
+    if expected and (img.format or "").upper() != expected:
+        raise HTTPException(status_code=422, detail="محتوای فایل با نوع اعلام‌شده مطابقت ندارد")
+
+
+@router.post("/site-content/admin/images", status_code=201)
+def upload_site_image(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """آپلود تصویر عمومی سایت — خروجی: URL نسبی برای درج در سند محتوا.
+
+    مسیر امنیتی: سقف حجم → نوع مجاز → Pillow-verify (ضد mime جعلی) →
+    حذف فراداده (EXIF/GPS) → اسکن AV (قرنطینه = رد) → ذخیره با کلید
+    قطعی sha24 → URL عمومی. آپلود دوبارهٔ همان تصویر همان URL را می‌دهد.
+    """
+    settings = get_settings()
+    data = file.file.read(settings.max_upload_bytes + 1)
+    if len(data) == 0:
+        raise HTTPException(status_code=422, detail="فایل خالی است")
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"حجم فایل بیش از سقف مجاز ({settings.max_upload_mb} مگابایت) است",
+        )
+    mime = (file.content_type or "").split(";")[0].strip().lower()
+    ext = IMAGE_MIMES.get(mime)
+    if ext is None:
+        raise HTTPException(
+            status_code=422,
+            detail="فقط تصاویر PNG و JPG و WEBP پذیرفته می‌شود",
+        )
+    _verify_image(data, mime)
+
+    # فاز ۲۷-مانند: حذف EXIF/GPS پیش از ذخیره (png/jpeg/webp)
+    data, metadata_stripped = strip_image_metadata(data, mime)
+
+    # اسکن بدافزار — قرنطینه هرگز عمومی نمی‌شود
+    scan = av_scan.scan_bytes(f"site_image.{ext}", mime, data, settings.allowed_mime_list)
+    if scan.status == "quarantined":
+        raise HTTPException(status_code=422, detail="فایل از نظر امنیتی رد شد")
+
+    digest = hashlib.sha256(data).hexdigest()[:24]
+    key = f"site_content/{digest}.{ext}"
+    provider, fallback = objstore.store_at_key(data, key, settings)
+
+    fname = f"{digest}.{ext}"
+    record_audit(
+        db,
+        action="site_content.image_uploaded",
+        actor_user_id=user.id,
+        entity_type="site_page_content",
+        entity_id=fname,
+        detail={
+            "mime": mime,
+            "size": len(data),
+            "sha256": digest,
+            "storage": provider,
+            "storage_fallback": fallback,
+            "metadata_stripped": metadata_stripped,
+            "scanner": scan.scanner,
+        },
+    )
+    db.commit()
+    return {
+        "url": f"/api/v1/site-content/images/{fname}",
+        "mime": mime,
+        "size_bytes": len(data),
+        "sha256": digest,
+        "storage": provider,
+    }
+
+
+@router.get("/site-content/images/{fname}")
+def get_site_image(fname: str):
+    """سرو عمومی تصویر آپلودشده — بدون احراز (public_prefixes).
+
+    نام فایل با الگوی قطعی اعتبارسنجی می‌شود (ضد پیمایش مسیر)؛ کش‌پذیری
+    با Cache-Control immutable چون نام = هش محتواست.
+    """
+    m = IMAGE_NAME_RE.match(fname)
+    if not m:
+        raise HTTPException(status_code=404, detail="تصویر یافت نشد")
+    ext = m.group(2)
+    settings = get_settings()
+    key = f"site_content/{fname}"
+    path = fs.storage_path(settings.upload_dir, key)
+    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    if os.path.exists(path):
+        return FileResponse(path, media_type=_EXT_MIME[ext], headers=headers)
+    # بک‌اند S3 فعال ولی فایل محلی نیست → خواندن از S3
+    if (settings.storage_backend or "").lower() == "s3":
+        try:
+            data = objstore.open_bytes(settings.upload_dir, "s3", key, settings)
+            return Response(content=data, media_type=_EXT_MIME[ext], headers=headers)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            raise HTTPException(status_code=502, detail="خواندن از سرویس ذخیره‌سازی ممکن نشد")
+    raise HTTPException(status_code=404, detail="تصویر یافت نشد")

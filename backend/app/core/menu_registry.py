@@ -204,9 +204,11 @@ MENU_GROUPS: list[dict] = [
             # واقعی است (نه self_service): ماتریس خودش مسیرهای /site-content را
             # گیت می‌کند؛ endpoint عمومی /site-content/public با public_prefixes
             # همیشه باز است (اپ site بدون توکن صدا می‌زند).
+            # فاز ۸۵: /site-content/images هم عمومی شد — سرو تصاویر آپلودشدهٔ
+            # بنر/کارت‌ها برای بازدیدکنندگان (نام فایل = sha24 هش محتوا).
             MenuEntry(key="site-content-editor", title="ویرایشگر صفحات عمومی",
                       path="/site-content", prefixes=["/site-content"],
-                      public_prefixes=["/site-content/public"]),
+                      public_prefixes=["/site-content/public", "/site-content/images"]),
         ],
     },
 ]

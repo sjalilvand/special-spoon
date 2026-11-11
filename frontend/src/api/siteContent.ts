@@ -63,3 +63,23 @@ export async function resetSiteContent(pageKey: string): Promise<SiteContentPage
   const r = await apiClient.post(`/site-content/admin/${encodeURIComponent(pageKey)}/reset`);
   return r.data as SiteContentPageDetail;
 }
+
+// فاز ۸۵ — آپلود تصویر عمومی سایت (بنر/تصویر کارت‌ها)؛ خروجی: URL نسبی
+export interface SiteImageUploadResult {
+  url: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+  storage: string;
+}
+
+export async function uploadSiteImage(file: File): Promise<SiteImageUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<SiteImageUploadResult>(
+    "/site-content/admin/images",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data;
+}

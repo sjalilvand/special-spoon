@@ -11,16 +11,21 @@
 import { texts } from "./texts";
 import { psycho } from "./psycho";
 import { payRules } from "./payRules";
+import { clinics } from "./clinics";
+import { specialist } from "./specialist";
 
 type Doc = Record<string, unknown>;
 
-export const CONTENT_PAGE_KEYS = ["home", "psycho", "payment-rules"] as const;
+// فاز ۸۵: کلیدهای «clinics» و «specialist» هم به ویرایشگر پیوستند
+export const CONTENT_PAGE_KEYS = ["home", "psycho", "payment-rules", "clinics", "specialist"] as const;
 export type ContentPageKey = (typeof CONTENT_PAGE_KEYS)[number];
 
 const TARGETS: Record<ContentPageKey, Doc> = {
   home: texts as unknown as Doc,
   psycho: psycho as unknown as Doc,
   "payment-rules": payRules as unknown as Doc,
+  clinics: clinics as unknown as Doc,
+  specialist: specialist as unknown as Doc,
 };
 
 function isPlainObject(v: unknown): v is Doc {
