@@ -28,4 +28,5 @@ Thumbs.db
 *.log
 test_tmp.db
 frontend/tsconfig.tsbuildinfo
+site/tsconfig.tsbuildinfo
 site/bun.lock
