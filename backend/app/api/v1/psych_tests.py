@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -98,6 +98,8 @@ def _question_out(q: PsychQuestion) -> dict:
         "prompt": q.prompt,
         "options": q.options or [],
         "subscale": q.subscale,
+        # فاز ۸۳ - مسیر فایل تصویر هم برمی‌گردد تا فرم‌ساز در ذخیرهٔ بعدی آن را حفظ کند
+        "image_path": q.image_path,
         # فاز ۵۰ - عکس پیوست سؤال (URL آماده)
         "image_url": f"/api/v1/public/psych-images/{q.image_path}" if q.image_path else None,
         "sort_order": q.sort_order,
@@ -116,8 +118,27 @@ def _interp_out(i: PsychInterpretation) -> dict:
     }
 
 
-def _attempt_out(a: PsychAttempt) -> dict:
-    return {
+def _subscale_maxes(db: Session, test_id: uuid.UUID) -> dict[str, int]:
+    """فاز ۸۳ - بیشینهٔ نمرهٔ هر زیرمقیاس از سؤال‌های ابزار — {نام: بیشینه}.
+
+    کاربرِ آزمون‌دهنده نام زیرمقیاس‌ها را نمی‌بیند (بدون سوگیری)، ولی نمودار
+    ریزنمرهٔ نتیجه به «از X» نیاز دارد؛ پس بیشینه‌ها در خروجی نتیجه برگردانده
+    می‌شود بدون افشای نگاشت سؤال → زیرمقیاس.
+    """
+    rows = db.scalars(
+        select(PsychQuestion).where(PsychQuestion.test_id == test_id)
+    ).all()
+    maxes: dict[str, int] = {}
+    for q in rows:
+        if not q.subscale:
+            continue
+        qmax = max((int(o.get("score", 0)) for o in (q.options or [])), default=0)
+        maxes[q.subscale] = maxes.get(q.subscale, 0) + max(qmax, 0)
+    return maxes
+
+
+def _attempt_out(a: PsychAttempt, db: Session | None = None) -> dict:
+    out: dict = {
         "id": str(a.id),
         "test_id": str(a.test_id),
         "user_id": str(a.user_id),
@@ -125,6 +146,8 @@ def _attempt_out(a: PsychAttempt) -> dict:
         "interpretation_label": a.interpretation_label,
         "interpretation_guidance": a.interpretation_guidance,
         "subscale_scores": a.subscale_scores,
+        # فاز ۸۳ - بیشینهٔ هر زیرمقیاس (بدون افشای نگاشت سؤال‌ها)
+        "subscale_maxes": _subscale_maxes(db, a.test_id) if db is not None else None,
         "demographics": a.demographics,
         # فاز ۶۳ - گزارش تحلیلی چندلایه (snapshot)
         "result_payload": a.result_payload,
@@ -147,6 +170,11 @@ class PsychTestUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=300)
     description: str | None = Field(default=None, max_length=20_000)
     topic_id: uuid.UUID | None = None
+    # فاز ۸۳ - متادیتای کاتالوگ هم از فرم‌ساز گرافیکی قابل ویرایش است
+    code: str | None = Field(default=None, max_length=60)
+    age_range: str | None = Field(default=None, max_length=120)
+    estimated_minutes: int | None = Field(default=None, ge=1, le=600)
+    accent_color: str | None = Field(default=None, max_length=20)
 
 
 class PsychReviewAction(BaseModel):
@@ -173,6 +201,58 @@ class AttemptCreate(BaseModel):
     answers: list[int] = Field(min_length=1)
     # فاز ۵۰ - مشخصات اولیه (فرم مرجع): کلیدهای gender/age/education/marital
     demographics: dict | None = None
+
+
+# ---------------------------------------------------------------- فاز ۸۳ schemas
+class QuestionReplaceItem(BaseModel):
+    """یک سؤال در جایگزینی کامل — id موجود یعنی ویرایش؛ بدون id یعنی سؤال جدید."""
+
+    id: str | None = None
+    prompt: str = Field(min_length=1, max_length=1000)
+    options: list[dict] = Field(min_length=2, max_length=10)  # [{"label","score"}]
+    subscale: str | None = Field(default=None, max_length=100)
+    image_path: str | None = Field(default=None, max_length=300)
+
+
+class QuestionsReplace(BaseModel):
+    items: list[QuestionReplaceItem] = Field(max_length=500)
+
+
+class InterpretationReplaceItem(BaseModel):
+    id: str | None = None
+    score_min: int = Field(ge=0)
+    score_max: int = Field(ge=0)
+    label: str = Field(min_length=1, max_length=200)
+    guidance: str | None = Field(default=None, max_length=1000)
+
+
+class InterpretationsReplace(BaseModel):
+    items: list[InterpretationReplaceItem] = Field(max_length=100)
+
+
+class ScaleLevelItem(BaseModel):
+    min: int
+    max: int
+    label: str = Field(min_length=1, max_length=200)
+    text: str = Field(default="", max_length=4000)
+    guidance: str | None = Field(default=None, max_length=2000)
+
+
+class ScaleNode(BaseModel):
+    """گره مقیاس — children بازگشتی (domain → وجه‌ها)."""
+
+    key: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    match_names: list[str] | None = Field(default=None, max_length=60)
+    levels: list[ScaleLevelItem] | None = Field(default=None, max_length=20)
+    direction: str = Field(default="balanced")
+    color: str | None = Field(default=None, max_length=20)
+    children: list["ScaleNode"] = Field(default_factory=list, max_length=60)
+
+
+class ScalesReplace(BaseModel):
+    items: list[ScaleNode] = Field(max_length=60)
 
 
 # ---------------------------------------------------------------- admin
@@ -231,6 +311,15 @@ def update_test(
         if db.get(Topic, payload.topic_id) is None:
             raise HTTPException(status_code=404, detail="دسته موضوعی یافت نشد")
         t.topic_id = payload.topic_id
+    # فاز ۸۳ - متادیتای کاتالوگ از فرم‌ساز
+    if payload.code is not None:
+        t.code = payload.code.strip() or None
+    if payload.age_range is not None:
+        t.age_range = payload.age_range.strip() or None
+    if payload.estimated_minutes is not None:
+        t.estimated_minutes = payload.estimated_minutes
+    if payload.accent_color is not None:
+        t.accent_color = payload.accent_color.strip() or None
     # ویرایش محتوای علمی منتشرشده → بازگشت به پیش‌نویس (D08: دوباره باید تأیید شود)
     if t.status == PsychStatus.PUBLISHED:
         t.status = PsychStatus.DRAFT
@@ -240,6 +329,292 @@ def update_test(
     db.commit()
     db.refresh(t)
     return _test_out(db, t)
+
+
+# ---------------------------------------------------------------- فاز ۸۳ - فرم‌ساز گرافیکی
+def _clean_options(options: list[dict], where: str) -> list[dict]:
+    """اعتبارسنجی گزینه‌ها — همان قواعد add_question (برچسب الزامی، امتیاز ≥ ۰)."""
+    clean: list[dict] = []
+    for idx, opt in enumerate(options):
+        label = str(opt.get("label", "")).strip()
+        score = opt.get("score", 0)
+        if not label:
+            raise HTTPException(status_code=422, detail=f"برچسب گزینه {idx + 1} در {where} الزامی است")
+        try:
+            score = int(score)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail=f"امتیاز گزینه {idx + 1} در {where} باید عدد باشد")
+        if score < 0:
+            raise HTTPException(status_code=422, detail=f"امتیاز گزینه {idx + 1} در {where} نمی‌تواند منفی باشد")
+        clean.append({"label": label, "score": score})
+    return clean
+
+
+def _revert_published(db: Session, t: PsychTest) -> None:
+    """ویرایش محتوای علمی ابزار منتشرشده → بازگشت به پیش‌نویس (D08)."""
+    if t.status == PsychStatus.PUBLISHED:
+        t.status = PsychStatus.DRAFT
+        t.review_note = None
+        t.reviewed_by = None
+        t.reviewed_at = None
+
+
+def _uuid_or_422(raw: str | None, what: str) -> uuid.UUID | None:
+    """تبدیل id متنی به UUID — مقدار خراب ۵۰۰ نمی‌شود، ۴۲۲ می‌گیرد."""
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(raw)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=422, detail=f"شناسهٔ {what} معتبر نیست")
+
+
+@router.put("/psych-tests/{test_id}/questions")
+def replace_questions(
+    test_id: uuid.UUID,
+    payload: QuestionsReplace,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """جایگزینی کامل سؤال‌های ابزار به ترتیب ارسالی (فرم‌ساز گرافیکی فاز ۸۳).
+
+    - id موجود → ویرایش همان سؤال؛ بدون id → ساخت سؤال جدید؛
+    - سؤال‌هایی که در فهرست نیستند حذف می‌شوند؛ sort_order = ترتیب فهرست؛
+    - image_path فقط از پاس آپلود مجاز است (ضد Traversal)؛
+    - ابزار منتشرشده → draft (بازبینی ناظر علمی دوباره لازم است).
+    """
+    t = db.get(PsychTest, test_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    current = {q.id: q for q in db.scalars(
+        select(PsychQuestion).where(PsychQuestion.test_id == test_id)
+    ).all()}
+    keep: set[uuid.UUID] = set()
+    for pos, item in enumerate(payload.items):
+        opts = _clean_options(item.options, f"سؤال {pos + 1}")
+        subscale = (item.subscale or "").strip() or None
+        image_path = (item.image_path or "").strip() or None
+        if image_path is not None:
+            base = Path("uploads/psych_images").resolve()
+            target = (base / image_path).resolve()
+            if base not in target.parents or not target.is_file():
+                raise HTTPException(status_code=422, detail=f"تصویر سؤال {pos + 1} معتبر نیست")
+        q = current.get(_uuid_or_422(item.id, "سؤال")) if item.id else None
+        if q is not None:
+            keep.add(q.id)
+            q.prompt = item.prompt.strip()
+            q.options = opts
+            q.subscale = subscale
+            q.image_path = image_path
+            q.sort_order = pos
+        else:
+            q = PsychQuestion(
+                test_id=test_id, prompt=item.prompt.strip(), options=opts,
+                subscale=subscale, image_path=image_path, sort_order=pos,
+            )
+            db.add(q)
+    # حذف سؤال‌های غایب در فهرست جدید
+    for qid, q in current.items():
+        if qid not in keep:
+            db.delete(q)
+    _revert_published(db, t)
+    db.commit()
+    rows = db.scalars(
+        select(PsychQuestion).where(PsychQuestion.test_id == test_id).order_by(PsychQuestion.sort_order)
+    ).all()
+    return {"items": [_question_out(q) for q in rows]}
+
+
+@router.put("/psych-tests/{test_id}/interpretations")
+def replace_interpretations(
+    test_id: uuid.UUID,
+    payload: InterpretationsReplace,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """جایگزینی کامل بازه‌های تفسیر به ترتیب ارسالی (فرم‌ساز گرافیکی فاز ۸۳)."""
+    t = db.get(PsychTest, test_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    for pos, it in enumerate(payload.items):
+        if it.score_max < it.score_min:
+            raise HTTPException(status_code=422, detail=f"حد بالای بازهٔ {pos + 1} نمی‌تواند کمتر از حد پایین باشد")
+    current = {i.id: i for i in db.scalars(
+        select(PsychInterpretation).where(PsychInterpretation.test_id == test_id)
+    ).all()}
+    keep: set[uuid.UUID] = set()
+    for pos, item in enumerate(payload.items):
+        i = current.get(_uuid_or_422(item.id, "بازهٔ تفسیر")) if item.id else None
+        if i is not None:
+            keep.add(i.id)
+            i.score_min = item.score_min
+            i.score_max = item.score_max
+            i.label = item.label.strip()
+            i.guidance = item.guidance
+            i.sort_order = pos
+        else:
+            i = PsychInterpretation(
+                test_id=test_id, score_min=item.score_min, score_max=item.score_max,
+                label=item.label.strip(), guidance=item.guidance, sort_order=pos,
+            )
+            db.add(i)
+    for iid, i in current.items():
+        if iid not in keep:
+            db.delete(i)
+    _revert_published(db, t)
+    db.commit()
+    rows = db.scalars(
+        select(PsychInterpretation).where(PsychInterpretation.test_id == test_id)
+        .order_by(PsychInterpretation.sort_order, PsychInterpretation.score_min)
+    ).all()
+    return {"items": [_interp_out(i) for i in rows]}
+
+
+def _scale_out(s: PsychScale, by_parent: dict[uuid.UUID | None, list[PsychScale]]) -> dict:
+    """سریال‌سازی بازگشتی گره مقیاس — فرزندان از نگاشت parent_id → ردیف‌ها."""
+    return {
+        "id": str(s.id),
+        "key": s.key,
+        "title": s.title,
+        "description": s.description,
+        "match_names": s.match_names,
+        "levels": s.levels,
+        "direction": s.direction,
+        "color": s.color,
+        "sort_order": s.sort_order,
+        "children": [_scale_out(c, by_parent) for c in by_parent.get(s.id, [])],
+    }
+
+
+@router.get("/psych-tests/{test_id}/scales")
+def list_scales(
+    test_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*VIEW_ROLES)),
+) -> dict:
+    """درخت مقیاس‌های ابزار (گزارش تحلیلی سطح‌بندی‌شده — فاز ۶۳/۸۳)."""
+    t = db.get(PsychTest, test_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    rows = db.scalars(
+        select(PsychScale).where(PsychScale.test_id == test_id).order_by(PsychScale.sort_order)
+    ).all()
+    by_parent: dict[uuid.UUID | None, list[PsychScale]] = {}
+    for r in rows:
+        by_parent.setdefault(r.parent_id, []).append(r)
+    roots = by_parent.get(None, [])
+    return {"items": [_scale_out(s, by_parent) for s in roots]}
+
+
+def _insert_scale_tree(
+    db: Session, test_id: uuid.UUID, nodes: list[ScaleNode], parent_id: uuid.UUID | None, pos0: int
+) -> None:
+    """درج والد قبل از فرزند؛ اعتبارسنجی direction و بازه‌ها."""
+    for pos, n in enumerate(nodes):
+        if n.direction not in ("higher_worse", "higher_better", "balanced"):
+            raise HTTPException(status_code=422, detail=f"جهت مقیاس «{n.title}» نامعتبر است")
+        levels = None
+        if n.levels:
+            for lv in n.levels:
+                if lv.max < lv.min:
+                    raise HTTPException(status_code=422, detail=f"بازهٔ سطح «{lv.label}» در مقیاس «{n.title}» نامعتبر است")
+            levels = [lv.model_dump() for lv in n.levels]
+        s = PsychScale(
+            test_id=test_id,
+            parent_id=parent_id,
+            key=n.key.strip(),
+            title=n.title.strip(),
+            description=n.description,
+            match_names=[m.strip() for m in n.match_names or [] if m.strip()] or None,
+            levels=levels,
+            direction=n.direction,
+            color=(n.color or "").strip() or None,
+            sort_order=pos0 + pos,
+        )
+        db.add(s)
+        db.flush()
+        _insert_scale_tree(db, test_id, n.children, s.id, 0)
+
+
+@router.put("/psych-tests/{test_id}/scales")
+def replace_scales(
+    test_id: uuid.UUID,
+    payload: ScalesReplace,
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """جایگزینی کامل درخت مقیاس‌ها (گزارش تحلیلی) — حذف همه و درج از نو.
+
+    match_names به «نام» سؤال‌ها وصل است (نه id) پس بازسازی امن است؛
+    کلیدها باید در سطح خودِ ابزار یکتا باشند.
+    """
+    t = db.get(PsychTest, test_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+
+    def collect_keys(nodes: list[ScaleNode], seen: set[str], path: str) -> None:
+        for n in nodes:
+            k = n.key.strip()
+            if k in seen:
+                raise HTTPException(status_code=422, detail=f"کلید مقیاس تکراری است: {k} ({path})")
+            seen.add(k)
+            collect_keys(n.children, seen, n.title)
+
+    seen: set[str] = set()
+    collect_keys(payload.items, seen, "—")
+    db.query(PsychScale).filter(PsychScale.test_id == test_id).delete(synchronize_session=False)
+    _insert_scale_tree(db, test_id, payload.items, None, 0)
+    _revert_published(db, t)
+    db.commit()
+    rows = db.scalars(
+        select(PsychScale).where(PsychScale.test_id == test_id).order_by(PsychScale.sort_order)
+    ).all()
+    by_parent: dict[uuid.UUID | None, list[PsychScale]] = {}
+    for r in rows:
+        by_parent.setdefault(r.parent_id, []).append(r)
+    return {"items": [_scale_out(s, by_parent) for s in by_parent.get(None, [])]}
+
+
+_IMG_MIME_EXT = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+}
+_IMG_MAX_BYTES = 5 * 1024 * 1024  # ۵ مگابایت
+
+
+@router.post("/psych-tests/{test_id}/question-image", status_code=201)
+async def upload_question_image(
+    test_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _actor: User = Depends(require_roles(*MANAGE_ROLES)),
+) -> dict:
+    """آپلود عکس پیوست سؤال (ماتریس ریون و …) → uploads/psych_images.
+
+    فایل جدا از سؤال ذخیره می‌شود؛ مسیر برگشتی را فرم‌ساز در image_path سؤال
+    ثبت می‌کند (در PUT questions اعتبارسنجی می‌شود).
+    """
+    t = db.get(PsychTest, test_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    ext = _IMG_MIME_EXT.get((file.content_type or "").lower())
+    if ext is None:
+        raise HTTPException(status_code=422, detail="فرمت تصویر باید PNG یا JPG یا WEBP باشد")
+    data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(status_code=422, detail="فایل خالی است")
+    if len(data) > _IMG_MAX_BYTES:
+        raise HTTPException(status_code=422, detail="حجم تصویر حداکثر ۵ مگابایت است")
+    base = Path("uploads/psych_images")
+    base.mkdir(parents=True, exist_ok=True)
+    fname = f"{uuid.uuid4().hex[:16]}_{int(datetime.now(timezone.utc).timestamp())}{ext}"
+    (base / fname).write_bytes(data)
+    return {
+        "image_path": fname,
+        "image_url": f"/api/v1/public/psych-images/{fname}",
+    }
 
 
 @router.post("/psych-tests/{test_id}/submit-review")
@@ -579,10 +954,11 @@ def public_paper(
         "effective_title": effective_title,
         "branding": branding,
         "questions": [
+            # فاز ۸۳ - نام زیرمقیاس دیگر به کلاینت آزمون‌دهنده نمی‌رود
+            # (پاسخ‌دهی بدون سوگیری؛ نمره‌دهی سمت سرور با نام در DB انجام می‌شود)
             {
                 "id": str(q.id),
                 "prompt": q.prompt,
-                "subscale": q.subscale,
                 "options": [o.get("label") for o in (q.options or [])],
                 "image_url": f"/api/v1/public/psych-images/{q.image_path}" if q.image_path else None,
                 "sort_order": q.sort_order,
@@ -674,7 +1050,8 @@ def take_test(
     db.commit()
     db.refresh(a)
     return {
-        "attempt": _attempt_out(a),
+        # فاز ۸۳ - db پاس داده می‌شود تا subscale_maxes هم در نتیجه بیاید
+        "attempt": _attempt_out(a, db),
         "disclaimer": "این نتیجه ابزار غربالگری است و جایگزین ارزیابی بالینی مشاور نیست",
     }
 

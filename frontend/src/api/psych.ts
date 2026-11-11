@@ -30,6 +30,8 @@ export interface PsychQuestion {
   prompt: string;
   options: { label: string; score: number }[];
   subscale?: string | null;
+  // فاز ۸۳ - مسیر فایل تصویر پیوست (برای حفظ آن در جایگزینی کامل سؤال‌ها)
+  image_path?: string | null;
   image_url?: string | null;
   sort_order: number;
 }
@@ -52,6 +54,8 @@ export interface PsychAttempt {
   interpretation_label: string;
   interpretation_guidance: string | null;
   subscale_scores?: Record<string, number> | null;
+  // فاز ۸۳ - بیشینهٔ نمرهٔ هر زیرمقیاس (بدون افشای نگاشت سؤال‌ها به مقیاس)
+  subscale_maxes?: Record<string, number> | null;
   demographics?: Record<string, string> | null;
   // فاز ۶۳ - گزارش تحلیلی چندلایه (snapshot)
   result_payload?: ReportPayload | null;
@@ -222,6 +226,92 @@ export async function addInterpretation(
 export async function fetchPsychAttempts(testId: string): Promise<PsychAttempt[]> {
   const r = await apiClient.get(`/psych-tests/${testId}/attempts`);
   return itemsOf<PsychAttempt>(r);
+}
+
+// ====================================================== فاز ۸۳ - فرم‌ساز گرافیکی
+/** سطح تفسیر مقیاس (بازهٔ نمره) — شکل seed scales.json */
+export interface ScaleLevel {
+  min: number;
+  max: number;
+  label: string;
+  text?: string;
+  guidance?: string | null;
+}
+
+/** گرهٔ مقیاس خروجی سرور (با id و فرزندان بازگشتی) */
+export interface PsychScaleNode {
+  id: string;
+  key: string;
+  title: string;
+  description: string | null;
+  match_names: string[] | null;
+  levels: ScaleLevel[] | null;
+  direction: "higher_worse" | "higher_better" | "balanced";
+  color: string | null;
+  sort_order: number;
+  children: PsychScaleNode[];
+}
+
+/** جایگزینی کامل سؤال‌ها به ترتیب ارسالی — id موجود یعنی ویرایش، بدون id یعنی جدید */
+export async function putPsychQuestions(
+  testId: string,
+  items: Array<{
+    id?: string | null;
+    prompt: string;
+    options: { label: string; score: number }[];
+    subscale?: string | null;
+    image_path?: string | null;
+  }>,
+): Promise<PsychQuestion[]> {
+  const r = await apiClient.put<{ items: PsychQuestion[] }>(`/psych-tests/${testId}/questions`, { items });
+  return r.data.items;
+}
+
+/** جایگزینی کامل بازه‌های تفسیر به ترتیب ارسالی */
+export async function putPsychInterpretations(
+  testId: string,
+  items: Array<{ id?: string | null; score_min: number; score_max: number; label: string; guidance?: string | null }>,
+): Promise<PsychInterpretation[]> {
+  const r = await apiClient.put<{ items: PsychInterpretation[] }>(`/psych-tests/${testId}/interpretations`, { items });
+  return r.data.items;
+}
+
+/** درخت مقیاس‌های ابزار (گزارش تحلیلی سطح‌بندی‌شده) */
+export async function fetchPsychScales(testId: string): Promise<PsychScaleNode[]> {
+  const r = await apiClient.get<{ items: PsychScaleNode[] }>(`/psych-tests/${testId}/scales`);
+  return r.data.items;
+}
+
+/** گرهٔ مقیاس برای جایگزینی کامل — درخت با فرزندان بازگشتی */
+export interface ScaleReplaceNode {
+  key: string;
+  title: string;
+  description?: string | null;
+  match_names?: string[] | null;
+  levels?: ScaleLevel[] | null;
+  direction: "higher_worse" | "higher_better" | "balanced";
+  color?: string | null;
+  children: ScaleReplaceNode[];
+}
+
+/** جایگزینی کامل درخت مقیاس‌ها — والد قبل از فرزند ارسال می‌شود */
+export async function putPsychScales(
+  testId: string,
+  items: ScaleReplaceNode[],
+): Promise<PsychScaleNode[]> {
+  const r = await apiClient.put<{ items: PsychScaleNode[] }>(`/psych-tests/${testId}/scales`, { items });
+  return r.data.items;
+}
+
+/** آپلود عکس پیوست سؤال (PNG/JPG/WEBP، حداکثر ۵MB) → {image_path, image_url} */
+export async function uploadPsychQuestionImage(testId: string, file: File): Promise<{ image_path: string; image_url: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await apiClient.post<{ image_path: string; image_url: string }>(
+    `/psych-tests/${testId}/question-image`,
+    fd,
+  );
+  return r.data;
 }
 
 export async function fetchMyPsychResults(): Promise<PsychAttempt[]> {

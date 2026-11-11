@@ -22,6 +22,7 @@ import {
 import { EmptyState, FormSection, OptionsEditor, OptionRow } from "../components/FormKit";
 import PsychResultReport from "../components/PsychResultReport";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import CategoryRoundedIcon from "@mui/icons-material/CategoryRounded";
@@ -475,6 +476,7 @@ function TestDetailDialog({ test, onClose, onChanged }: {
   test: PsychTest; onClose: () => void; onChanged: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   const questions = useQuery({ queryKey: ["psych-questions", test.id], queryFn: () => fetchPsychQuestions(test.id) });
   const interps = useQuery({ queryKey: ["psych-interps", test.id], queryFn: () => fetchInterpretations(test.id) });
   const attempts = useQuery({ queryKey: ["psych-attempts", test.id], queryFn: () => fetchPsychAttempts(test.id) });
@@ -498,6 +500,12 @@ function TestDetailDialog({ test, onClose, onChanged }: {
       <DialogContent>
         <Stack spacing={2} mt={1}>
           {error && <Alert severity="error">{error}</Alert>}
+
+          {/* فاز ۸۳ - محیط گرافیکی کامل ویرایش فرم اصلی با پیش‌نمایش قبل از اعمال */}
+          <Button variant="contained" startIcon={<EditRoundedIcon />}
+            onClick={() => navigate(`/psych-tests/${test.id}/builder`)}>
+            فرم‌ساز گرافیکی: ویرایش کامل فرم + پیش‌نمایش قبل از اعمال
+          </Button>
 
           <QuestionAddForm onSubmit={(p) => qMut.mutate(p)} />
 

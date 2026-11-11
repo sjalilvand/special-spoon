@@ -123,16 +123,18 @@ export default function PsychTestRunPage() {
                   <Typography variant="subtitle1" fontWeight={800} mb={2}>ریزنمرهٔ ابعاد</Typography>
                   <Stack spacing={1.5}>
                     {subs.map(([name, val]) => {
-                      const subMax = questions
-                        .filter((q) => q.subscale === name)
-                        .reduce((acc, q) => acc + questionMax(questions.indexOf(q)), 0);
+                      // فاز ۸۳ - نام زیرمقیاس دیگر به کلاینت نمی‌آید؛ بیشینه از
+                      // subscale_maxes سرور می‌آید (بدون افشای نگاشت سؤال‌ها)
+                      const subMax = a.subscale_maxes?.[name] ?? 0;
                       const pct = subMax > 0 ? (val / subMax) * 100 : 0;
                       return (
                         <Box key={name}>
                           <Stack direction="row" justifyContent="space-between" mb={0.5}>
                             <Typography variant="body2" fontWeight={700}>{name}</Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {val.toLocaleString("fa-IR")} از {subMax.toLocaleString("fa-IR")}
+                              {subMax > 0
+                                ? `${val.toLocaleString("fa-IR")} از ${subMax.toLocaleString("fa-IR")}`
+                                : val.toLocaleString("fa-IR")}
                             </Typography>
                           </Stack>
                           <Box sx={{ bgcolor: "#f3e8ea", borderRadius: 99, height: 10 }}>
@@ -334,10 +336,9 @@ export default function PsychTestRunPage() {
 
         {q && (
           <Paper sx={{ p: { xs: 2, md: 3.5 } }}>
-            {/* فاز ۵۷ - در ابزارهای بلند (مثل نئو ۲۴۰) نام زیرمقیاس نشان داده نمی‌شود تا پاسخ‌دهی بی‌سوگیری بماند */}
-            {q.subscale && questions.length < 100 && (
-              <Chip size="small" color="secondary" variant="outlined" label={q.subscale} sx={{ mb: 1.5 }} />
-            )}
+            {/* فاز ۸۳ - نام زیرمقیاس (مثل «اضطراب و بی‌خوابی») دیگر به پاسخ‌دهنده
+                نشان داده نمی‌شود تا پاسخ‌دهی بدون سوگیری بماند؛ حذف از payload
+                سمت سرور هم انجام شده (public_paper) و سرور ملاک است */}
             <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.9, mb: 2.5 }}>
               {q.prompt}
             </Typography>

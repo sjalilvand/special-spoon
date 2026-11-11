@@ -38,6 +38,7 @@ const NotificationsPage = lazyRetry(() => import("../pages/NotificationsPage"));
 const SupportPage = lazyRetry(() => import("../pages/SupportPage"));
 const PsychTestCenterPage = lazyRetry(() => import("../pages/PsychTestCenterPage"));
 const PsychAttemptsPage = lazyRetry(() => import("../pages/PsychAttemptsPage"));
+const PsychTestBuilderPage = lazyRetry(() => import("../pages/PsychTestBuilderPage"));
 const CounselingFilesPage = lazyRetry(() => import("../pages/CounselingFilesPage"));
 const PsychTestRunPage = lazyRetry(() => import("../pages/PsychTestRunPage"));
 const AssistantPage = lazyRetry(() => import("../pages/AssistantPage"));
@@ -237,6 +238,12 @@ export default function AppRoutes() {
       <Route path="/psych-tests/:slug/run" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "TECHNICAL_SUPERVISOR", "COUNSELOR", "RECEPTION", "APPLICANT"]}>
           <Layout><PsychTestRunPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۸۳ - فرم‌ساز گرافیکی ابزار آزمون (مدیر) + پیش‌نمایش قبل از اعمال */}
+      <Route path="/psych-tests/:testId/builder" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
+          <Layout><PsychTestBuilderPage /></Layout>
         </ProtectedRoute>
       } />
       {/* فاز ۳۵ - B25–B27: دستیار هوشمند (D07) */}
