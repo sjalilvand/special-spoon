@@ -318,6 +318,7 @@ function AdminTestsTab({ tests, canManage, canReview }: {
   tests: PsychTest[]; canManage: boolean; canReview: boolean;
 }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -403,6 +404,14 @@ function AdminTestsTab({ tests, canManage, canReview }: {
                 </Button>
                 <Button size="small" color="error" onClick={() => setRejectOpen(t)}>رد</Button>
               </>
+            )}
+            {/* فاز ۸۳ج - دکمهٔ فرم‌ساز روی هر ردیف (قبلاً داخل پنجرهٔ مدیریت بود و
+                در فهرست دیده نمی‌شد) */}
+            {canManage && (
+              <Button size="small" variant="outlined" color="secondary" startIcon={<EditRoundedIcon />}
+                onClick={() => navigate(`/psych-tests/${t.id}/builder`)}>
+                فرم‌ساز گرافیکی
+              </Button>
             )}
             {canManage && <Button size="small" variant="contained" onClick={() => setDetail(t)}>مدیریت سؤال و تفسیر</Button>}
           </Stack>

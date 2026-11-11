@@ -246,6 +246,14 @@ export default function AppRoutes() {
           <Layout><PsychTestBuilderPage /></Layout>
         </ProtectedRoute>
       } />
+      {/* فاز ۸۳ج - لانچر فرم‌ساز (بدون شناسه): ورود از منوی «سامانه و پشتیبانی» —
+          ابتدا ابزار انتخاب می‌شود، بعد ویرایشگر پنج‌تبی باز می‌شود.
+          (React Router مسیر ایستا را بر :testId ترجیح می‌دهد — تداخلی نیست) */}
+      <Route path="/psych-tests/builder" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER"]}>
+          <Layout><PsychTestBuilderPage /></Layout>
+        </ProtectedRoute>
+      } />
       {/* فاز ۳۵ - B25–B27: دستیار هوشمند (D07) */}
       <Route path="/assistant" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "APPLICANT"]}>

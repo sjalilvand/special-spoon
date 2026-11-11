@@ -193,6 +193,12 @@ MENU_GROUPS: list[dict] = [
                       path="/user-guide.html", self_service=True),
             MenuEntry(key="project-progress", title="گزارش پیشرفت پروژه",
                       path="/project-status.html", self_service=True),
+            # فاز ۸۳ج: فرم‌ساز گرافیکی ابزارهای آزمون (لانچر: انتخاب ابزار → ویرایش
+            # کامل + پیش‌نمایش زنده). self_service=True مثل «مرکز آزمون» — APIهای
+            # فرم‌ساز خودشان با require_roles(MANAGE_ROLES) محافظت می‌شوند؛ ماتریس
+            # فقط «نمایش منو» را کنترل می‌کند.
+            MenuEntry(key="psych-form-builder", title="فرم‌ساز آزمون‌ها",
+                      path="/psych-tests/builder", self_service=True),
         ],
     },
 ]
@@ -380,4 +386,8 @@ MENU_SEED: list[tuple[str, str, str]] = [
     # (مدیر از ماتریس می‌تواند برای هر نقش بردارد).
     *(_seed(r, "system-guide", "view") for r in SELF_ROLES),
     *(_seed(r, "project-progress", "view") for r in SELF_ROLES),
+    # ── فاز ۸۳ج: فرم‌ساز گرافیکی آزمون‌ها ── فقط مدیر سازمان (ORG_MANAGER)؛
+    # مسیر فرم‌ساز ProtectedRoute خودش SYSTEM_ADMIN/ORG_MANAGER است و
+    # SYSTEM_ADMIN بدون ردیف همیشه کامل است (bypass).
+    _seed("ORG_MANAGER", "psych-form-builder", "view"),
 ]

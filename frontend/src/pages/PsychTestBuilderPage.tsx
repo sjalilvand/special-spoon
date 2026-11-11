@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { errDetail } from "../api/client";
 import { fetchTopics } from "../api/topics";
 import {
@@ -112,6 +112,48 @@ const collectScaleNames = (scales: DraftS[], questions: DraftQ[]): string[] => {
   return [...names];
 };
 
+// ------------------------------------------------------- فاز ۸۳ج: لانچر فرم‌ساز
+// ورود از منوی «فرم‌ساز آزمون‌ها» (گروه سامانه و پشتیبانی) بدون شناسهٔ ابزار —
+// ابتدا ابزار انتخاب می‌شود، بعد ویرایشگر پنج‌تبی باز می‌شود.
+const STATUS_LABEL: Record<string, string> = {
+  draft: "پیش‌نویس", pending_review: "در انتظار تأیید ناظر",
+  published: "منتشرشده", rejected: "ردشده",
+};
+
+function BuilderLauncher({ tests }: { tests: PsychTest[] }) {
+  const navigate = useNavigate();
+  return (
+    <Box sx={{ maxWidth: 860, mx: "auto", p: { xs: 2, md: 3 } }}>
+      <Typography variant="h6" fontWeight={800} mb={1}>فرم‌ساز آزمون‌ها</Typography>
+      <Typography variant="body2" color="text.secondary" mb={2}>
+        ابزار موردنظر را انتخاب کنید — ویرایش کامل فرم (مشخصات، سؤال‌ها، بازه‌های تفسیر،
+        مقیاس‌ها) با پیش‌نمایش زندهٔ تجربهٔ کاربر، قبل از اعمال روی فرم اصلی.
+      </Typography>
+      {tests.length === 0 ? (
+        <Alert severity="info">هنوز ابزاری ثبت نشده است — از «مرکز آزمون روان‌شناسی» یک ابزار بسازید.</Alert>
+      ) : (
+        <Stack spacing={1.5}>
+          {tests.map((t) => (
+            <Paper key={t.id} variant="outlined" sx={{ p: 2 }}>
+              <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+                <Typography variant="subtitle2" fontWeight={800}>{t.title}</Typography>
+                <Chip size="small" variant="outlined" label={STATUS_LABEL[t.status] ?? t.status} />
+                <Chip size="small" variant="outlined"
+                  label={`${(t.question_count ?? 0).toLocaleString("fa-IR")} سؤال`} />
+                <Box flexGrow={1} />
+                <Button variant="contained" size="small" startIcon={<EditRoundedIcon />}
+                  onClick={() => navigate(`/psych-tests/${t.id}/builder`)}>
+                  ویرایش فرم
+                </Button>
+              </Stack>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
 export default function PsychTestBuilderPage() {
   const { testId = "" } = useParams<{ testId: string }>();
   const qc = useQueryClient();
@@ -149,10 +191,11 @@ export default function PsychTestBuilderPage() {
 
   const mark = () => setDirty(true);
 
-  // سؤال‌ها / بازه‌ها / مقیاس‌ها از سرور
-  const qRows = useQuery({ queryKey: ["psych-questions", testId], queryFn: () => fetchPsychQuestions(testId) });
-  const iRows = useQuery({ queryKey: ["psych-interps", testId], queryFn: () => fetchInterpretations(testId) });
-  const sRows = useQuery({ queryKey: ["psych-scales", testId], queryFn: () => fetchPsychScales(testId) });
+  // سؤال‌ها / بازه‌ها / مقیاس‌ها از سرور — فاز ۸۳ج: در حالت لانچر (بدون شناسه)
+  // این فراخوانی‌ها غیرفعال می‌شوند تا به URL خراب نزنند
+  const qRows = useQuery({ queryKey: ["psych-questions", testId], queryFn: () => fetchPsychQuestions(testId), enabled: !!testId });
+  const iRows = useQuery({ queryKey: ["psych-interps", testId], queryFn: () => fetchInterpretations(testId), enabled: !!testId });
+  const sRows = useQuery({ queryKey: ["psych-scales", testId], queryFn: () => fetchPsychScales(testId), enabled: !!testId });
   useEffect(() => {
     if (loadedRef.current) return;
     if (qRows.data) setQuestions(fromQRows(qRows.data));
@@ -206,6 +249,11 @@ export default function PsychTestBuilderPage() {
     onError: (e) => setSnack({ msg: errDetail(e), ok: false }),
   });
 
+  if (!testId) {
+    // فاز ۸۳ج - لانچر: ورود از منو بدون شناسهٔ ابزار (همهٔ هوک‌ها قبل از این
+    // بازگشت اجرا شده‌اند — قاعدهٔ React حفظ است)
+    return <BuilderLauncher tests={tests.data ?? []} />;
+  }
   if (stillLoading) {
     return <CircularProgress sx={{ display: "block", mx: "auto", mt: 8 }} />;
   }
