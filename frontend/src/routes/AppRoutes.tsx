@@ -19,6 +19,8 @@ const ActivatePage = lazyRetry(() => import("../pages/ActivatePage"));
 const AccountingPage = lazyRetry(() => import("../pages/AccountingPage"));
 const AdminDashboardPage = lazyRetry(() => import("../pages/AdminDashboardPage"));
 const ApplicantsPage = lazyRetry(() => import("../pages/ApplicantsPage"));
+// فاز ۸۸: فراخوان همکاری — مدیریت ثبت‌نام‌های فرم عمومی
+const FarakhanPage = lazyRetry(() => import("../pages/FarakhanPage"));
 const AssessmentFormPage = lazyRetry(() => import("../pages/AssessmentFormPage"));
 const AuditEventsPage = lazyRetry(() => import("../pages/AuditEventsPage"));
 const BranchMapPage = lazyRetry(() => import("../pages/BranchMapPage"));
@@ -307,6 +309,12 @@ export default function AppRoutes() {
       <Route path="/applicants" element={
         <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"]}>
           <Layout><ApplicantsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      {/* فاز ۸۸: فراخوان همکاری — ثبت‌نام‌های فرم عمومی /farakhan */}
+      <Route path="/farakhan" element={
+        <ProtectedRoute roles={["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"]}>
+          <Layout><FarakhanPage /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/imports" element={

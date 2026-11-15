@@ -89,6 +89,8 @@ from app.models.learning import (
     ExamQuestion,
     PublishStatus,
 )
+# فاز ۸۸: فراخوان همکاری — پورت فرم مرجع farakhan
+from app.models.farakhan import FarakhanFile, FarakhanLocation, FarakhanSubmission
 from app.models.org_statement import OrgStatement, OrgStatementItem, OrgStatementStatus
 from app.models.psych_test import (
     PsychAttempt,

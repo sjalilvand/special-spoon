@@ -103,6 +103,12 @@ MENU_GROUPS: list[dict] = [
         "items": [
             MenuEntry(key="applicants", title="متقاضیان", path="/applicants",
                       prefixes=["/applicants"]),
+            # فاز ۸۸: فراخوان همکاری — ثبت‌نام‌های فرم عمومی؛ مسیرهای عمومی
+            # فرم (meta/captcha/provinces/submissions) هرگز گیت نمی‌شوند
+            MenuEntry(key="farakhan", title="فراخوان همکاری", path="/farakhan",
+                      prefixes=["/farakhan"],
+                      public_prefixes=["/farakhan/meta", "/farakhan/captcha",
+                                       "/farakhan/provinces", "/farakhan/submissions"]),
             MenuEntry(key="public-chats", title="گفتگوهای عمومی سایت", path="/public-chats",
                       prefixes=["/public-chat/admin"]),
             MenuEntry(key="imports", title="ورود اکسل", path="/imports",
@@ -335,6 +341,10 @@ MENU_SEED: list[tuple[str, str, str]] = [
     # ── پذیرش و مشتریان ──
     _seed("ORG_MANAGER", "applicants", "edit"),
     _seed("RECEPTION", "applicants", "edit"),
+    # فاز ۸۸: فراخوان همکاری — مثل متقاضیان: مدیر/پذیرش کامل، مشاور فقط خواندن
+    _seed("ORG_MANAGER", "farakhan", "edit"),
+    _seed("RECEPTION", "farakhan", "edit"),
+    _seed("TECHNICAL_SUPERVISOR", "farakhan", "read"),
     _seed("ORG_MANAGER", "public-chats", "read"),
     _seed("RECEPTION", "public-chats", "read"),
     _seed("ORG_MANAGER", "imports", "edit"),

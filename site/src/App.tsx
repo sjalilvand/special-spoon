@@ -20,6 +20,8 @@ const AcademyCoursePage = lazy(() => import("./pages/AcademyCoursePage"));
 const AcademyCartPage = lazy(() => import("./pages/AcademyCartPage"));
 const AcademyPayResultPage = lazy(() => import("./pages/AcademyPayResultPage"));
 const AcademyMyPage = lazy(() => import("./pages/AcademyMyPage"));
+// فاز ۸۸ - فراخوان همکاری (لینک مستقیم عمومی برای گروه‌ها و سامانه‌های دیگر)
+const FarakhanPage = lazy(() => import("./pages/FarakhanPage"));
 
 function PageFallback() {
   return (
@@ -83,6 +85,8 @@ function SiteShell() {
           <Route path="/academy/cart" element={<AcademyCartPage />} />
           <Route path="/academy/pay/result" element={<AcademyPayResultPage />} />
           <Route path="/academy/my" element={<AcademyMyPage />} />
+          {/* فاز ۸۸ - فراخوان همکاری: لینک مستقیم /farakhan */}
+          <Route path="/farakhan" element={<FarakhanPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

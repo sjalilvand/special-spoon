@@ -240,3 +240,100 @@ export async function postCounselorReview(
     throw new Error((d && d.detail) || "خطا در ثبت نظر");
   }
 }
+
+// ---------------- فاز ۸۸ - فراخوان همکاری (پورت فرم مرجع farakhan) ----------------
+
+export interface FarakhanOption {
+  value: string;
+  label: string;
+}
+
+export interface FarakhanFileField {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+export interface FarakhanMeta {
+  genders: FarakhanOption[];
+  military_status_options: FarakhanOption[];
+  education_degrees: FarakhanOption[];
+  license_status_options: FarakhanOption[];
+  center_ownership_options: FarakhanOption[];
+  file_fields: FarakhanFileField[];
+  allowed_extensions: string[];
+  max_file_size_bytes: number;
+  max_files: number;
+  rules: { require_military_status_for_male: boolean; phone_required: boolean };
+}
+
+export interface FarakhanCaptcha {
+  captcha_id: string;
+  svg: string;
+  ttl_seconds: number;
+}
+
+/** خطای اعتبارسنجی فراخوان: نقشهٔ «برچسب فارسی فیلد → پیام» */
+export class FarakhanValidationError extends Error {
+  errors: Record<string, string>;
+  constructor(message: string, errors: Record<string, string>) {
+    super(message);
+    this.errors = errors;
+  }
+}
+
+export async function fetchFarakhanMeta(): Promise<FarakhanMeta> {
+  const r = await fetch("/api/v1/farakhan/meta");
+  if (!r.ok) throw new Error("خطا در دریافت اطلاعات فرم فراخوان");
+  return (await r.json()) as FarakhanMeta;
+}
+
+export async function fetchFarakhanCaptcha(): Promise<FarakhanCaptcha> {
+  const r = await fetch("/api/v1/farakhan/captcha");
+  if (!r.ok) throw new Error("خطا در دریافت کپچا");
+  return (await r.json()) as FarakhanCaptcha;
+}
+
+export interface FarakhanLocationOption {
+  id: number;
+  name: string;
+}
+
+export async function fetchFarakhanProvinces(): Promise<FarakhanLocationOption[]> {
+  const r = await fetch("/api/v1/farakhan/provinces");
+  if (!r.ok) throw new Error("خطا در دریافت استان‌ها");
+  return (await r.json()).items as FarakhanLocationOption[];
+}
+
+export async function fetchFarakhanCounties(provinceId: number): Promise<FarakhanLocationOption[]> {
+  const r = await fetch(`/api/v1/farakhan/provinces/${encodeURIComponent(String(provinceId))}/counties`);
+  if (!r.ok) return [];
+  return (await r.json()).items as FarakhanLocationOption[];
+}
+
+export interface FarakhanSubmitResult {
+  success: boolean;
+  tracking_code: string;
+  message: string;
+}
+
+export async function submitFarakhan(payload: Record<string, unknown>, files: Record<string, File>): Promise<FarakhanSubmitResult> {
+  const fd = new FormData();
+  fd.append("payload", JSON.stringify(payload));
+  for (const [key, file] of Object.entries(files)) {
+    if (file) fd.append(key, file, file.name);
+  }
+  const r = await fetch("/api/v1/farakhan/submissions", { method: "POST", body: fd });
+  if (!r.ok) {
+    const d = await r.json().catch(() => null);
+    const detail = d && d.detail;
+    if (detail && typeof detail === "object" && detail.errors) {
+      throw new FarakhanValidationError(
+        detail.message || "اعتبارسنجی اطلاعات ناموفق بود.",
+        detail.errors as Record<string, string>,
+      );
+    }
+    throw new Error(typeof detail === "string" ? detail : "خطا در ثبت فرم فراخوان");
+  }
+  return (await r.json()) as FarakhanSubmitResult;
+}

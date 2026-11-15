@@ -8,6 +8,7 @@ import {
   useMediaQuery, useTheme,
 } from "@mui/material";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
+import PersonAddAltRoundedIcon from "@mui/icons-material/PersonAddAltRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
@@ -101,6 +102,8 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: <PeopleAltRoundedIcon />,
     items: [
       { label: "متقاضیان", path: "/applicants", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"], menuKey: "applicants", icon: <PersonSearch /> },
+      // فاز ۸۸: فراخوان همکاری — مدیریت ثبت‌نام‌های فرم عمومی
+      { label: "فراخوان همکاری", path: "/farakhan", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"], menuKey: "farakhan", icon: <PersonAddAltRoundedIcon /> },
       // فاز ۵۵: پنل مشاهدهٔ گفتگوهای عمومی و امتیازها — پذیرش/مدیر
       { label: "گفتگوهای عمومی سایت", path: "/public-chats", roles: ["ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"], menuKey: "public-chats", icon: <Forum /> },
       { label: "ورود اکسل", path: "/imports", roles: ["SYSTEM_ADMIN", "ORG_MANAGER", "RECEPTION"], menuKey: "imports", icon: <UploadFile /> },
