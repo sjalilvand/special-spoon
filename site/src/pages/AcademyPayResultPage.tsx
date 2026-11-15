@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: نتیجهٔ بازگشت از درگاه پرداخت
+// فاز ۸۶ - آکادمی رز دکتر: نتیجهٔ بازگشت از درگاه پرداخت
 // callback درگاه پس از verify سمت سرور به /academy/pay/result?state=...&order=<uuid> برمی‌گردد
 import {
   Alert, Box, Button, Container, Paper, Stack, Typography,
@@ -20,7 +20,7 @@ export default function AcademyPayResultPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = "نتیجهٔ پرداخت | آکادمی رز";
+    document.title = "نتیجهٔ پرداخت | آکادمی رز دکتر";
     if (orderId && getToken()) {
       academyOrderStatus(orderId)
         .then(setOrder)

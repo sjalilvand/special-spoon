@@ -243,7 +243,7 @@ def build_reply(db: Session, content: str) -> PublicChatReply:
     # ۸) سلام و احوال‌پرسی
     if _has(text, ("سلام", "درود", "خسته نباشید", "وقت بخیر", "hello", "hi ", "سلام علیکم")) or text in ("سلام", "hi", "hello"):
         return PublicChatReply(
-            "سلام! خوش آمدید. من دستیار آنلاین Rosepsy هستم؛ دربارهٔ نوبت‌دهی، مشاوران، خدمات و قیمت‌ها "
+            "سلام! خوش آمدید. من دستیار آنلاین رز دکتر هستم؛ دربارهٔ نوبت‌دهی، مشاوران، خدمات و قیمت‌ها "
             "یا نحوهٔ ورود به سامانه می‌توانم راهنمایی کنم. چه کاری برایتان انجام دهم؟",
             quick_replies=_GREETING_QUICK_REPLIES,
             intent="greeting",

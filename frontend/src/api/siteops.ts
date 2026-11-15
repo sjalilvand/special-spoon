@@ -57,6 +57,7 @@ export async function createManualConsultationRequest(payload: {
   mobile: string;
   topic: string;
   preferred_date?: string;
+  request_type?: string;
   preferred_slot?: string;
   city?: string;
   referral_source?: string;

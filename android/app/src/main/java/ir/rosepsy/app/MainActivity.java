@@ -36,7 +36,7 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
 
     private static final String SERVER_IP = "130.185.73.157";
-    private static final String HOST = SERVER_IP + ".sslip.io";
+    private static final String HOST = "rosedoctor.ir"; // فاز ۸۷ — دامنهٔ اصلی
     // فایروال هاستینگ فعلاً 80/443 را می‌بندد؛ تلاش اول: IP خام روی 8080
     // (بدون DNS → سریع‌ترین راه)، پشتیبان: دامنهٔ sslip روی 8080، سپس https.
     // وقتی پورت‌های اصلی باز شدند، START_FAST را به "https://" + HOST + "/" تغییر دهید.

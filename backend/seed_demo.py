@@ -1,3 +1,4 @@
+import os
 """داده آزمایشی ساختگی - بند ۱۸ سند.
 
 اجرا:  docker compose run --rm api python seed_demo.py
@@ -10,6 +11,11 @@ from app.models.user import Role, User, UserStatus
 
 
 def main() -> int:
+    # فاز ۸۷ — kill-switch: در تولید، دادهٔ نمونه هرگز نباید ساخته شود.
+    # برای اجرای آگاهانه در محیط توسعه:  ROSEPSY_ALLOW_DEMO_SEED=1 python seed_demo.py
+    if os.environ.get("ROSEPSY_ALLOW_DEMO_SEED") != "1":
+        print("دادهٔ نمونه غیرفعال است — برای اجرا: ROSEPSY_ALLOW_DEMO_SEED=1 (کاندوم تولید فاز ۸۷)")
+        return 0
     db = SessionLocal()
     try:
         if db.scalar(select(OrganizationUnit).where(OrganizationUnit.code == "U1")) is not None:

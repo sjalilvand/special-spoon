@@ -174,7 +174,7 @@ def download_import_template(
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="rosepsy-counselors-import-template.xlsx"'},
+        headers={"Content-Disposition": 'attachment; filename="rosedoctor-counselors-import-template.xlsx"'},
     )
 
 

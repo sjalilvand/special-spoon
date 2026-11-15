@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: دیالوگ ورود با کد یک‌بارمصرف (پیامکی) برای خرید و پخش
+// فاز ۸۶ - آکادمی رز دکتر: دیالوگ ورود با کد یک‌بارمصرف (پیامکی) برای خرید و پخش
 import {
   Alert, Box, Button, Dialog, DialogContent, DialogTitle, Snackbar, Stack, TextField, Typography,
 } from "@mui/material";
@@ -62,7 +62,7 @@ export default function AcademyAuthDialog({ open, onClose, onDone }: {
     <>
       <Dialog open={open} onClose={() => { reset(); onClose(); }} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, color: "primary.main" }}>
-          {step === "mobile" ? "ورود به آکادمی رز" : "کد تأیید"}
+          {step === "mobile" ? "ورود به آکادمی رز دکتر" : "کد تأیید"}
         </DialogTitle>
         <DialogContent>
           {step === "mobile" ? (

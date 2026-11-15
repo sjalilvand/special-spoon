@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: سبد خرید → پرداخت در درگاه (شبیه‌ساز/زرین‌پال)
+// فاز ۸۶ - آکادمی رز دکتر: سبد خرید → پرداخت در درگاه (شبیه‌ساز/زرین‌پال)
 import {
   Alert, Box, Button, Chip, Container, Divider, Paper, Stack, Typography,
 } from "@mui/material";
@@ -37,7 +37,7 @@ export default function AcademyCartPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = "سبد خرید | آکادمی رز";
+    document.title = "سبد خرید | آکادمی رز دکتر";
     reload();
     fetchAcademyCourses().then(setCourses).catch(() => setCourses([]));
     const onCart = () => reload();

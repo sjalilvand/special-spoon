@@ -948,12 +948,10 @@ function Invoke-Deploy {
     Write-Step 'راه‌اندازی API و وب (Nginx + پنل)'
     Invoke-Compose -ComposeArgs @('up', '-d', 'api', 'web')
 
-    if (-not $SkipSeed) {
-        Write-Step 'اجرای دادهٔ نمونهٔ جامع (idempotent — اگر قبلاً اجرا شده، بخش‌های جدید را اضافه می‌کند)'
-        Write-Host '    ۱۰۰ متقاضی / مشاوره‌ها / نوبت‌ها / فرایندها / شعب ۳۱ استان / بانک آزمون ۳۱ ابزار ...' -ForegroundColor DarkGray
+    # فاز ۸۷ — seed دمو در تولید هرگز اجرا نمی‌شود؛ فقط با env صریح در توسعه ممکن است.
+    Write-Warn2 'seed_demo_rich در این نسخه غیرفعال است (فاز ۸۷ — دادهٔ نمونه در تولید ممنوع)'
+    if (-not $SkipSeed -and $env:ROSEPSY_ALLOW_DEMO_SEED -eq '1') {
         Invoke-Compose -ComposeArgs @('run', '--rm', 'api', 'python', 'seed_demo_rich.py')
-    } else {
-        Write-Warn2 'اجرای seed با پرچم -SkipSeed رد شد'
     }
 
     Set-FirewallRule

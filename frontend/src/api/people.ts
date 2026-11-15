@@ -48,6 +48,8 @@ export interface Applicant {
   gender: string | null;
   mobile: string | null;
   unit_title: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
   service_location_title: string | null;
   referral_source: string | null;
   status: string;
@@ -91,6 +93,42 @@ export async function fetchApplicants(params: { search?: string; page: number })
 
 export async function createApplicant(payload: Record<string, unknown>): Promise<Applicant> {
   return (await apiClient.post("/applicants", payload)).data;
+}
+
+// ---------------- فاز ۸۷: حساب/توکن/درخواست/پروندهٔ الکترونیکی متقاضی ----------------
+
+export async function createApplicantAccount(id: string, username: string): Promise<{ ok: boolean; username: string }> {
+  return (await apiClient.post(`/applicants/${id}/account`, { username })).data;
+}
+
+export async function createApplicantActivationLink(id: string): Promise<{ username: string; activation_path: string; expires_at: string }> {
+  return (await apiClient.post(`/applicants/${id}/activation-link`)).data;
+}
+
+export async function createApplicantRequest(
+  id: string,
+  payload: { topic: string; message?: string; preferred_date?: string; request_type?: string; city?: string },
+): Promise<Record<string, unknown>> {
+  return (await apiClient.post(`/applicants/${id}/requests`, payload)).data;
+}
+
+export async function enrollApplicantOrgPrograms(id: string): Promise<{ ok: boolean; programs: number; added: number }> {
+  return (await apiClient.post(`/applicants/${id}/enroll-org-programs`)).data;
+}
+
+export interface ApplicantSummary {
+  applicant: Applicant;
+  organization_name: string | null;
+  unit_title: string | null;
+  user: { id: string; username: string; status: string; token_hours: number | null } | null;
+  requests: { id: string; topic: string; status: string; request_type: string | null; created_at: string | null; case_id: string | null }[];
+  intakes: { id: string; request_id: string; status: string; created_at: string | null }[];
+  cases: { id: string; case_number: string; status: string; acceptance_date: string | null }[];
+  timeline: { kind: string; id: string; title: string; at: string | null; status?: string; [k: string]: unknown }[];
+}
+
+export async function fetchApplicantSummary(id: string): Promise<ApplicantSummary> {
+  return (await apiClient.get(`/applicants/${id}/summary`)).data;
 }
 
 // ---------------- فاز ۶۴: استان‌های پایه (کد رسمی ۰۱..۳۱) + ورود گروهی مشاوران ----------------

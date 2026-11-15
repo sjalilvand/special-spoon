@@ -32,7 +32,7 @@ from app.services.object_storage import storage_status
 
 SMS_PROVIDERS = ("log", "kavenegar", "smsir")
 
-_SMS_FOOTER = "\n- سامانه Rosepsy"
+_SMS_FOOTER = "\n- سامانه رز دکتر"
 
 
 # ---------------------------------------------------------------- provider resolution

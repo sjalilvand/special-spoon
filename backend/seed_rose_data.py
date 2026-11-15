@@ -61,7 +61,7 @@ CLINICS_FILE = SEED_DIR / "clinics.json"
 COUNSELORS_FILE = SEED_DIR / "counselors.json"
 
 ROSE_CLINIC_SLUG = "rose"
-ROSE_CLINIC_NAME = "شرکت مشاوره رز"
+ROSE_CLINIC_NAME = "شرکت مشاوره رز دکتر"
 
 MAX_WARNINGS_PRINTED = 20
 
@@ -89,11 +89,15 @@ def _ensure_clinic(db) -> Clinic:
         c = Clinic(
             name=ROSE_CLINIC_NAME,
             slug=ROSE_CLINIC_SLUG,
-            description="شبکهٔ کلینیک‌های مشاورهٔ شرکت رز در ۳۱ استان کشور",
+            description="شبکهٔ کلینیک‌های مشاورهٔ رز دکتر در ۳۱ استان کشور",
             is_active=True,
         )
         db.add(c)
         db.flush()
+    else:
+        # فاز ۸۷ — rebrand: نام کلینیک موجود هم با مقدار فعلی به‌روز می‌شود
+        if c.name != ROSE_CLINIC_NAME:
+            c.name = ROSE_CLINIC_NAME
     return c
 
 

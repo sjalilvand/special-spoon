@@ -598,6 +598,8 @@ def submit_consultation(payload: ConsultationCreate, request: Request, db: Sessi
         city=payload.city,
         referral_source=payload.referral_source,
         ip=ip,
+        # فاز ۸۷ — رزرو سایت = درخواست آنلاین
+        request_type="online",
         preferred_counselor_id=preferred_counselor_id,
         preferred_start_at=preferred_start,
         service_id=selected_service.id if selected_service is not None else None,

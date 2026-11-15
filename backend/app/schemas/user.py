@@ -11,6 +11,9 @@ class UserCreate(BaseModel):
     roles: list[str] = Field(default_factory=list)
     # فاز ۷۴: انتساب کاربر به سازمان برای ایزولاسیون دادهٔ سازمانی
     organization_id: str | None = Field(default=None, max_length=64)
+    # فاز ۸۷: عمر توکن بر حسب ساعت (None/0 = دائمی) + شمارهٔ سریال اختیاری
+    token_hours: int | None = Field(default=None, ge=0, le=720)
+    serial_number: str | None = Field(default=None, max_length=50)
 
 
 class UserUpdate(BaseModel):
@@ -20,6 +23,10 @@ class UserUpdate(BaseModel):
     status: str | None = Field(default=None, max_length=30)
     # فاز ۷۴: تغییر سازمان کاربر (None = بدون تغییر؛ "" = حذف انتساب)
     organization_id: str | None = Field(default=None, max_length=64)
+    # فاز ۸۷: عمر توکن (None = بدون تغییر؛ ۰ = دائمی؛ ۱..۷۲۰ = ساعت)
+    token_hours: int | None = Field(default=None, ge=0, le=720)
+    # فاز ۸۷: شمارهٔ سریال (None = بدون تغییر؛ "" = حذف)
+    serial_number: str | None = Field(default=None, max_length=50)
 
 
 class RolesUpdate(BaseModel):

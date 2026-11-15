@@ -96,6 +96,49 @@ def _revoke_all_sessions(db: Session, user_id) -> None:
         s.revoked_at = now
 
 
+def _user_token_hours(user: User) -> int | None:
+    """عمر نشست کاربر بر حسب ساعت — فاز ۸۷.
+
+    users.token_hours > 0 = کاربر موقت (۱ تا ۲ ساعت و …)؛
+    None یا ۰ = دائمی (رفتار پیش‌فرض سامانه).
+    """
+    hours = user.token_hours
+    if hours and hours > 0:
+        return hours
+    return None
+
+
+def _access_expires_minutes(user: User) -> int | None:
+    """عمر توکن دسترسی بر حسب دقیقه — None = پیش‌فرض settings."""
+    hours = _user_token_hours(user)
+    return hours * 60 if hours else None
+
+
+def _new_auth_session(user: User, *, token_hash: str, ip: str, user_agent: str,
+                      previous: AuthSession | None = None) -> AuthSession:
+    """ساخت نشست احراز با رعایت توکن موقت — فاز ۸۷.
+
+    کاربر دائمی: انقضای استاندارد (refresh هر بار پنجرهٔ کامل را تمدید می‌کند).
+    کاربر موقت: انقضا از ساعتِ token_hours؛ در refresh چرخشی، ضرب‌الاجل
+    نشست قبلی حفظ می‌شود (نه تمدید) تا کاربر موقت بعد از ساعات تعیین‌شده
+    حتی با refresh فعال هم بیرون بیفتد.
+    """
+    hours = _user_token_hours(user)
+    now = datetime.now(timezone.utc)
+    if hours:
+        expires_at = previous.expires_at if (previous is not None and previous.expires_at > now) \
+            else now + timedelta(hours=hours)
+    else:
+        expires_at = now + timedelta(days=settings.refresh_token_expire_days)
+    return AuthSession(
+        user_id=user.id,
+        refresh_token_hash=token_hash,
+        expires_at=expires_at,
+        ip=ip,
+        user_agent=user_agent,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(
     payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
@@ -124,11 +167,8 @@ def login(
 
     _clear_attempts(key)
     token, token_hash = generate_refresh_token()
-    session = AuthSession(
-        user_id=user.id,
-        refresh_token_hash=token_hash,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
-        ip=ip,
+    session = _new_auth_session(
+        user, token_hash=token_hash, ip=ip,
         user_agent=(request.headers.get("user-agent") or "")[:400],
     )
     db.add(session)
@@ -138,7 +178,10 @@ def login(
     record_audit(db, action="auth.login", actor_user_id=user.id, detail={"ip": ip})
     _set_refresh_cookie(response, token, request)
     return TokenResponse(
-        access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+        access_token=create_access_token(
+            user_id=str(user.id), auth_version=user.auth_version,
+            expires_minutes=_access_expires_minutes(user),
+        ),
         must_change_password=user.must_change_password,
     )
 
@@ -163,19 +206,20 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
     # چرخش Refresh Token - بند ۴.۲ سند
     session.revoked_at = now
     new_token, new_hash = generate_refresh_token()
-    new_session = AuthSession(
-        user_id=user.id,
-        refresh_token_hash=new_hash,
-        expires_at=now + timedelta(days=settings.refresh_token_expire_days),
-        ip=_client_ip(request),
+    new_session = _new_auth_session(
+        user, token_hash=new_hash, ip=_client_ip(request),
         user_agent=(request.headers.get("user-agent") or "")[:400],
+        previous=session,
     )
     db.add(new_session)
     db.commit()
 
     _set_refresh_cookie(response, new_token, request)
     return TokenResponse(
-        access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+        access_token=create_access_token(
+            user_id=str(user.id), auth_version=user.auth_version,
+            expires_minutes=_access_expires_minutes(user),
+        ),
         must_change_password=user.must_change_password,
     )
 
@@ -386,11 +430,8 @@ def otp_verify(
 
         ip = _client_ip(request)
         token, token_hash = generate_refresh_token()
-        session = AuthSession(
-            user_id=user.id,
-            refresh_token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
-            ip=ip,
+        session = _new_auth_session(
+            user, token_hash=token_hash, ip=ip,
             user_agent=(request.headers.get("user-agent") or "")[:400],
         )
         db.add(session)
@@ -399,7 +440,10 @@ def otp_verify(
         record_audit(db, action="auth.login_otp", actor_user_id=user.id, detail={"ip": ip})
         _set_refresh_cookie(response, token, request)
         return TokenResponse(
-            access_token=create_access_token(user_id=str(user.id), auth_version=user.auth_version),
+            access_token=create_access_token(
+                user_id=str(user.id), auth_version=user.auth_version,
+                expires_minutes=_access_expires_minutes(user),
+            ),
             must_change_password=user.must_change_password,
         ).model_dump()
 

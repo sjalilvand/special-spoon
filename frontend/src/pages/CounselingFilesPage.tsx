@@ -16,10 +16,12 @@ import {
 } from "../api/counseling";
 import { formatJalaliDateTime } from "../utils/jalali";
 
-const KIND_META: Record<CounselingFileItem["kind"], { label: string; color: "primary" | "secondary" | "info" }> = {
+const KIND_META: Record<CounselingFileItem["kind"], { label: string; color: "primary" | "secondary" | "info" | "warning" }> = {
   psych_test: { label: "آزمون", color: "primary" },
   consultation: { label: "مشاوره", color: "secondary" },
   appointment: { label: "نوبت", color: "info" },
+  intake: { label: "پرسشنامه", color: "warning" },
+  assessment: { label: "ارزیابی", color: "info" },
 };
 
 function Timeline({ data }: { data: CounselingFileOut }) {

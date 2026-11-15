@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: ویترین عمومی دوره‌ها (فهرست + فیلتر دسته)
+// فاز ۸۶ - آکادمی رز دکتر: ویترین عمومی دوره‌ها (فهرست + فیلتر دسته)
 import { Box, Card, CardContent, CardMedia, Chip, Container, Paper, Skeleton, Stack, Typography, Button } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
@@ -21,7 +21,7 @@ export default function AcademyPage() {
   const [user, setUser] = useState(getStoredUser());
 
   useEffect(() => {
-    document.title = "آکادمی رز | آموزش روان‌شناسی";
+    document.title = "آکادمی رز دکتر | آموزش روان‌شناسی";
     fetchAcademyCourses()
       .then(setCourses)
       .catch((e) => setError(e instanceof Error ? e.message : "خطا"));
@@ -51,7 +51,7 @@ export default function AcademyPage() {
       <Box sx={{ background: "linear-gradient(180deg,#fdf3f5 0%,#ffffff 100%)", pb: 6 }}>
         <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 }, minHeight: "55vh" }}>
           <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
-            <Typography variant="h4" fontWeight={800} color="primary.main">آکادمی رز</Typography>
+            <Typography variant="h4" fontWeight={800} color="primary.main">آکادمی رز دکتر</Typography>
             <Chip size="small" label="دوره‌های ویدیویی روان‌شناسی" variant="outlined" />
             <Box flexGrow={1} />
             {user && (
@@ -144,7 +144,7 @@ export default function AcademyPage() {
           {courses && list.length === 0 && !error && (
             <Paper sx={{ p: 4, mt: 3, textAlign: "center" }}>
               <Typography variant="body1" color="text.secondary">
-                هنوز دوره‌ای منتشر نشده است — به‌زودی دوره‌های آکادمی رز اینجا قرار می‌گیرد.
+                هنوز دوره‌ای منتشر نشده است — به‌زودی دوره‌های آکادمی رز دکتر اینجا قرار می‌گیرد.
               </Typography>
             </Paper>
           )}

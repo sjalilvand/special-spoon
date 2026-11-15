@@ -194,12 +194,14 @@ function CreateManualDialog({ open, onClose, invalidate, onError }: {
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [preferredDate, setPreferredDate] = useState<string | undefined>(undefined);
+  // فاز ۸۷ — نوع درخواست ثبت توسط پذیرش (حضوری/تلفنی/آنلاین)
+  const [requestType, setRequestType] = useState("in_person");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) { setForm({}); setPreferredDate(undefined); setFormError(null); setSuccess(null); }
+    if (open) { setForm({}); setPreferredDate(undefined); setRequestType("in_person"); setFormError(null); setSuccess(null); }
   }, [open]);
 
   const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -214,6 +216,7 @@ function CreateManualDialog({ open, onClose, invalidate, onError }: {
         mobile: form.mobile?.trim() || "",
         topic: form.topic || "",
         preferred_date: preferredDate,
+        request_type: requestType,
         preferred_slot: form.preferred_slot || undefined,
         city: form.city?.trim() || undefined,
         referral_source: form.referral_source?.trim() || undefined,
@@ -258,16 +261,22 @@ function CreateManualDialog({ open, onClose, invalidate, onError }: {
                 </TextField>
               </Stack>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-end">
-                <TextField label="شهر (اختیاری)" value={form.city ?? ""} onChange={set("city")} fullWidth />
+                <TextField select label="نوع درخواست" value={requestType}
+                  onChange={(e) => setRequestType(e.target.value)} fullWidth>
+                  <MenuItem value="in_person">حضوری</MenuItem>
+                  <MenuItem value="phone">تلفنی</MenuItem>
+                  <MenuItem value="online">آنلاین</MenuItem>
+                </TextField>
                 <Box sx={{ flexGrow: 1, width: "100%" }}>
                   <JalaliDateField
                     label="تاریخ ترجیحی تماس"
-                    value={undefined}
+                    value={preferredDate}
                     onChange={(iso) => setPreferredDate(iso)}
                   />
                 </Box>
               </Stack>
               <TextField label="نحوه آشنایی (اختیاری)" value={form.referral_source ?? ""} onChange={set("referral_source")} fullWidth />
+              <TextField label="شهر (اختیاری)" value={form.city ?? ""} onChange={set("city")} fullWidth />
               <TextField label="توضیح مراجع (اختیاری)" value={form.message ?? ""} onChange={set("message")} multiline minRows={2} fullWidth />
               <TextField label="یادداشت پذیرش (اختیاری)" value={form.reception_note ?? ""} onChange={set("reception_note")} multiline minRows={2} fullWidth />
             </Stack>

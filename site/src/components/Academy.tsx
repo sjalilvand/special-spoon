@@ -50,7 +50,7 @@ export default function Academy() {
           ))}
         </Box>
 
-        {/* فاز ۸۶ - لینک به ویترین فروش دوره‌ها (آکادمی رز) */}
+        {/* فاز ۸۶ - لینک به ویترین فروش دوره‌ها (آکادمی رز دکتر) */}
         <Box sx={{ textAlign: "center", mt: { xs: 3.5, md: 5 } }}>
           <Button
             component={RouterLink}
@@ -59,7 +59,7 @@ export default function Academy() {
             size="large"
             sx={{ borderRadius: 999, px: 4, fontWeight: 800 }}
           >
-            مشاهده دوره‌های آکادمی رز
+            مشاهده دوره‌های آکادمی رز دکتر
           </Button>
         </Box>
       </Container>

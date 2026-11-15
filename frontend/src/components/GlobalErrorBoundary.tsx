@@ -23,7 +23,7 @@ class GlobalErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // eslint-disable-next-line no-console
-    console.error("Rosepsy panel render error:", error, info.componentStack);
+    console.error("رز دکتر panel render error:", error, info.componentStack);
   }
 
   render() {

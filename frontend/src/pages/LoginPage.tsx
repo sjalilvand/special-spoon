@@ -89,7 +89,7 @@ export default function LoginPage() {
       <Card sx={{ minWidth: 380 }}>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h5" fontWeight={700} gutterBottom>
-            Rosepsy
+            رز دکتر
           </Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>
             ورود به سامانه مشاوره روان‌شناختی سازمانی

@@ -261,7 +261,7 @@ function CreateDialog({ open, onClose, onError }: { open: boolean; onClose: () =
               <TextField label="ظرفیت" type="number" value={form.capacity ?? ""} onChange={set("capacity")} />
               <JalaliDateField
                 label="تاریخ اعتبار مجوز"
-                value={undefined}
+                value={licenseExpiry}
                 onChange={(iso) => setLicenseExpiry(iso)}
               />
               <TextField label="تماس کاری (متن)" value={form.work_mobile ?? ""} onChange={set("work_mobile")} />

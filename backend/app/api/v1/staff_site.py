@@ -261,6 +261,8 @@ class ManualConsultationCreate(BaseModel):
     referral_source: str | None = Field(default=None, max_length=200)
     message: str | None = Field(default=None, max_length=2000)
     reception_note: str | None = Field(default=None, max_length=2000)
+    # فاز ۸۷ — نوع درخواست: in_person (حضوری) | phone (تلفنی) | online (آنلاین)
+    request_type: str | None = Field(default="in_person", max_length=20)
 
 
 def _normalize_mobile_staff(raw: str) -> str:
@@ -296,6 +298,8 @@ def create_consultation_request(payload: ManualConsultationCreate, db: Session =
         city=payload.city,
         referral_source=payload.referral_source or "ثبت در پنل",
         reception_note=payload.reception_note,
+        # فاز ۸۷ — نوع درخواست ثبت‌شده توسط پذیرش
+        request_type=(payload.request_type if payload.request_type in ("in_person", "phone", "online") else "in_person"),
         status="in_review",
     )
     db.add(r)

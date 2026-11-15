@@ -22,9 +22,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment
+from app.models.assessment import Assessment
 from app.models.case import Case
 from app.models.counseling_file import UserCounselingFile
 from app.models.consultation import ConsultationRequest
+from app.models.intake import IntakeQuestionnaire
 from app.models.people import Applicant
 from app.models.psych_test import PsychAttempt, PsychTest
 from app.models.user import User
@@ -78,9 +80,12 @@ def timeline(
 ) -> list[dict]:
     """خط زمانی تاریخچهٔ کاربر — همهٔ اقلام با زمان، جدیدترین اول.
 
-    kinds اختیاری برای فیلتر ("psych_test" | "consultation" | "appointment").
+    kinds اختیاری برای فیلتر ("psych_test" | "consultation" | "appointment"
+    | "intake" | "assessment").
     """
-    want = set(kinds) if kinds else {"psych_test", "consultation", "appointment"}
+    want = set(kinds) if kinds else {
+        "psych_test", "consultation", "appointment", "intake", "assessment",
+    }
     items: list[dict] = []
 
     # ۱) آزمون‌ها
@@ -129,10 +134,39 @@ def timeline(
                     "at": r.created_at.isoformat() if r.created_at else None,
                     "status": r.status,
                     "payment_status": r.payment_status,
+                    "request_type": r.request_type,
                     "preferred_start_at": (
                         r.preferred_start_at.isoformat() if r.preferred_start_at else None
                     ),
                     "case_id": str(r.case_id) if r.case_id else None,
+                })
+
+    # ۲ب) پرسشنامه‌های پذیرش متصل به درخواست‌های همان کاربر — فاز ۸۷
+    if "intake" in want:
+        applicant_ids = user_applicant_ids(db, user.id)
+        mobile_keys = _user_mobile_keys(user)
+        conds = []
+        if applicant_ids:
+            conds.append(ConsultationRequest.applicant_id.in_(applicant_ids))
+        if mobile_keys:
+            conds.append(ConsultationRequest.mobile.in_(mobile_keys))
+        if conds:
+            rows = db.execute(
+                select(IntakeQuestionnaire, ConsultationRequest)
+                .join(ConsultationRequest, IntakeQuestionnaire.consultation_request_id == ConsultationRequest.id)
+                .where(or_(*conds))
+                .order_by(IntakeQuestionnaire.created_at.desc())
+                .limit(limit)
+            ).all()
+            for q, r in rows:
+                items.append({
+                    "kind": "intake",
+                    "id": str(q.id),
+                    "title": "پرسشنامهٔ پذیرش",
+                    "at": q.created_at.isoformat() if q.created_at else None,
+                    "status": q.status,
+                    "request_id": str(r.id),
+                    "request_topic": r.topic,
                 })
 
     # ۳) نوبت‌های پرونده‌های بالینی کاربر
@@ -161,6 +195,34 @@ def timeline(
                     "case_number": c.case_number,
                 })
 
+    # ۴) ارزیابی‌های فرم‌محور پرونده‌های بالینی کاربر — فاز ۸۷
+    if "assessment" in want:
+        applicant_ids = user_applicant_ids(db, user.id)
+        case_ids = (
+            db.scalars(select(Case.id).where(Case.applicant_id.in_(applicant_ids))).all()
+            if applicant_ids else []
+        )
+        if case_ids:
+            from app.models.assessment import FormVersion
+            rows = db.execute(
+                select(Assessment, Case, FormVersion)
+                .join(Case, Assessment.case_id == Case.id)
+                .join(FormVersion, Assessment.form_version_id == FormVersion.id)
+                .where(Assessment.case_id.in_(case_ids))
+                .order_by(Assessment.created_at.desc())
+                .limit(limit)
+            ).all()
+            for asm, c, fv in rows:
+                defn = fv.definition or {}
+                items.append({
+                    "kind": "assessment",
+                    "id": str(asm.id),
+                    "title": defn.get("title") or fv.form_code or "ارزیابی",
+                    "at": asm.created_at.isoformat() if asm.created_at else None,
+                    "status": asm.status,
+                    "case_number": c.case_number,
+                })
+
     items.sort(key=lambda x: x.get("at") or "", reverse=True)
     return items[:limit]
 
@@ -173,6 +235,8 @@ def file_out(db: Session, user: User, *, limit: int = 100) -> dict:
         "psych_tests": sum(1 for i in items if i["kind"] == "psych_test"),
         "consultations": sum(1 for i in items if i["kind"] == "consultation"),
         "appointments": sum(1 for i in items if i["kind"] == "appointment"),
+        "intakes": sum(1 for i in items if i["kind"] == "intake"),
+        "assessments": sum(1 for i in items if i["kind"] == "assessment"),
     }
     return {
         "file": {

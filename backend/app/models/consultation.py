@@ -57,6 +57,8 @@ class ConsultationRequest(Base):
         UUID(as_uuid=True), ForeignKey("cases.id", ondelete="SET NULL"), nullable=True
     )
     reception_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # فاز ۸۷ - نوع دریافت درخواست: online (رزرو سایت) | in_person (حضوری) | phone (تلفنی)
+    request_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     contact_attempts: Mapped[int] = mapped_column(Integer, default=0)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     referral_source: Mapped[str | None] = mapped_column(String(200), nullable=True)

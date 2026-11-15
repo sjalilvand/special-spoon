@@ -10,7 +10,8 @@ import { errDetail } from "../api/client";
 import { CASE_STATUS_META, CONSENT_META } from "../api/cases";
 import { APPOINTMENT_STATUS_META } from "../api/schedule";
 import {
-  fetchMyAppointments, fetchMyCases, fetchMyProfile, fetchMyRecommendations,
+  fetchMyAppointments, fetchMyCases, fetchMyOrgExams, fetchMyProfile, fetchMyRecommendations,
+  MyOrgExamProgram,
 } from "../api/me";
 import { CounselingFileItem, fetchMyCounselingFile } from "../api/counseling";
 import { formatJalali, formatJalaliDateTime } from "../utils/jalali";
@@ -30,11 +31,14 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
 }
 
 // فاز ۷۰ - خط زمانی پروندهٔ مشاورهٔ من (آزمون‌ها + مشاوره‌ها + نوبت‌ها با زمان)
+// فاز ۸۷ - اقلام جدید: پرسشنامهٔ پذیرش + ارزیابی‌های پرونده
 function FileTimeline({ items }: { items: CounselingFileItem[] }) {
-  const kindMeta: Record<CounselingFileItem["kind"], { label: string; color: "primary" | "secondary" | "info" }> = {
+  const kindMeta: Record<CounselingFileItem["kind"], { label: string; color: "primary" | "secondary" | "info" | "warning" }> = {
     psych_test: { label: "آزمون", color: "primary" },
     consultation: { label: "مشاوره", color: "secondary" },
     appointment: { label: "نوبت", color: "info" },
+    intake: { label: "پرسشنامه", color: "warning" },
+    assessment: { label: "ارزیابی", color: "info" },
   };
   return (
     <Stack spacing={0.5}>
@@ -55,6 +59,8 @@ function FileTimeline({ items }: { items: CounselingFileItem[] }) {
               {it.kind === "consultation" &&
                 `وضعیت: ${it.status ?? "—"}${it.payment_status === "paid" ? " — پرداخت آنلاین انجام شد" : ""}`}
               {it.kind === "appointment" && `${it.case_number ? `پروندهٔ ${it.case_number}` : ""}${it.location ? ` — ${it.location}` : ""}`}
+              {it.kind === "intake" && `${it.request_topic ? `درخواست: ${it.request_topic}` : ""}${it.status ? ` — ${it.status === "final" ? "نهایی‌شده" : "پیش‌نویس"}` : ""}`}
+              {it.kind === "assessment" && `${it.case_number ? `پروندهٔ ${it.case_number}` : ""}${it.status ? ` — وضعیت: ${it.status}` : ""}`}
             </Typography>
           </Box>
         );
@@ -97,6 +103,13 @@ export default function MyPanelPage() {
     queryFn: fetchMyCounselingFile,
   });
 
+  // فاز ۸۷ - آزمون‌های سازمانی من (برنامه‌های فعال سازمانِ من)
+  const { data: orgExams } = useQuery({
+    queryKey: ["me-org-exams"],
+    queryFn: fetchMyOrgExams,
+  });
+  const orgExamPrograms: MyOrgExamProgram[] = orgExams?.items ?? [];
+
   if (isLoading) return <CircularProgress />;
 
   if (error) {
@@ -129,6 +142,39 @@ export default function MyPanelPage() {
         <Button variant="contained">شروع آزمون‌ها</Button>
       </Paper>
 
+      {/* فاز ۸۷ - آزمون‌های سازمانی من: آزمون‌های تعیین‌شده در برنامه‌های فعال سازمانِ من */}
+      {orgExamPrograms.length > 0 && (
+        <Paper sx={{ p: 2, border: "1px solid #ffe0b2" }}>
+          <Typography variant="subtitle1" fontWeight={700} mb={1}>آزمون‌های سازمان من</Typography>
+          {orgExamPrograms.map((p) => (
+            <Box key={p.id} sx={{ border: 1, borderColor: "divider", borderRadius: 1.5, p: 1.5, mb: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                <Typography variant="subtitle2" fontWeight={700} flexGrow={1}>{p.title}</Typography>
+                {p.due_date && <Typography variant="caption" color="text.secondary">مهلت: {formatJalali(p.due_date)}</Typography>}
+              </Stack>
+              {p.tests.map((t) => (
+                <Box key={t.test_id} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, flexWrap: "wrap" }}>
+                  <Chip size="small" color={t.done ? "success" : "warning"} variant="outlined"
+                    label={t.done ? "انجام شده" : "در انتظار انجام"} />
+                  <Typography variant="body2" flexGrow={1}>
+                    {t.title}{t.is_required ? " (الزامی)" : ""}
+                  </Typography>
+                  {t.done && t.score !== null && (
+                    <Typography variant="caption" color="text.secondary">
+                      نمره: {t.score.toLocaleString("fa-IR")}{t.interpretation_label ? ` — ${t.interpretation_label}` : ""}
+                    </Typography>
+                  )}
+                  <Button size="small" variant={t.done ? "text" : "contained"}
+                    onClick={() => navigate(`/psych-tests/${t.test_slug}/run`)}>
+                    {t.done ? "انجام مجدد" : "شروع آزمون"}
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Paper>
+      )}
+
       {/* فاز ۷۰ - پروندهٔ مشاورهٔ من: تاریخچهٔ آزمون‌ها و مشاوره‌ها به همراه زمان */}
       {myFile && (
         <Paper sx={{ p: 2 }}>
@@ -138,7 +184,9 @@ export default function MyPanelPage() {
             <Typography variant="caption" color="text.secondary">
               {myFile.counts.psych_tests.toLocaleString("fa-IR")} آزمون —{" "}
               {myFile.counts.consultations.toLocaleString("fa-IR")} مشاوره —{" "}
-              {myFile.counts.appointments.toLocaleString("fa-IR")} نوبت
+              {myFile.counts.appointments.toLocaleString("fa-IR")} نوبت —{" "}
+              {myFile.counts.intakes.toLocaleString("fa-IR")} پرسشنامه —{" "}
+              {myFile.counts.assessments.toLocaleString("fa-IR")} ارزیابی
             </Typography>
           </Stack>
           {myFile.items.length === 0 ? (

@@ -46,7 +46,7 @@ export default function InvoicePage() {
           <Box>
             <Typography variant="h5" fontWeight={800} color="#8d2f3c">فاکتور خدمات مشاوره</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              کلینیک رز — سامانه Rosepsy
+              کلینیک رز دکتر — سامانه هوشمند
             </Typography>
           </Box>
           <Box sx={{ textAlign: "left" }}>
@@ -115,7 +115,7 @@ export default function InvoicePage() {
 
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" sx={{ mt: 4 }} spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            این فاکتور به‌صورت الکترونیکی توسط سامانه Rosepsy صادر شده است.
+            این فاکتور به‌صورت الکترونیکی توسط سامانه رز دکتر صادر شده است.
           </Typography>
           <Box sx={{ textAlign: "center" }}>
             <Typography variant="body2" sx={{ mb: 4 }}>مهر و امضا</Typography>

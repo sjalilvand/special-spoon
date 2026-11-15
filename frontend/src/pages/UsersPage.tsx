@@ -38,6 +38,7 @@ import {
   resetUserPassword,
   roleTitle,
   setUserRoles,
+  updateUserAccess,
   updateUserOrganization,
   updateUserStatus,
 } from "../api/auth";
@@ -53,6 +54,20 @@ const STATUS_META: Record<string, { label: string; color: "success" | "warning" 
   disabled: { label: "غیرفعال", color: "default" },
 };
 
+// فاز ۸۷: گزینه‌های عمر توکن — دائمی یا موقت چندساعته
+const TOKEN_HOURS_OPTIONS = [
+  { value: 0, label: "دائمی (پیش‌فرض)" },
+  { value: 1, label: "۱ ساعت" },
+  { value: 2, label: "۲ ساعت" },
+  { value: 4, label: "۴ ساعت" },
+  { value: 8, label: "۸ ساعت" },
+  { value: 24, label: "۲۴ ساعت" },
+];
+
+export function tokenLifetimeLabel(tokenHours: number | null): string {
+  return tokenHours && tokenHours > 0 ? `موقت — ${tokenHours} ساعت` : "دائمی";
+}
+
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -64,6 +79,7 @@ export default function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [tokenInfo, setTokenInfo] = useState<{ username: string; token: string; expires_at: string } | null>(null);
   const [rolesTarget, setRolesTarget] = useState<UserRow | null>(null);
+  const [accessTarget, setAccessTarget] = useState<UserRow | null>(null);
   const [pwTarget, setPwTarget] = useState<UserRow | null>(null);
   const [pwResult, setPwResult] = useState<string | null>(null);
   // فاز ۷۴: فهرست سازمان‌ها برای نمایش/انتساب ستون سازمان
@@ -141,6 +157,7 @@ export default function UsersPage() {
               <TableCell>نام نمایشی</TableCell>
               <TableCell>نقش‌ها</TableCell>
               <TableCell>سازمان</TableCell>
+              <TableCell>توکن</TableCell>
               <TableCell>وضعیت</TableCell>
               <TableCell>آخرین ورود</TableCell>
               <TableCell>عملیات</TableCell>
@@ -149,7 +166,7 @@ export default function UsersPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
@@ -174,6 +191,17 @@ export default function UsersPage() {
                     ) : (
                       <Typography variant="caption" color="text.disabled">همهٔ داده‌ها</Typography>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {/* فاز ۸۷: تفکیک کاربر موقت/دائمی + سریال */}
+                    <Tooltip title={row.serial_number ? `شمارهٔ سریال: ${row.serial_number}` : "بدون سریال"}>
+                      <Chip
+                        size="small"
+                        color={row.token_hours && row.token_hours > 0 ? "warning" : "default"}
+                        variant="outlined"
+                        label={tokenLifetimeLabel(row.token_hours)}
+                      />
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
                     <Chip label={meta.label} color={meta.color} size="small" />
@@ -219,6 +247,9 @@ export default function UsersPage() {
                       <Button size="small" onClick={() => setRolesTarget(row)}>
                         نقش‌ها/سازمان
                       </Button>
+                      <Button size="small" onClick={() => setAccessTarget(row)}>
+                        توکن
+                      </Button>
                       <Button size="small" color="warning" onClick={() => setPwTarget(row)}>
                         بازنشانی رمز
                       </Button>
@@ -250,6 +281,13 @@ export default function UsersPage() {
       <UserRolesDialog
         target={rolesTarget}
         onClose={() => setRolesTarget(null)}
+        onError={setError}
+      />
+
+      {/* فاز ۸۷: عمر توکن موقت/دائمی + شمارهٔ سریال */}
+      <UserAccessDialog
+        target={accessTarget}
+        onClose={() => setAccessTarget(null)}
         onError={setError}
       />
 
@@ -324,6 +362,9 @@ function CreateUserDialog({
   const [mobile, setMobile] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [organizationId, setOrganizationId] = useState<string>("");
+  // فاز ۸۷: عمر توکن (۰ = دائمی) + شمارهٔ سریال
+  const [tokenHours, setTokenHours] = useState<number>(0);
+  const [serialNumber, setSerialNumber] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   // فاز ۵۲: نقش‌ها از سرور (سیستمی + سفارشی) — نه لیست ثابت
@@ -344,6 +385,8 @@ function CreateUserDialog({
         mobile: mobile.trim() || undefined,
         roles,
         organization_id: organizationId || undefined,
+        token_hours: tokenHours > 0 ? tokenHours : null,
+        serial_number: serialNumber.trim() || undefined,
       });
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       setUsername("");
@@ -352,6 +395,8 @@ function CreateUserDialog({
       setMobile("");
       setRoles([]);
       setOrganizationId("");
+      setTokenHours(0);
+      setSerialNumber("");
       onClose();
     } catch (err) {
       setFormError(errDetail(err));
@@ -392,6 +437,28 @@ function CreateUserDialog({
                 <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>
               ))}
             </TextField>
+            {/* فاز ۸۷: عمر توکن — کاربر موقت بعد از ساعات تعیین‌شده از سامانه بیرون می‌آید */}
+            <Stack direction="row" spacing={2}>
+              <TextField
+                select
+                label="عمر توکن"
+                value={tokenHours}
+                onChange={(e) => setTokenHours(Number(e.target.value))}
+                fullWidth
+                helperText="موقت = بعد از این مدت از ورود، نشست منقضی می‌شود"
+              >
+                {TOKEN_HOURS_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label="شمارهٔ سریال (اختیاری)"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { dir: "ltr" } }}
+              />
+            </Stack>
             <Box>
               <Typography variant="body2" sx={{ mb: 1 }}>
                 نقش‌ها:
@@ -510,6 +577,88 @@ function UserRolesDialog({
             <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>
           ))}
         </TextField>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            onClose();
+            setInitialized(null);
+          }}
+        >
+          انصراف
+        </Button>
+        <Button variant="contained" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "در حال ذخیره…" : "ذخیره"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// فاز ۸۷ — عمر توکن کاربر (موقت/دائمی) + شمارهٔ سریال: تفکیک دسترسی موقت و
+// دائمی در مدیریت کاربران. تغییر عمر توکن، نشست‌های فعلی کاربر را هم باطل می‌کند.
+// ---------------------------------------------------------------------------
+function UserAccessDialog({
+  target,
+  onClose,
+  onError,
+}: {
+  target: UserRow | null;
+  onClose: () => void;
+  onError: (msg: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [tokenHours, setTokenHours] = useState<number>(0);
+  const [serialNumber, setSerialNumber] = useState<string>("");
+  const [initialized, setInitialized] = useState<string | null>(null);
+
+  if (target && initialized !== target.id) {
+    setInitialized(target.id);
+    setTokenHours(target.token_hours && target.token_hours > 0 ? target.token_hours : 0);
+    setSerialNumber(target.serial_number ?? "");
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateUserAccess(target!.id, {
+        token_hours: tokenHours,
+        serial_number: serialNumber.trim(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      onClose();
+      setInitialized(null);
+    },
+    onError: (e) => onError(errDetail(e)),
+  });
+
+  return (
+    <Dialog open={target !== null} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>تنظیمات توکن — {target?.username}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <TextField
+            select
+            fullWidth
+            label="عمر توکن"
+            value={tokenHours}
+            onChange={(e) => setTokenHours(Number(e.target.value))}
+            helperText="کاربر موقت بعد از این مدت از ورود، حتی با refresh هم بیرون می‌آید"
+          >
+            {TOKEN_HOURS_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            fullWidth
+            label="شمارهٔ سریال (اختیاری)"
+            value={serialNumber}
+            onChange={(e) => setSerialNumber(e.target.value)}
+            slotProps={{ htmlInput: { dir: "ltr" } }}
+            helperText="برای تفکیک کاربران با توکنِ سریال‌دار؛ خالی = بدون سریال"
+          />
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button

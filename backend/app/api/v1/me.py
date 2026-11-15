@@ -107,3 +107,66 @@ def my_recommendations(db: Session = Depends(get_db), actor=Depends(get_current_
         "published_at": r.published_at.isoformat() if r.published_at else None,
     } for r, c in rows]
     return {"items": items}
+
+
+# ---------------------------------------------------------------------------
+# فاز ۸۷ — آزمون‌های سازمانی من: کاربرِ متقاضی (عضو برنامه‌های سازمانش)
+# فهرست آزمون‌های تعیین‌شدهٔ برنامه‌های فعال سازمان خودش را می‌بیند، وضعیت
+# انجام هرکدام (نمره/تفسیر آخرین تلاش) و می‌تواند مستقیم آزمون را بگیرد.
+# ---------------------------------------------------------------------------
+@router.get("/org-exams")
+def my_org_exams(db: Session = Depends(get_db), actor=Depends(get_current_user)) -> dict:
+    from app.models.org_program import OrgProgram, OrgProgramMember, OrgProgramTest
+    from app.models.psych_test import PsychAttempt, PsychTest
+
+    org_id = actor.organization_id
+    if org_id is None:
+        return {"items": []}
+
+    member_rows = db.scalars(
+        select(OrgProgramMember).where(OrgProgramMember.user_id == actor.id)
+    ).all()
+    member_program_ids = {m.program_id for m in member_rows}
+
+    programs = db.scalars(
+        select(OrgProgram).where(
+            OrgProgram.organization_id == org_id,
+            OrgProgram.status == "active",
+        ).order_by(OrgProgram.created_at.desc())
+    ).all()
+    # کاربرِ عضو همهٔ برنامه‌های فعال سازمانش را می‌بیند؛ اگر عضویت صریح ندارد،
+    # برنامه به‌عنوان «در انتظار عضویت» نمایش داده نمی‌شود (فقط عضوها).
+    items: list[dict] = []
+    for p in programs:
+        if p.id not in member_program_ids:
+            continue
+        tests = db.execute(
+            select(OrgProgramTest, PsychTest)
+            .join(PsychTest, OrgProgramTest.test_id == PsychTest.id)
+            .where(OrgProgramTest.program_id == p.id)
+            .order_by(OrgProgramTest.sort_order)
+        ).all()
+        test_items = []
+        for pt, t in tests:
+            last = db.scalar(
+                select(PsychAttempt)
+                .where(PsychAttempt.user_id == actor.id, PsychAttempt.test_id == t.id)
+                .order_by(PsychAttempt.created_at.desc())
+            )
+            test_items.append({
+                "test_id": str(t.id),
+                "test_slug": t.slug,
+                "title": pt.display_title or t.title,
+                "is_required": pt.is_required,
+                "done": last is not None,
+                "score": int(last.score or 0) if last else None,
+                "interpretation_label": last.interpretation_label if last else None,
+                "completed_at": last.created_at.isoformat() if last else None,
+            })
+        items.append({
+            "id": str(p.id),
+            "title": p.title,
+            "due_date": p.due_date.isoformat() if p.due_date else None,
+            "tests": test_items,
+        })
+    return {"items": items}

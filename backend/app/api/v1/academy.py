@@ -413,7 +413,7 @@ def academy_checkout(
         title = (
             f"ثبت‌نام دوره «{paid_courses[0].title}»"
             if len(paid_courses) == 1
-            else f"خرید آکادمی رز ({len(paid_courses)} دوره)"
+            else f"خرید آکادمی رز دکتر ({len(paid_courses)} دوره)"
         )
         order = Order(
             order_number=pay.generate_order_number(db),

@@ -24,8 +24,8 @@ from app.models.user import Role, User
 CATEGORIES = ("case", "assessment", "appointment", "consent", "system")
 SEVERITIES = ("info", "warning", "critical")
 
-_EMAIL_FOOTER = "این پیام به‌صورت خودکار توسط سامانه Rosepsy ارسال شده است؛ به این ایمیل پاسخ ندهید."
-_SMS_FOOTER = "\n- سامانه Rosepsy"
+_EMAIL_FOOTER = "این پیام به‌صورت خودکار توسط سامانه رز دکتر ارسال شده است؛ به این ایمیل پاسخ ندهید."
+_SMS_FOOTER = "\n- سامانه رز دکتر"
 
 
 def _queue_sms_copy(db: Session, user: User, title: str, body: str | None, notification_id) -> None:

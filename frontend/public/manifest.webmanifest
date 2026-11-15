@@ -1,8 +1,8 @@
 {
   "id": "/panel/",
-  "name": "رزپسی | پنل مدیریتی",
-  "short_name": "پنل رزپسی",
-  "description": "پنل مدیریتی و کارتابل سامانهٔ رزپسی",
+  "name": "رز دکتر | پنل مدیریتی",
+  "short_name": "پنل رز دکتر",
+  "description": "پنل مدیریتی و کارتابل رز دکتر",
   "start_url": "/panel/",
   "scope": "/panel/",
   "display": "standalone",

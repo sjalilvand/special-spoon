@@ -118,7 +118,7 @@ def build_template(import_type: str) -> bytes:
     guide.column_dimensions["A"].width = 28
     guide.column_dimensions["B"].width = 16
     guide.column_dimensions["C"].width = 80
-    guide.append([f"قالب ورود {import_type} — سامانه Rosepsy (RS-PS-04-01)"])
+    guide.append([f"قالب ورود {import_type} — سامانه رز دکتر (RS-PS-04-01)"])
     guide.append([])
     guide.append(["قواعد کلی:"])
     for rule in RULES:

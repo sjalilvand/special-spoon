@@ -297,7 +297,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0, cursor: "pointer" }}
             onClick={() => navigate("/")}>
             <BrandIcon sx={{ display: { xs: "none", md: "block" } }} />
-            <Typography variant="h6" sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>Rosepsy</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>رز دکتر</Typography>
           </Stack>
           <Tooltip title="مشاهده سایت عمومی">
             <IconButton color="inherit" size="small" href="/" sx={{ flexShrink: 0 }}>
@@ -391,7 +391,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <Stack direction="row" spacing={1} alignItems="center">
             <BrandIcon />
             <Box flexGrow={1}>
-              <Typography fontWeight={800}>Rosepsy</Typography>
+              <Typography fontWeight={800}>رز دکتر</Typography>
               <Typography variant="caption" sx={{ opacity: 0.9 }}>
                 {user ? user.display_name : "پنل کاربری"}
               </Typography>

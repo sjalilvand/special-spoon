@@ -53,7 +53,7 @@ export default function Footer() {
                 { href: "#services", label: "خدمات" },
                 { href: "#steps", label: "مسیر دریافت نوبت" },
                 { href: "#counselors", label: "مشاوران" },
-                { href: "#academy", label: "آکادمی رز" },
+                { href: "#academy", label: "آکادمی رز دکتر" },
                 { href: "/booking", label: "رزرو نوبت آنلاین" },
                 { href: "/payment-rules", label: "قوانین پرداخت و استرداد وجه" },
                 { href: "/panel/", label: "ورود به سامانه مدیریت" },
@@ -82,7 +82,7 @@ export default function Footer() {
             <Typography variant="subtitle2" sx={{ opacity: 0.65, mb: 1.5, fontWeight: 700 }}>تماس با ما</Typography>
             <Stack spacing={1.4}>
               <ContactLine icon="📞" text={`تلفن: ${texts.footer.phone}`} />
-              <ContactLine icon="✉️" text="info@rosepsy.local" />
+              <ContactLine icon="✉️" text="info@rosedoctor.ir" />
               <ContactLine icon="📍" text={texts.footer.address} />
               <ContactLine icon="🕘" text={`ساعات کاری: ${texts.footer.hours}`} />
             </Stack>

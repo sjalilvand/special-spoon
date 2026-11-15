@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: صفحهٔ دوره — ویترین، جلسات (رایگان/قفل/انتشار پلکانی)،
+// فاز ۸۶ - آکادمی رز دکتر: صفحهٔ دوره — ویترین، جلسات (رایگان/قفل/انتشار پلکانی)،
 // پخش ویدیو با کنترل دسترسی سمت سرور، افزودن به سبد و خرید مستقیم
 import {
   Alert, Box, Button, Chip, Container, Divider, LinearProgress, Paper, Snackbar,
@@ -126,7 +126,7 @@ export default function AcademyCoursePage() {
     try {
       const c = await fetchAcademyCourse(slug);
       setCourse(c);
-      document.title = `${c.title} | آکادمی رز`;
+      document.title = `${c.title} | آکادمی رز دکتر`;
       if (getToken()) {
         try {
           const m = await fetchAcademyMyCourse(c.id);

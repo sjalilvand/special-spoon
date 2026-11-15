@@ -1,4 +1,4 @@
-// فاز ۸۶ - آکادمی رز: دوره‌های من — دسترسی به ویدیوها + پرداخت‌های معلق
+// فاز ۸۶ - آکادمی رز دکتر: دوره‌های من — دسترسی به ویدیوها + پرداخت‌های معلق
 import {
   Alert, Box, Button, Chip, Container, LinearProgress, Paper, Stack, Typography,
 } from "@mui/material";
@@ -52,7 +52,7 @@ export default function AcademyMyPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = "دوره‌های من | آکادمی رز";
+    document.title = "دوره‌های من | آکادمی رز دکتر";
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

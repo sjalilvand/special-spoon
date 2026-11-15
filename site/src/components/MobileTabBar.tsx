@@ -197,7 +197,7 @@ export default function MobileTabBar() {
         }}
       >
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
-          <Typography variant="h6" fontWeight={800} color="primary">منوی رزپسی</Typography>
+          <Typography variant="h6" fontWeight={800} color="primary">منوی رز دکتر</Typography>
           <Button size="small" onClick={() => setMore(false)} sx={{ minWidth: 0 }}>بستن</Button>
         </Stack>
         <List disablePadding>
@@ -229,14 +229,14 @@ export default function MobileTabBar() {
           )}
           <ListItem
             component="a"
-            href="/app/rosepsy-1.0.0.apk"
+            href="/app/rosedoctor-1.0.0.apk"
             onClick={() => setMore(false)}
             sx={{ borderRadius: 2, color: "primary.main", fontWeight: 800, mt: 1, bgcolor: "#faf0f3", "&:hover": { bgcolor: "#f3dce2" } }}
           >
             📲 دانلود اپ اندروید (APK)
           </ListItem>
           <Typography sx={{ fontSize: 11.5, color: "text.secondary", px: 1, mt: 1, lineHeight: 1.9 }}>
-            راهنما: در کروم منوی سه‌نقطه ← «Add to Home screen» و در آیفون دکمهٔ اشتراک ← «Add to Home Screen» — رزپسی مثل اپ واقعی تمام‌صفحه باز می‌شود.
+            راهنما: در کروم منوی سه‌نقطه ← «Add to Home screen» و در آیفون دکمهٔ اشتراک ← «Add to Home Screen» — رز دکتر مثل اپ واقعی تمام‌صفحه باز می‌شود.
           </Typography>
         </List>
       </Drawer>

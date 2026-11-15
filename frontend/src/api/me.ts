@@ -50,3 +50,26 @@ export async function fetchMyAppointments(): Promise<{ items: MyAppointmentRow[]
 export async function fetchMyRecommendations(): Promise<{ items: MyRecommendationRow[] }> {
   return (await apiClient.get("/me/recommendations")).data;
 }
+
+// فاز ۸۷ — آزمون‌های سازمانی من: برنامه‌های فعال سازمانِ کاربر عضو + وضعیت هر آزمون
+export interface MyOrgExamTest {
+  test_id: string;
+  test_slug: string;
+  title: string;
+  is_required: boolean;
+  done: boolean;
+  score: number | null;
+  interpretation_label: string | null;
+  completed_at: string | null;
+}
+
+export interface MyOrgExamProgram {
+  id: string;
+  title: string;
+  due_date: string | null;
+  tests: MyOrgExamTest[];
+}
+
+export async function fetchMyOrgExams(): Promise<{ items: MyOrgExamProgram[] }> {
+  return (await apiClient.get("/me/org-exams")).data;
+}

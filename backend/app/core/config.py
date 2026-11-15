@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "Rosepsy"
+    app_name: str = "Rosedoctor"
     app_version: str = "0.59.2"
     api_prefix: str = "/api/v1"
     environment: str = "production"

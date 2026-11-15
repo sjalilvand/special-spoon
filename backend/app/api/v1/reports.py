@@ -871,5 +871,5 @@ def report_query_export(
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="rosepsy-report.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="rosedoctor-report.csv"'},
     )

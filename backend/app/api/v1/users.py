@@ -33,6 +33,9 @@ def _user_out(db: Session, user: User) -> dict:
         "organization_id": str(user.organization_id) if user.organization_id else None,
         "organization_name": org.name if org else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+        # فاز ۸۷: توکن موقت + شمارهٔ سریال
+        "token_hours": user.token_hours,
+        "serial_number": user.serial_number,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -64,6 +67,14 @@ def _revoke_all_sessions(db: Session, user_id) -> None:
     ).all()
     for s in sessions:
         s.revoked_at = now
+
+
+def _validate_serial_unique(db: Session, serial: str | None, current_user_id) -> None:
+    if not serial:
+        return
+    other = db.scalar(select(User).where(User.serial_number == serial))
+    if other is not None and other.id != current_user_id:
+        raise HTTPException(status_code=409, detail="این شمارهٔ سریال قبلاً به کاربر دیگری اختصاص یافته است")
 
 
 @router.get("")
@@ -109,6 +120,12 @@ def create_user(
         user.roles = list(roles)
     org = _resolve_organization(db, payload.organization_id)
     user.organization_id = org.id if org else None
+    # فاز ۸۷: توکن موقت + سریال در زمان ساخت
+    if payload.token_hours:
+        user.token_hours = int(payload.token_hours)
+    if payload.serial_number:
+        _validate_serial_unique(db, payload.serial_number.strip(), None)
+        user.serial_number = payload.serial_number.strip()
     db.add(user)
     db.commit()
     record_audit(
@@ -156,6 +173,18 @@ def update_user(
             user.auth_version += 1  # ابطال نشست‌ها - بند ۴.۲ سند
             _revoke_all_sessions(db, user.id)
             changed.append("status")
+    # فاز ۸۷: عمر توکن (None = بدون تغییر؛ ۰ = دائمی؛ >۰ = ساعت)
+    if payload.token_hours is not None:
+        user.token_hours = int(payload.token_hours) if payload.token_hours > 0 else None
+        user.auth_version += 1  # توکن‌های موجود با عمر قبلی باطل شوند
+        _revoke_all_sessions(db, user.id)
+        changed.append("token_hours")
+    # فاز ۸۷: شمارهٔ سریال (None = بدون تغییر؛ "" = حذف)
+    if payload.serial_number is not None:
+        serial = payload.serial_number.strip() or None
+        _validate_serial_unique(db, serial, user.id)
+        user.serial_number = serial
+        changed.append("serial_number")
 
     db.commit()
     record_audit(

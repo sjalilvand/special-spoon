@@ -155,7 +155,7 @@ def build_template() -> bytes:
     guide.column_dimensions["A"].width = 24
     guide.column_dimensions["B"].width = 18
     guide.column_dimensions["C"].width = 95
-    title = guide.cell(row=1, column=1, value="قالب ورود گروهی مشاوران — سامانه Rosepsy (فاز ۶۴)")
+    title = guide.cell(row=1, column=1, value="قالب ورود گروهی مشاوران — سامانه رز دکتر (فاز ۶۴)")
     title.font = Font(bold=True, size=13)
     guide.append([])
     guide.append(["قواعد کلی:"])

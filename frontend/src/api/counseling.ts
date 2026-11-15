@@ -2,7 +2,7 @@
 import { apiClient, itemsOf } from "./client";
 
 export interface CounselingFileItem {
-  kind: "psych_test" | "consultation" | "appointment";
+  kind: "psych_test" | "consultation" | "appointment" | "intake" | "assessment";
   id: string;
   title: string;
   at: string | null;
@@ -13,6 +13,9 @@ export interface CounselingFileItem {
   test_slug?: string | null;
   status?: string;
   payment_status?: string;
+  request_type?: string | null;
+  request_id?: string | null;
+  request_topic?: string | null;
   preferred_start_at?: string | null;
   case_number?: string | null;
   location?: string | null;
@@ -32,7 +35,7 @@ export interface CounselingFileOut {
     username: string;
     mobile: string | null;
   };
-  counts: { psych_tests: number; consultations: number; appointments: number };
+  counts: { psych_tests: number; consultations: number; appointments: number; intakes: number; assessments: number };
   items: CounselingFileItem[];
 }
 

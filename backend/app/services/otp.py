@@ -145,7 +145,7 @@ def _try_send_otp_sms(settings, mobile: str, code: str, purpose: str) -> None:
         provider, fallback = active_sms_provider(settings)
         if fallback or provider == "log":
             return  # بدون آداپتور واقعی، ارسال پیامکی انجام نمی‌شود
-        body = f"کد تأیید شما در سامانه Rosepsy: {code}\nاعتبار: {settings.otp_code_ttl_seconds // 60} دقیقه"
+        body = f"کد تأیید شما در سامانه رز دکتر: {code}\nاعتبار: {settings.otp_code_ttl_seconds // 60} دقیقه"
         _send(settings, provider, mobile, body)
     except Exception:
         pass

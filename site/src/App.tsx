@@ -14,7 +14,7 @@ const ClinicsPage = lazy(() => import("./pages/ClinicsPage"));
 const PsychotherapyPage = lazy(() => import("./pages/PsychotherapyPage"));
 const SpecialistPage = lazy(() => import("./pages/SpecialistPage"));
 const PaymentRulesPage = lazy(() => import("./pages/PaymentRulesPage"));
-// فاز ۸۶ - آکادمی رز: ویترین فروش دوره + سبد خرید + درگاه بانکی + پخش ویدیو
+// فاز ۸۶ - آکادمی رز دکتر: ویترین فروش دوره + سبد خرید + درگاه بانکی + پخش ویدیو
 const AcademyPage = lazy(() => import("./pages/AcademyPage"));
 const AcademyCoursePage = lazy(() => import("./pages/AcademyCoursePage"));
 const AcademyCartPage = lazy(() => import("./pages/AcademyCartPage"));
@@ -77,7 +77,7 @@ function SiteShell() {
           <Route path="/services/psychotherapy" element={<PsychotherapyPage />} />
           {/* فاز ۷۶ - قوانین پرداخت و استرداد وجه */}
           <Route path="/payment-rules" element={<PaymentRulesPage />} />
-          {/* فاز ۸۶ - آکادمی رز */}
+          {/* فاز ۸۶ - آکادمی رز دکتر */}
           <Route path="/academy" element={<AcademyPage />} />
           <Route path="/academy/c/:slug" element={<AcademyCoursePage />} />
           <Route path="/academy/cart" element={<AcademyCartPage />} />

@@ -540,7 +540,7 @@ _SANDBOX_PAGE = """<!doctype html>
 <html lang="fa" dir="rtl">
 <head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>درگاه شبیه‌ساز پرداخت - رزپسی</title>
+<title>درگاه شبیه‌ساز پرداخت - رز دکتر</title>
 <style>
  body{font-family:Vazirmatn,Tahoma,sans-serif;background:#f6eef1;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}
  .card{background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(168,58,84,.15);padding:32px;max-width:420px;width:92%;text-align:center}

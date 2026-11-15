@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type FocusEvent, type MouseEvent } from "react";
 import { Box, Popover, TextField, Typography } from "@mui/material";
 import { Calendar } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -82,7 +82,21 @@ export default function JalaliDateField({
   required?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // فاز ۸۷ — ضد «قفل شدن فرم»: بلافاصله بعد از بستن تقویم، باز شدن مجدد خودکار
+  // برای ۴۰۰ms مسدود می‌شود. MUI وقتی Popover بسته می‌شود فوکوس را به TextField
+  // برمی‌گرداند؛ آن فوکوسِ برنامه‌ای روی onFocus قبلی دوباره تقویم را باز می‌کرد
+  // و همین چرخهٔ باز/بستنِ بی‌پایان، کل فرم را قفل می‌کرد (کاربر نمی‌توانست
+  // به هیچ فیلد دیگری برسد). ریشه با سه تغییر قطع شد:
+  // ۱) باز شدن فقط با کلیک (onFocus حذف شد)؛
+  // ۲) disableRestoreFocus روی Popover (برگرداندن فوکوس دیگر رخ نمی‌دهد)؛
+  // ۳) disableAutoFocus/disableEnforceFocus (تلهٔ فوکوسِ Modal به تقویم قفل نمی‌شود).
+  const closedAtRef = useRef(0);
   const display = useMemo(() => jalaliDisplayText(typeof value === "string" ? value : undefined), [value]);
+
+  const openPicker = (e: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) => {
+    if (Date.now() - closedAtRef.current < 400) return; // چرخهٔ باز/بستن شکسته می‌شود
+    setAnchor(e.currentTarget);
+  };
 
   return (
     <Box sx={{ width: "100%", minWidth: 0 }}>
@@ -95,8 +109,7 @@ export default function JalaliDateField({
         size="small"
         value={display}
         placeholder="انتخاب تاریخ (تقویم شمسی)"
-        onClick={(e) => setAnchor(e.currentTarget)}
-        onFocus={(e) => setAnchor(e.currentTarget)}
+        onClick={openPicker}
         sx={{
           "& .MuiInputBase-input": { cursor: "pointer" },
           // هم‌عرض با بقیهٔ فرم — بدون سرریز در گرید باریک
@@ -107,10 +120,17 @@ export default function JalaliDateField({
       <Popover
         open={!!anchor}
         anchorEl={anchor}
-        onClose={() => setAnchor(null)}
+        onClose={() => {
+          closedAtRef.current = Date.now();
+          setAnchor(null);
+        }}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ paper: { elevation: 8, sx: { mt: 0.5, borderRadius: 2 } } }}
+        // فاز ۸۷ — رفع قفل‌شدن فرم بعد از انتخاب تاریخ:
+        disableRestoreFocus
+        disableAutoFocus
+        disableEnforceFocus
         // بالای دیالوگ‌ها (z-index پیش‌فرض دیالوگ = 1300)
         sx={{ zIndex: 1500 }}
       >

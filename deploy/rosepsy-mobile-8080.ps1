@@ -35,7 +35,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $AppRoot   = 'C:\rosepsy\app'
 $Stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
 $BackupDir = "C:\rosepsy\backups\mobile8080-$Stamp"
-$DomainRx  = '^(?:130\.185\.73\.157|.*\.sslip\.io)$'
+$DomainRx  = '^(?:130\.185\.73\.157|.*\.sslip\.io|rosedoctor\.ir)$'
 
 function Write-Ok    { param($m) Write-Host "  [OK]     $m" -ForegroundColor Green }
 function Write-Warn2 { param($m) Write-Host "  [هشدار]  $m" -ForegroundColor Yellow }
@@ -218,13 +218,14 @@ foreach ($f in $envFiles) {
         if ($host_ -notmatch $DomainRx) { return $raw }
         if ($host_ -match '^(localhost|127\.0\.0\.1)$') { return $raw }
 
-        # میزبان هدف: ip = IP خام (سریع، بدون DNS) — domain = دامنهٔ sslip.io
+        # میزبان هدف: ip = IP خام (سریع، بدون DNS) — domain = rosedoctor.ir (فاز ۸۷)
         $hostOut = $host_
         if ($Mode -ne 'revert') {
             if ($UrlHost -eq 'ip') {
                 $hostOut = $host_ -replace '(?i)\.sslip\.io$', ''
-            } elseif ($host_ -eq '130.185.73.157') {
-                $hostOut = $host_ + '.sslip.io'
+                # rosedoctor.ir عیناً می‌ماند — دامنهٔ اصلی سامانه
+            } elseif ($host_ -eq '130.185.73.157' -or $host_ -match '(?i)\.sslip\.io$') {
+                $hostOut = 'rosedoctor.ir'
             }
             if ($u.Port -eq 80 -or $u.Port -eq 443) { $portOut = $TargetPort } else { $portOut = $u.Port }
         } else {
@@ -313,9 +314,9 @@ Write-Host "==> گام ۴: نسخهٔ موبایل (PWA) — manifest، آیکو
 $manifestJson = @'
 {
   "id": "/",
-  "name": "رزپسی | کلینیک مشاوره و روان‌درمانی",
-  "short_name": "رزپسی",
-  "description": "سامانهٔ نوبت‌دهی و مشاورهٔ رزپسی",
+  "name": "رز دکتر | کلینیک مشاوره و روان‌درمانی",
+  "short_name": "رز دکتر",
+  "description": "سامانهٔ نوبت‌دهی و مشاورهٔ رز دکتر",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -381,7 +382,7 @@ $MetaTags = @(
     '<link rel="apple-touch-icon" href="/app-icon-192.png"/>',
     '<meta name="apple-mobile-web-app-capable" content="yes"/>',
     '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>',
-    '<meta name="apple-mobile-web-app-title" content="رزپسی"/>',
+    '<meta name="apple-mobile-web-app-title" content="رز دکتر"/>',
     '<meta name="mobile-web-app-capable" content="yes"/>'
 ) -join "`n  "
 
@@ -475,8 +476,8 @@ if ($Mode -ne 'check') {
 # (بعد از git pull لازم نیست حتماً rebuild کل سایت شود)
 # ---------------------------------------------------------------
 Write-Host ""
-Write-Host "==> گام ۵: APK اندروید (/app/rosepsy-1.0.0.apk)" -ForegroundColor White
-$repoApk = Join-Path $AppRoot 'site\public\app\rosepsy-1.0.0.apk'
+Write-Host "==> گام ۵: APK اندروید (/app/rosedoctor-1.0.0.apk)" -ForegroundColor White
+$repoApk = Join-Path $AppRoot 'site\public\app\rosedoctor-1.0.0.apk'
 if ($Mode -eq 'check') {
     if (Test-Path $repoApk) { Write-Info ("APK در ریپو موجود است: {0}" -f $repoApk) }
     else { Write-Warn2 ("APK در ریپو نیست (git pull کنید): {0}" -f $repoApk) }
@@ -485,13 +486,13 @@ elseif ($SiteRoot) {
     if (Test-Path $repoApk) {
         try {
             $apkDest = Join-Path $SiteRoot 'app'
-            $dstFile = Join-Path $apkDest 'rosepsy-1.0.0.apk'
+            $dstFile = Join-Path $apkDest 'rosedoctor-1.0.0.apk'
             $srcHash = (Get-FileHash $repoApk -Algorithm MD5).Hash
             $dstHash = if (Test-Path $dstFile) { (Get-FileHash $dstFile -Algorithm MD5).Hash } else { '' }
             if ($srcHash -ne $dstHash) {
                 if (-not (Test-Path $apkDest)) { New-Item -ItemType Directory -Path $apkDest -Force | Out-Null }
                 if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
-                if (Test-Path $dstFile) { Copy-Item $dstFile (Join-Path $BackupDir ('rosepsy-1.0.0.apk.' + $Stamp + '.bak')) -Force }
+                if (Test-Path $dstFile) { Copy-Item $dstFile (Join-Path $BackupDir ('rosedoctor-1.0.0.apk.' + $Stamp + '.bak')) -Force }
                 Copy-Item $repoApk $dstFile -Force
                 Write-Ok ("APK نسخهٔ 8080 در مسیر سروشده کپی شد: {0}" -f $dstFile)
                 Write-Info "کاربران: اپ قبلی را باز کنید ← همان آدرس همیشگی، نصب روی نصب قبلی (بدون حذف)"
@@ -525,7 +526,7 @@ $tests = @(
     @{ U = '/offline.html';                       Want = 'offline' },
     @{ U = '/panel/manifest.webmanifest';         Want = 'panel-manifest' },
     @{ U = '/app-icon-192.png';                   Want = 'icon' },
-    @{ U = '/app/rosepsy-1.0.0.apk';              Want = 'apk' },
+    @{ U = '/app/rosedoctor-1.0.0.apk';              Want = 'apk' },
     @{ U = '/docs/zarinpal-gateway-request.html'; Want = 'docs' }
 )
 foreach ($t in $tests) {
@@ -558,9 +559,10 @@ foreach ($t in $tests) {
 Write-Host ""
 Write-Host "========================= جمع‌بندی نسخهٔ موبایل =========================" -ForegroundColor White
 Write-Host "  آدرس اصلی (سریع‌ترین): http://130.185.73.157:8080/   ← بدون DNS؛ این را به کاربران بدهید"
-Write-Host "  آدرس جایگزین (دامنه) : http://130.185.73.157.sslip.io:8080/  (DNS دامنه از بعضی شبکه‌ها کند است)"
-Write-Host "  پنل روی موبایل       : http://130.185.73.157:8080/panel/"
-Write-Host "  اپ اندروید (APK)     : http://130.185.73.157:8080/app/rosepsy-1.0.0.apk"
+Write-Host "  دامنهٔ اصلی (فاز ۸۷) : http://rosedoctor.ir/  (بعد از تنظیم DNS + باز بودن TCP 80)"
+Write-Host "  دامنه روی 8080       : http://rosedoctor.ir:8080/"
+Write-Host "  پنل روی موبایل       : http://130.185.73.157:8080/panel/  (یا http://rosedoctor.ir/panel/)"
+Write-Host "  اپ اندروید (APK)     : http://130.185.73.157:8080/app/rosedoctor-1.0.0.apk"
 Write-Host "  SSO (هم‌اکنون باز)    : http://130.185.73.157:8082"
 if ($Mode -eq 'revert') {
     Write-Host "  حالت revert         : URLها به حالت بدون پورت برگشتند (پورت 80 باید باز شده باشد)"

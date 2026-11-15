@@ -2,7 +2,7 @@ import { Box, Button, Container, Paper, Stack, Typography } from "@mui/material"
 import SectionTitle from "./SectionTitle";
 import { texts } from "../content/texts";
 
-/** فاز ۶۸ - بخش دانلود اپلیکیشن اندروید رزپسی با QR روی صفحهٔ اصلی */
+/** فاز ۶۸ - بخش دانلود اپلیکیشن اندروید رز دکتر با QR روی صفحهٔ اصلی */
 export default function AppDownload() {
   const t = texts.appDownload;
   return (
@@ -40,8 +40,8 @@ export default function AppDownload() {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.6} mt={2.8}>
               <Button
                 component="a"
-                href="/app/rosepsy-1.0.0.apk"
-                download="rosepsy-1.0.0.apk"
+                href="/app/rosedoctor-1.0.0.apk"
+                download="rosedoctor-1.0.0.apk"
                 size="large"
                 sx={{ bgcolor: "primary.main", color: "#fff", fontWeight: 800, px: 3.4, "&:hover": { bgcolor: "primary.dark" } }}
               >

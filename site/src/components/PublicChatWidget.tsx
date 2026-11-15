@@ -127,7 +127,7 @@ export default function PublicChatWidget() {
           id: "welcome",
           role: "assistant",
           content:
-            "سلام! به Rosepsy خوش آمدید. من دستیار آنلاین هستم؛ دربارهٔ نوبت‌دهی، مشاوران، خدمات و قیمت‌ها یا ورود به سامانه می‌توانم راهنمایی کنم.",
+            "سلام! به رز دکتر خوش آمدید. من دستیار آنلاین هستم؛ دربارهٔ نوبت‌دهی، مشاوران، خدمات و قیمت‌ها یا ورود به سامانه می‌توانم راهنمایی کنم.",
           quick_replies: [
             "می‌خواهم نوبت رزرو کنم",
             "مشاوران شما چه کسانی هستند؟",
@@ -306,7 +306,7 @@ export default function PublicChatWidget() {
               <Stack direction="row" spacing={1} alignItems="center">
                 <Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: "#7CFC9B", display: "inline-block", boxShadow: "0 0 6px #7CFC9B" }} />
                 <Box>
-                  <Typography sx={{ fontWeight: 800, fontSize: 15 }}>گفتگوی آنلاین Rosepsy</Typography>
+                  <Typography sx={{ fontWeight: 800, fontSize: 15 }}>گفتگوی آنلاین رز دکتر</Typography>
                   <Typography sx={{ fontSize: 11.5, opacity: 0.85 }}>
                     {session?.is_registered
                       ? `کاربر: ${session.display_name}`

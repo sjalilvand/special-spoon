@@ -78,6 +78,9 @@ export interface UserRow {
   /** فاز ۷۴: سازمان کاربر */
   organization_id: string | null;
   organization_name: string | null;
+  /** فاز ۸۷: عمر توکن بر حسب ساعت (null = دائمی) + شمارهٔ سریال */
+  token_hours: number | null;
+  serial_number: string | null;
   last_login_at: string | null;
   created_at: string | null;
 }
@@ -155,6 +158,8 @@ export async function createUser(payload: {
   mobile?: string;
   roles: string[];
   organization_id?: string | null;
+  token_hours?: number | null;
+  serial_number?: string | null;
 }): Promise<UserRow> {
   const res = await apiClient.post("/users", payload);
   return res.data;
@@ -168,6 +173,23 @@ export async function updateUserStatus(id: string, status: string): Promise<User
 /** فاز ۷۴: انتساب/تغییر سازمان کاربر توسط مدیر سامانه */
 export async function updateUserOrganization(id: string, organizationId: string | null): Promise<UserRow> {
   const res = await apiClient.patch(`/users/${id}`, { organization_id: organizationId ?? "" });
+  return res.data;
+}
+
+/** فاز ۸۷: عمر توکن (null = دائمی) و شمارهٔ سریال کاربر */
+export async function updateUserAccess(
+  id: string,
+  payload: { token_hours?: number | null; serial_number?: string | null },
+): Promise<UserRow> {
+  const body: Record<string, unknown> = {};
+  if (payload.token_hours !== undefined) {
+    // ۰/نول = دائمی → بک‌اند ۰ را دائمی می‌کند
+    body.token_hours = payload.token_hours ?? 0;
+  }
+  if (payload.serial_number !== undefined) {
+    body.serial_number = payload.serial_number ?? "";
+  }
+  const res = await apiClient.patch(`/users/${id}`, body);
   return res.data;
 }
 

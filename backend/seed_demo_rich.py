@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import hashlib
 import random
 import shutil
@@ -1493,7 +1494,12 @@ def wipe(db) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="داده نمونه جامع رزپسی")
+    # فاز ۸۷ — kill-switch: در تولید، دادهٔ نمونه هرگز نباید ساخته شود.
+    # برای اجرای آگاهانه در محیط توسعه:  ROSEPSY_ALLOW_DEMO_SEED=1 python seed_demo.py
+    if os.environ.get("ROSEPSY_ALLOW_DEMO_SEED") != "1":
+        print("دادهٔ نمونه غیرفعال است — برای اجرا: ROSEPSY_ALLOW_DEMO_SEED=1 (کاندوم تولید فاز ۸۷)")
+        return 0
+    parser = argparse.ArgumentParser(description="داده نمونه جامع (فقط توسعه)")
     parser.add_argument("--reset", action="store_true", help="پاک‌سازی کامل داده‌های دمو")
     args = parser.parse_args()
 

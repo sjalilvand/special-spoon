@@ -155,7 +155,7 @@ param(
     [string]$BaseDir = 'C:\rosepsy',
     [string]$RepoUrl = 'https://github.com/sjalilvand/special-spoon.git',
     [string]$RepoBranch = 'main',
-    [string]$Domain = '130.185.73.157.sslip.io',
+    [string]$Domain = 'rosedoctor.ir',
     [int]$DbPort = 5432,
     [int]$ApiPort = 8000,
     [int]$RedisPort = 6379,
