@@ -23,6 +23,8 @@ import logging
 
 import pytest
 
+from conftest import next_national_code
+
 META_URL = "/api/v1/farakhan/meta"
 
 
@@ -103,7 +105,9 @@ def _clear_farakhan_rate_hits():
 
 def _valid_payload(sid, captcha_id, answer, **over):
     base = {
-        "first_name": "آزمون", "last_name": "فراخوانی۹۲", "national_code": "0123456789",
+        "first_name": "آزمون", "last_name": "فراخوانی۹۲",
+        # فاز ۹۳ — ثبت تکراری با یک کد ملی ۴۲۲ می‌گیرد؛ هر ثبت آزمونی کد یکتای معتبر می‌گیرد
+        "national_code": next_national_code(),
         "gender": "female", "birth_date": "1370/01/01",
         "education_degree": "bachelor", "education_field": "روان‌شناسی",
         "license_status": "none", "center_ownership": "rented",

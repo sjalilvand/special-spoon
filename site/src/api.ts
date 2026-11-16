@@ -264,7 +264,14 @@ export interface FarakhanMeta {
   allowed_extensions: string[];
   max_file_size_bytes: number;
   max_files: number;
-  rules: { require_military_status_for_male: boolean; phone_required: boolean };
+  /** فاز ۹۳ — قواعد اعتبارسنجی منتشرشدهٔ سرور (محدودهٔ سن + الگوریتم کد ملی) */
+  rules: {
+    require_military_status_for_male: boolean;
+    phone_required: boolean;
+    min_age?: number;
+    max_age?: number;
+    national_code_checksum?: boolean;
+  };
   /** فاز ۸۹ - نشست یک‌ساعتهٔ فرم: شناسهٔ نشست + طول مهلت (ثانیه) برای شمارش معکوس */
   session_id: string;
   session_ttl_seconds: number;
@@ -329,6 +336,27 @@ export interface FarakhanSubmitResult {
   success: boolean;
   tracking_code: string;
   message: string;
+}
+
+export interface FarakhanNationalCodeCheck {
+  valid: boolean;
+  duplicate: boolean;
+}
+
+/**
+ * فاز ۹۳ — وارسی زندهٔ کد ملی (الگوریتم + تکراری بودن) هنگام خروج از فیلد.
+ * fail-open: خطای شبکه/سرور فرم را بلاک نمی‌کند — سرور در لحظهٔ ثبت همان را
+ * کامل و نهایی بررسی می‌کند.
+ */
+export async function checkFarakhanNationalCode(code: string): Promise<FarakhanNationalCodeCheck> {
+  try {
+    const r = await fetch(`/api/v1/farakhan/check-national-code?code=${encodeURIComponent(code)}`);
+    if (!r.ok) return { valid: true, duplicate: false };
+    const d = (await r.json()) as FarakhanNationalCodeCheck;
+    return { valid: d.valid !== false, duplicate: d.duplicate === true };
+  } catch {
+    return { valid: true, duplicate: false };
+  }
 }
 
 export async function submitFarakhan(payload: Record<string, unknown>, files: Record<string, File>): Promise<FarakhanSubmitResult> {

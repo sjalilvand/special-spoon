@@ -14,7 +14,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,6 +57,15 @@ class FarakhanSubmission(Base):
         CheckConstraint(
             "center_ownership IN ('owned','rented','other')",
             name="ck_farakhan_ownership",
+        ),
+        # فاز ۹۳ — هر کد ملی فقط یک ثبت‌نامِ «فعال» (ایندکس یکتای جزئی؛ مایگریشن 0055).
+        # ثبت‌نامِ «ردشده» مستثنا است تا متقاضی بتواند دوباره ثبت‌نام کند.
+        Index(
+            "ux_farakhan_nc_active",
+            "national_code",
+            unique=True,
+            postgresql_where=text("status <> 'rejected'"),
+            sqlite_where=text("status <> 'rejected'"),
         ),
     )
 

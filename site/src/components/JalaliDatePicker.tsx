@@ -6,6 +6,9 @@
 // است (همان قالبی که سرور فراخوان می‌پذیرد) و نمایش در ورودی با ارقام فارسی.
 // تقویم همان کتابخانهٔ پنل است (react-multi-date-picker + تقویم persian) تا رفتار
 // یکسان باشد؛ مالکیت تاریخ آینده/بیش از ۱۲۵۰ بسته است (هم‌راستا با اعتبارسنجی سرور).
+// فاز ۹۳ — بازهٔ سن ثبت‌نام (۱۸ تا ۸۰ سال): اگر minJalali/maxJalali داده شود
+// (از FarakhanPage با birthDateCalendarBounds)، تقویم فقط همان بازهٔ سن را
+// باز می‌کند و تاریخ خارج از محدودهٔ سن اصلاً انتخاب‌شدنی نیست.
 import {
   Box, IconButton, InputAdornment, Paper, Popover, TextField, Typography,
 } from "@mui/material";
@@ -67,6 +70,7 @@ function jalaliStringToDateObject(value: string): any {
 
 export default function JalaliDatePicker({
   label, value, onChange, required, error, helperText, disabled,
+  minJalali, maxJalali, rangeHint,
 }: {
   label: string;
   /** رشتهٔ شمسی با ارقام لاتین «1370/01/01»؛ خالی = انتخاب نشده */
@@ -76,17 +80,30 @@ export default function JalaliDatePicker({
   error?: boolean;
   helperText?: string;
   disabled?: boolean;
+  /** فاز ۹۳ — کف بازهٔ مجاز تقویم (شمسی لاتین «YYYY/MM/DD»)؛ پیش‌فرض ۱۲۵۰/۰۱/۰۱ */
+  minJalali?: string;
+  /** فاز ۹۳ — سقف بازهٔ مجاز تقویم؛ پیش‌فرض امروز */
+  maxJalali?: string;
+  /** فاز ۹۳ — متن راهنمای بازه در پای تقویم */
+  rangeHint?: string;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const open = Boolean(anchor) && !disabled;
 
-  // سقف انتخاب: امروز (شمسی) — تاریخ آیندهٔ تولد بی‌معناست؛ کف: ۱۲۵۰ مثل سرور
+  // سقف انتخاب: امروز (شمسی) — تاریخ آیندهٔ تولد بی‌معناست؛ کف: ۱۲۵۰ مثل سرور.
+  // فاز ۹۳ — اگر کف/سقف بازهٔ سن داده شود، همان ملاک است (سن ۱۸ تا ۸۰ سال).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const todayObj = useMemo(() => new DateObject({ calendar: persian, locale: persian_fa }), []);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const minDateObj = useMemo(
-    () => new DateObject({ calendar: persian, locale: persian_fa, year: 1250, month: 1, day: 1 }),
-    [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => jalaliStringToDateObject(minJalali ?? "") ?? new DateObject({ calendar: persian, locale: persian_fa, year: 1250, month: 1, day: 1 }),
+    [minJalali],
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maxDateObj = useMemo(
+    () => jalaliStringToDateObject(maxJalali ?? "") ?? todayObj,
+    [maxJalali, todayObj],
   );
   const calendarValue = useMemo(() => jalaliStringToDateObject(value), [value]);
 
@@ -162,11 +179,11 @@ export default function JalaliDatePicker({
             locale={persian_fa}
             onChange={pick}
             minDate={minDateObj}
-            maxDate={todayObj}
+            maxDate={maxDateObj}
           />
           <Box sx={{ px: 2, pb: 1.5 }}>
             <Typography variant="caption" color="text.secondary">
-              تولد نمی‌تواند در آینده باشد — بازهٔ مجاز: ۱۲۵۰ تا امروز
+              {rangeHint ?? "تولد نمی‌تواند در آینده باشد — بازهٔ مجاز: ۱۲۵۰ تا امروز"}
             </Typography>
           </Box>
         </Paper>

@@ -12,7 +12,8 @@
 3) ارقام فارسی در فیلدهای عددی رد می‌شد → اکنون نرمال می‌شود
 4) هر خطای غیرمنتظرهٔ ذخیره (پایگاه‌داده/فایل) «۵۰۰ بی‌پیام» می‌ساخت → اکنون
    rollback + ردیابی کامل در لاگ + پاسخ JSON ساختاریافته با پیام فارسی
-5) ثبت دوباره با همان کد ملی هرگز خطا نیست (هر ثبت‌نام مستقل است)
+5) ثبت دوباره با همان کد ملی: در فاز ۹۱ آزاد بود؛ از فاز ۹۳ (خواستهٔ صاحب سامانه)
+   ثبت‌نامِ فعالِ تکراری با همان کد ملی ۴۲۲ با پیام فارسی می‌گیرد (پوشش در test_phase93)
 6) تقویم شمسی سمت مرورگر است (JalaliDatePicker)؛ سمت سرور همان اعتبارسنجی قبلی
 """
 
@@ -21,7 +22,7 @@ from __future__ import annotations
 import io
 import json
 
-from conftest import bearer, login
+from conftest import bearer, login, next_national_code
 
 META_URL = "/api/v1/farakhan/meta"
 
@@ -59,7 +60,9 @@ def _meta_and_captcha(client):
 
 def _valid_payload(sid, captcha_id, answer, **over):
     base = {
-        "first_name": "آزمون", "last_name": "فراخوانی۹۱", "national_code": "0123456789",
+        "first_name": "آزمون", "last_name": "فراخوانی۹۱",
+        # فاز ۹۳ — ثبت تکراری با یک کد ملی ۴۲۲ می‌گیرد؛ هر ثبت آزمونی کد یکتای معتبر می‌گیرد
+        "national_code": next_national_code(),
         "gender": "female", "birth_date": "1370/01/01",
         "education_degree": "bachelor", "education_field": "روان‌شناسی",
         "license_status": "none", "center_ownership": "rented",
@@ -106,14 +109,18 @@ def test_persian_filenames_ok(client):
     assert r.status_code == 201, r.text
 
 
-def test_same_national_code_can_submit_twice(client):
-    """ثبت دوم با همان کد ملی — هر ثبت‌نام مستقل است؛ هرگز ۵۰۰ نیست"""
+def test_same_national_code_second_submit_blocked(client):
+    """فاز ۹۳ — ثبت دوم با همان کد ملی: تکراری شمرده می‌شود و ۴۲۲ پیام فارسی می‌گیرد
+    (رفتار فاز ۹۱ یعنی «ثبت مستقل» با خواستهٔ صاحب سامانه برای تشخیص تکراری عوض شد)"""
+    pinned = next_national_code()
     sid, cap, ans = _meta_and_captcha(client)
-    r1 = _submit(client, _valid_payload(sid, cap["captcha_id"], ans))
+    r1 = _submit(client, _valid_payload(sid, cap["captcha_id"], ans, national_code=pinned))
     assert r1.status_code == 201, r1.text
     sid2, cap2, ans2 = _meta_and_captcha(client)
-    r2 = _submit(client, _valid_payload(sid2, cap2["captcha_id"], ans2))
-    assert r2.status_code == 201, f"ثبت دوم باید ۲۰۱ شود: {r2.status_code} {r2.text[:300]}"
+    r2 = _submit(client, _valid_payload(sid2, cap2["captcha_id"], ans2, national_code=pinned))
+    assert r2.status_code == 422, f"ثبت تکراری باید ۴۲۲ شود: {r2.status_code} {r2.text[:300]}"
+    errors = r2.json()["detail"]["errors"]
+    assert any("کد ملی" in k and "قبلاً" in v for k, v in errors.items()), errors
 
 
 # ---------------------------------------------------------------- پیام‌های فارسی + ارقام فارسی

@@ -13,9 +13,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FarakhanServerError, fetchFarakhanCaptcha, fetchFarakhanCounties, fetchFarakhanMeta,
-  fetchFarakhanProvinces, FarakhanValidationError, submitFarakhan,
+  fetchFarakhanProvinces, FarakhanValidationError, submitFarakhan, checkFarakhanNationalCode,
 } from "../api";
 import type { FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta } from "../api";
+import {
+  FARAKHAN_MAX_AGE, FARAKHAN_MIN_AGE, birthDateCalendarBounds, completedAgeFromJalali,
+  isValidNationalCode, normalizeFaDigits,
+} from "../utils/farakhanRules";
 import JalaliDatePicker from "../components/JalaliDatePicker";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
@@ -199,6 +203,19 @@ export default function FarakhanPage() {
   const [deadline, setDeadline] = useState<number | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [expired, setExpired] = useState(false);
+  // فاز ۹۳ — بازخورد زندهٔ کد ملی/تاریخ تولد زیر فیلد (قبل از submit) + نشان تکراری بودن
+  const [liveErrors, setLiveErrors] = useState<Record<string, string>>({});
+  const [ncDuplicate, setNcDuplicate] = useState(false);
+  const [ncChecking, setNcChecking] = useState(false);
+
+  const setLiveError = (label: string, message: string | null) => {
+    setLiveErrors((prev) => {
+      const next = { ...prev };
+      if (message) next[label] = message;
+      else delete next[label];
+      return next;
+    });
+  };
 
   const loadCaptcha = useCallback(() => {
     setCaptcha(null);
@@ -273,14 +290,57 @@ export default function FarakhanPage() {
     [provinces, form.province_id],
   );
 
+  // فاز ۹۳ — قواعد سن از سرور (meta) با مقادیر پیش‌فرض همان مقادیر سرور
+  const minAge = meta?.rules?.min_age ?? FARAKHAN_MIN_AGE;
+  const maxAge = meta?.rules?.max_age ?? FARAKHAN_MAX_AGE;
+  // کف/سقف تقویم تولد: فقط بازهٔ مجاز سن ۱۸ تا ۸۰ سال قابل انتخاب است
+  const birthBounds = useMemo(() => birthDateCalendarBounds(minAge, maxAge), [minAge, maxAge]);
+
+  // فاز ۹۳ — بازخورد زندهٔ کد ملی هنگام خروج از فیلد: الگوریتم + تکراری بودن (endpoint عمومی)
+  const onNationalCodeBlur = async () => {
+    const raw = form.national_code.trim();
+    if (!raw) {
+      setNcDuplicate(false);
+      setLiveError("کد ملی", null);
+      return;
+    }
+    if (!/^\d{10}$/.test(normalizeFaDigits(raw))) return; // پیام تعداد رقم را clientValidate می‌دهد
+    if (!isValidNationalCode(raw)) {
+      setNcDuplicate(false);
+      setLiveError("کد ملی", "کد ملی واردشده معتبر نیست (رقم کنترل الگوریتم کد ملی رعایت نشده است).");
+      return;
+    }
+    setNcChecking(true);
+    try {
+      const res = await checkFarakhanNationalCode(normalizeFaDigits(raw));
+      if (res.duplicate) {
+        setNcDuplicate(true);
+        setLiveError("کد ملی", "این کد ملی قبلاً در فراخوان همکاری ثبت شده است و ثبت تکراری امکان‌پذیر نیست.");
+      } else {
+        setNcDuplicate(false);
+        setLiveError("کد ملی", null);
+      }
+    } finally {
+      setNcChecking(false);
+    }
+  };
+
   const clientValidate = (): string => {
     if (expired) return "مهلت یک‌ساعتهٔ تکمیل فرم منقضی شده است؛ لطفاً فرم را از ابتدا شروع کنید.";
     if (!form.first_name.trim()) return "نام را وارد کنید.";
     if (!form.last_name.trim()) return "نام خانوادگی را وارد کنید.";
-    if (!/^\d{10}$/.test(form.national_code.trim())) return "کد ملی باید ۱۰ رقم باشد.";
+    if (!/^\d{10}$/.test(normalizeFaDigits(form.national_code.trim()))) return "کد ملی باید ۱۰ رقم باشد.";
+    // فاز ۹۳ — الگوریتم کد ملی (جمع وزنی/رقم کنترل) پیش از ارسال به سرور
+    if (!isValidNationalCode(form.national_code)) return "کد ملی واردشده معتبر نیست (رقم کنترل الگوریتم کد ملی رعایت نشده است).";
+    // فاز ۹۳ — نشان تکراری بودن کد ملی (وارسی زندهٔ endpoint عمومی)
+    if (ncDuplicate) return "این کد ملی قبلاً در فراخوان همکاری ثبت شده است و ثبت تکراری امکان‌پذیر نیست.";
     if (!form.gender) return "جنسیت را انتخاب کنید.";
     // فاز ۹۱ - تاریخ با تقویم شمسی انتخاب می‌شود؛ تایپ مستقیم نیست
     if (!/^\d{4}\/\d{2}\/\d{2}$/.test(form.birth_date.trim())) return "تاریخ تولد را از تقویم انتخاب کنید.";
+    // فاز ۹۳ — محدودهٔ سن ثبت‌نام: حداقل ۱۸ و حداکثر ۸۰ سال (سن تکمیل‌شده)
+    const age = completedAgeFromJalali(form.birth_date);
+    if (age >= 0 && age < minAge) return `حداقل سن برای ثبت‌نام ${faNum(minAge)} سال است؛ تاریخ تولد انتخاب‌شده کمتر از ${faNum(minAge)} سال دارد.`;
+    if (age >= 0 && age > maxAge) return `حداکثر سن برای ثبت‌نام ${faNum(maxAge)} سال است؛ تاریخ تولد انتخاب‌شده بیش از ${faNum(maxAge)} سال دارد.`;
     if (isMale && !form.military_status) return "وضعیت سربازی را برای متقاضی مرد انتخاب کنید.";
     if (!form.education_degree) return "مدرک تحصیلی را انتخاب کنید.";
     if (!form.education_field.trim()) return "رشته تحصیلی را وارد کنید.";
@@ -462,7 +522,8 @@ export default function FarakhanPage() {
     );
   }
 
-  const err = (label: string): string | undefined => fieldErrors?.[label];
+  // فاز ۹۳ — خطای زندهٔ زیر فیلد (کد ملی/تاریخ تولد) مقدم بر خطاهای submit است
+  const err = (label: string): string | undefined => liveErrors?.[label] || fieldErrors?.[label];
 
   return (
     <Box>
@@ -556,10 +617,17 @@ export default function FarakhanPage() {
                       onChange={(e) => set("last_name", e.target.value)} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
+                    {/* فاز ۹۳ — کد ملی: الگوریتم + تکراری بودن با بازخورد زنده */}
                     <TextField fullWidth required size="small" label="کد ملی" value={form.national_code}
                       inputProps={{ inputMode: "numeric", maxLength: 10, dir: "ltr" }}
-                      error={!!err("کد ملی")} helperText={err("کد ملی") || "۱۰ رقم بدون خط تیره"}
-                      onChange={(e) => set("national_code", e.target.value)} />
+                      error={!!err("کد ملی")}
+                      helperText={err("کد ملی") ?? (ncChecking ? "در حال بررسی تکراری بودن…" : "۱۰ رقم بدون خط تیره — رقم کنترل الگوریتم بررسی می‌شود")}
+                      onChange={(e) => {
+                        set("national_code", e.target.value);
+                        setNcDuplicate(false);
+                        setLiveError("کد ملی", null);
+                      }}
+                      onBlur={onNationalCodeBlur} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth required size="small" error={!!err("جنسیت")}>
@@ -574,13 +642,27 @@ export default function FarakhanPage() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     {/* فاز ۹۱ - تاریخ تولد شمسی با تقویم؛ تایپ مستقیم ممنوع */}
+                    {/* فاز ۹۳ - تقویم فقط بازهٔ سن مجاز (۱۸ تا ۸۰ سال) را می‌دهد */}
                     <JalaliDatePicker
                       label="تاریخ تولد (شمسی)"
                       value={form.birth_date}
-                      onChange={(v) => set("birth_date", v)}
+                      onChange={(v) => {
+                        set("birth_date", v);
+                        const pickedAge = v ? completedAgeFromJalali(v) : -1;
+                        if (pickedAge >= 0 && pickedAge < minAge) {
+                          setLiveError("تاریخ تولد", `حداقل سن برای ثبت‌نام ${faNum(minAge)} سال است.`);
+                        } else if (pickedAge >= 0 && pickedAge > maxAge) {
+                          setLiveError("تاریخ تولد", `حداکثر سن برای ثبت‌نام ${faNum(maxAge)} سال است.`);
+                        } else {
+                          setLiveError("تاریخ تولد", null);
+                        }
+                      }}
                       required
+                      minJalali={birthBounds.minJalali}
+                      maxJalali={birthBounds.maxJalali}
+                      rangeHint={`بازهٔ مجاز سن: ${faNum(minAge)} تا ${faNum(maxAge)} سال — تاریخ خارج از این بازه قابل انتخاب نیست`}
                       error={!!err("تاریخ تولد")}
-                      helperText={err("تاریخ تولد") ?? "انتخاب از تقویم شمسی — تایپ مستقیم غیرفعال است"}
+                      helperText={err("تاریخ تولد") ?? `انتخاب از تقویم شمسی — سن مجاز: ${faNum(minAge)} تا ${faNum(maxAge)} سال`}
                     />
                   </Grid>
                   {isMale && (

@@ -75,6 +75,21 @@ if not any(getattr(_h, "_farakhan_own", False) for _h in logger.handlers):
     logger.addHandler(_farakhan_handler)
 logger.setLevel(logging.INFO)
 
+# فاز ۹۳ — محدودهٔ سن ثبت‌نام فراخوان (خواستهٔ صاحب سامانه: حداقل ۱۸ و حداکثر ۸۰ سال).
+# سن «تکمیل‌شده» بر مبنای تاریخ امروز میلادی و تاریخ تولد شمسیِ تبدیل‌شده به میلادی است.
+FARAKHAN_MIN_AGE = 18
+FARAKHAN_MAX_AGE = 80
+
+# فاز ۹۳ — پیام واحد کد ملی تکراری؛ هم در وارسی پیش از ذخیره و هم هنگام نقض ایندکس یکتا
+DUP_NATIONAL_CODE_MSG = (
+    "این کد ملی قبلاً در فراخوان همکاری ثبت شده است و ثبت تکراری امکان‌پذیر نیست؛ "
+    "اگر این کد ملی متعلق به شماست نیازی به ثبت مجدد نیست."
+)
+
+# ثبت‌نام «فعال» = جدید/بررسی‌شده/پذیرفته‌شده — تنها این‌ها مانع ثبت مجدد همان کد ملی‌اند؛
+# ثبت‌نامِ «ردشده» مانع تلاش دوبارهٔ متقاضی نیست (جریان کاری جذب نیرو).
+_ACTIVE_FARAKHAN_STATUSES = ("new", "reviewed", "accepted")
+
 # ---------------------------------------------------------------- گزینه‌های فرم
 GENDER_OPTIONS = {"male": "مرد", "female": "زن"}
 MILITARY_STATUS_OPTIONS = {
@@ -250,6 +265,40 @@ def _submit_rate_ok(ip: str) -> bool:
     lst.append(now)
     _submit_ip_hits[ip] = lst
     return True
+
+
+# فاز ۹۳ — سقف نرخ وارسی کد ملی (endpoint عمومی): ضد پیمایش کدهای ملی.
+# ۶۰ وارسی در ساعت از هر IP برای تکمیل فرم یک نفر بسیار بیش از کافی است.
+_nc_check_ip_hits: dict[str, list[float]] = {}
+_NC_CHECK_RATE = 60
+_NC_CHECK_WINDOW = 3600.0
+
+
+def _nc_check_rate_ok(ip: str) -> bool:
+    now = time.monotonic()
+    lst = [t for t in _nc_check_ip_hits.get(ip, []) if now - t < _NC_CHECK_WINDOW]
+    if len(lst) >= _NC_CHECK_RATE:
+        _nc_check_ip_hits[ip] = lst
+        return False
+    lst.append(now)
+    _nc_check_ip_hits[ip] = lst
+    return True
+
+
+def _duplicate_national_code(db: Session, national_code: str) -> FarakhanSubmission | None:
+    """فاز ۹۳ — نخستین ثبت‌نامِ «فعال» با همان کد ملی؛ None یعنی تکراری نیست.
+
+    ثبت‌نامِ ردشده شمرده نمی‌شود تا متقاضیِ ردشده بتواند با اصلاح اطلاعات دوباره ثبت‌نام کند.
+    """
+    return db.scalar(
+        select(FarakhanSubmission)
+        .where(
+            FarakhanSubmission.national_code == national_code,
+            FarakhanSubmission.status.in_(_ACTIVE_FARAKHAN_STATUSES),
+        )
+        .order_by(FarakhanSubmission.created_at)
+        .limit(1)
+    )
 
 
 def _render_math_svg(a: int, b: int) -> str:
@@ -529,6 +578,20 @@ class FarakhanCreate(BaseModel):
         today = datetime.now(timezone.utc).date()
         if gregorian > today:
             raise ValueError("تاریخ تولد نمی‌تواند در آینده باشد.")
+        # فاز ۹۳ — محدودهٔ سن ثبت‌نام: حداقل ۱۸ و حداکثر ۸۰ سال (سن تکمیل‌شده)
+        age = today.year - gregorian.year - (
+            (today.month, today.day) < (gregorian.month, gregorian.day)
+        )
+        if age < FARAKHAN_MIN_AGE:
+            raise ValueError(
+                f"حداقل سن برای ثبت‌نام {FARAKHAN_MIN_AGE} سال است؛ "
+                f"تاریخ تولد انتخاب‌شده کمتر از {FARAKHAN_MIN_AGE} سال دارد."
+            )
+        if age > FARAKHAN_MAX_AGE:
+            raise ValueError(
+                f"حداکثر سن برای ثبت‌نام {FARAKHAN_MAX_AGE} سال است؛ "
+                f"تاریخ تولد انتخاب‌شده بیش از {FARAKHAN_MAX_AGE} سال دارد."
+            )
         return value
 
     @field_validator("license_status")
@@ -677,7 +740,14 @@ def get_farakhan_meta() -> dict:
         "allowed_extensions": sorted(ALLOWED_EXTENSIONS),
         "max_file_size_bytes": MAX_FILE_SIZE_BYTES,
         "max_files": MAX_FILES,
-        "rules": {"require_military_status_for_male": True, "phone_required": True},
+        "rules": {
+            "require_military_status_for_male": True,
+            "phone_required": True,
+            # فاز ۹۳ — محدودهٔ سن ثبت‌نام + وارسی الگوریتم کد ملی (کلاینت همان را پیش‌آزمون می‌کند)
+            "min_age": FARAKHAN_MIN_AGE,
+            "max_age": FARAKHAN_MAX_AGE,
+            "national_code_checksum": True,
+        },
         # فاز ۸۹ - نشست یک‌ساعتهٔ فرم: شناسه + طول مهلت برای شمارش معکوس مرورگر
         **_new_form_session(),
     }
@@ -713,6 +783,30 @@ def get_farakhan_counties(province_id: int, db: Session = Depends(get_db)) -> di
         .order_by(FarakhanLocation.county_name)
     ).all()
     return {"items": [{"id": r.id, "name": r.county_name} for r in rows]}
+
+
+@router.get("/check-national-code")
+def check_farakhan_national_code(
+    request: Request,
+    code: str = Query(min_length=1, max_length=20),
+    db: Session = Depends(get_db),
+) -> dict:
+    """فاز ۹۳ — وارسی زندهٔ کد ملی برای فرم عمومی (خواستهٔ صاحب سامانه).
+
+    پاسخ: ``valid`` = الگوریتم رسمی کد ملی (جمع وزنی/رقم کنترل) رعایت شده؛
+    ``duplicate`` = ثبت‌نامِ «فعال» با همین کد ملی از قبل موجود است.
+    ثبت‌نامِ «ردشده» duplicate نمی‌شمارد (متقاضی می‌تواند دوباره تلاش کند).
+    سقف نرخ: ۶۰ وارسی در ساعت از هر IP — ضد پیمایش کدهای ملی.
+    """
+    if not _nc_check_rate_ok(_client_ip(request)):
+        logger.warning("check-national-code: ۴۲۹ سقف نرخ | ip=%s", _client_ip(request))
+        raise HTTPException(status_code=429, detail="تعداد درخواست‌ها بیش از حد مجاز است؛ کمی بعد تلاش کنید.")
+    normalized = normalize_digits(code).strip()
+    valid = is_valid_national_code(normalized)
+    duplicate = False
+    if valid:
+        duplicate = _duplicate_national_code(db, normalized) is not None
+    return {"valid": valid, "duplicate": duplicate}
 
 
 def _validate_upload(upload: UploadFile, field_key: str) -> tuple[bytes, str]:
@@ -813,6 +907,16 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
     if county_row is None:
         raise _errors_422({"شهرستان": "شهرستان انتخاب‌شده با استان همخوان نیست."})
 
+    # فاز ۹۳ — تشخیص کد ملی تکراری پیش از ذخیره: پیام مشخص فارسی به‌جای خطای عمومی.
+    # ایندکس یکتای جزئی (ux_farakhan_nc_active) نیز پشتیبانِ هم‌زمانی است.
+    duplicate = _duplicate_national_code(db, data.national_code)
+    if duplicate is not None:
+        logger.warning(
+            "submit: ۴۲۲ کد ملی تکراری | ip=%s | کد_پیگیری_موجود=%s",
+            ip, duplicate.tracking_code,
+        )
+        raise _errors_422({"کد ملی": DUP_NATIONAL_CODE_MSG})
+
     settings = get_settings()
     # فاز ۹۱ — سپر خطای غیرمنتظره: هیچ خطای پایگاه‌داده/فایل دیگر «۵۰۰ بی‌پیام»
     # نمی‌سازد؛ ردیابی کامل در لاگ می‌افتد و پاسخ JSON ساختاریافته با پیام فارسی
@@ -887,8 +991,14 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
             ))
 
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
+        # فاز ۹۳ — نقض ایندکس یکتای کد ملی (ux_farakhan_nc_active؛ مثلاً ثبت هم‌زمانِ
+        # دو درخواست با یک کد ملی) پیام اختصاصی همان کد ملی تکراری را می‌دهد.
+        exc_text = f"{getattr(exc, 'orig', '')}{exc}"
+        if "ux_farakhan_nc_active" in exc_text:
+            logger.warning("submit: ۴۲۲ کد ملی تکراری (ایندکس یکتا) | ip=%s", ip)
+            raise _errors_422({"کد ملی": DUP_NATIONAL_CODE_MSG})
         logger.exception("farakhan submit: تداخل داده در ذخیره (کد ملی/کد پیگیری)")
         raise _errors_422({"داده": "ثبت با این اطلاعات از قبل وجود دارد یا با دادهٔ سامانه تداخل دارد؛ اطلاعات را بازبینی کنید."})
     except OperationalError as exc:

@@ -124,3 +124,18 @@ def login(client, username, password=PASSWORD):
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+# فاز ۹۳ — ثبت‌نام تکراری با یک کد ملی دیگر ۴۲۲ می‌گیرد؛ هر ثبت آزمونی باید
+# کد ملی «یکتا و معتبر» داشته باشد (رقم کنترل الگوریتم کد ملی حساب می‌شود).
+import itertools  # noqa: E402
+
+_nc_seq = itertools.count(300000001)
+
+
+def next_national_code() -> str:
+    base = str(next(_nc_seq))
+    weighted = sum(int(d) * (10 - i) for i, d in enumerate(base))
+    remainder = weighted % 11
+    check = remainder if remainder < 2 else 11 - remainder
+    return base + str(check)
