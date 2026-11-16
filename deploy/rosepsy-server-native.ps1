@@ -1,9 +1,15 @@
 ﻿#requires -Version 5.1
 # ============================================================================
-#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳۲ (Plan B)
+#  rosepsy-server-native.ps1  -  نسخهٔ ۱.۰.۳۳ (Plan B)
 #  استقرار «بومی» Rosepsy روی Windows Server بدون Docker و بدون مجازی‌سازی
 #  ---------------------------------------------------------------------------
 #  تغییرات نسخه‌ها:
+#    1.0.33 - فاز ۹۱ (گزارش میدانی کاربر): فرم فراخوان همکاری تا ۷ فایل × ۵ مگابایت
+#             = ۳۵ مگابایت می‌پذیرد ولی Caddyfile «request_body max_size 15MB» داشت؛
+#             بارگذاری بالای ۱۵ مگابایت وسط استریم قطع می‌شد → مرورگر
+#             ERR_INCOMPLETE_CHUNKED_ENCODING/500 بی‌پیام می‌دید. اصلاح: سقف بدنهٔ
+#             درخواست به ۴۰ مگابایت (۳۵ مگابایت فایل‌ها + سربار multipart + payload)
+#             و ترمیم خودکار Caddyfile در همان upgrade (Update-CaddyfileFromTemplate).
 #    1.0.32 - خطای میدانی گزارش کاربر: «Get-NetTCPListener is not recognized» در
 #             بررسی سلامت نهایی upgrade. چنین فرمانی در هیچ نسخهٔ ویندوز وجود
 #             ندارد (نام درست Get-NetTCPConnection است) و چون «نبودنِ خودِ فرمان»
@@ -1184,7 +1190,9 @@ function New-CaddyfileContent([string]$siteAddr, [string]$tlsNote) {
 (rosepsy_site) {
         encode gzip zstd
         request_body {
-                max_size 15MB
+                # فاز ۹۱ — فرم فراخوان تا ۷×۵MB فایل + payload + سربار multipart؛
+                # سقف ۱۵ مگابایتی قبلی، بارگذاری بزرگ را وسط استریم قطع می‌کرد
+                max_size 40MB
         }
         header {
                 X-Content-Type-Options "nosniff"
@@ -1668,7 +1676,7 @@ function Invoke-Setup {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     try { Start-Transcript -Path ("$LogDir\native-setup-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')) | Out-Null } catch {}
-    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.32 ===' -ForegroundColor Cyan
+    Write-Host '=== Rosepsy - استقرار بومی ویندوز (بدون Docker) - نسخهٔ 1.0.33 ===' -ForegroundColor Cyan
     Test-ReservedPortsFree
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe یافت نشد (باید در Windows Server درون‌ساخت باشد)' }
     # رفع اشکال ۱.۰.۸: WinSW پیش‌تر هرگز دانلود نمی‌شد و rosepsy-api در گام ۱۱ کل اجرا را می‌خواباند؛

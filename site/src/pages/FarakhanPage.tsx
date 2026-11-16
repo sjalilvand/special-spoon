@@ -12,10 +12,11 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  fetchFarakhanCaptcha, fetchFarakhanCounties, fetchFarakhanMeta,
+  FarakhanServerError, fetchFarakhanCaptcha, fetchFarakhanCounties, fetchFarakhanMeta,
   fetchFarakhanProvinces, FarakhanValidationError, submitFarakhan,
 } from "../api";
 import type { FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta } from "../api";
+import JalaliDatePicker from "../components/JalaliDatePicker";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 
@@ -278,7 +279,8 @@ export default function FarakhanPage() {
     if (!form.last_name.trim()) return "نام خانوادگی را وارد کنید.";
     if (!/^\d{10}$/.test(form.national_code.trim())) return "کد ملی باید ۱۰ رقم باشد.";
     if (!form.gender) return "جنسیت را انتخاب کنید.";
-    if (!/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(form.birth_date.trim())) return "تاریخ تولد شمسی را به قالب ۱۳۷۰/۰۱/۰۱ وارد کنید.";
+    // فاز ۹۱ - تاریخ با تقویم شمسی انتخاب می‌شود؛ تایپ مستقیم نیست
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(form.birth_date.trim())) return "تاریخ تولد را از تقویم انتخاب کنید.";
     if (isMale && !form.military_status) return "وضعیت سربازی را برای متقاضی مرد انتخاب کنید.";
     if (!form.education_degree) return "مدرک تحصیلی را انتخاب کنید.";
     if (!form.education_field.trim()) return "رشته تحصیلی را وارد کنید.";
@@ -345,10 +347,21 @@ export default function FarakhanPage() {
       clearSavedSession();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
+      // فاز ۹۱ - مدیریت کامل خطا: اعتبارسنجی روی فیلدها، سرور/شبکه با پیام روشن فارسی؛
+      // دادهٔ فرم همیشه حفظ می‌شود و کپچا تازه می‌شود
       if (err instanceof FarakhanValidationError) {
         setFieldErrors(err.errors);
-        setErrorText("ثبت فرم ناموفق بود؛ موارد اعلام‌شده را اصلاح کنید.");
+        const names = Object.keys(err.errors);
+        setErrorText(
+          names.length > 0
+            ? `ثبت ناموفق بود؛ این موارد را اصلاح کنید: ${names.join("، ")} — جزئیات هر فیلد زیر همان فیلد نمایش داده شده است.`
+            : "ثبت فرم ناموفق بود؛ موارد اعلام‌شده را اصلاح کنید.",
+        );
+      } else if (err instanceof FarakhanServerError) {
+        setFieldErrors({});
+        setErrorText(err.message);
       } else {
+        setFieldErrors({});
         setErrorText(err instanceof Error ? err.message : "خطا در ثبت فرم فراخوان");
       }
       loadCaptcha();
@@ -455,6 +468,9 @@ export default function FarakhanPage() {
                 {Object.entries(fieldErrors).map(([label, message]) => (
                   <Typography key={label} variant="body2">• <b>{label}:</b> {message}</Typography>
                 ))}
+                <Typography variant="caption" color="text.secondary">
+                  اطلاعات واردشدهٔ شما حفظ شده است؛ فقط موارد بالا را اصلاح کنید و دوباره ذخیره کنید.
+                </Typography>
               </Stack>
             </Alert>
           )}
@@ -498,10 +514,15 @@ export default function FarakhanPage() {
                     </FormControl>
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField fullWidth required size="small" label="تاریخ تولد (شمسی)" placeholder="۱۳۷۰/۰۱/۰۱"
-                      value={form.birth_date} inputProps={{ dir: "ltr", maxLength: 10 }}
-                      error={!!err("تاریخ تولد")} helperText={err("تاریخ تولد") || "قالب: سال/ماه/روز — مثال ۱۳۷۰/۰۱/۰۱"}
-                      onChange={(e) => set("birth_date", e.target.value)} />
+                    {/* فاز ۹۱ - تاریخ تولد شمسی با تقویم؛ تایپ مستقیم ممنوع */}
+                    <JalaliDatePicker
+                      label="تاریخ تولد (شمسی)"
+                      value={form.birth_date}
+                      onChange={(v) => set("birth_date", v)}
+                      required
+                      error={!!err("تاریخ تولد")}
+                      helperText={err("تاریخ تولد") ?? "انتخاب از تقویم شمسی — تایپ مستقیم غیرفعال است"}
+                    />
                   </Grid>
                   {isMale && (
                     <Grid item xs={12} sm={6}>

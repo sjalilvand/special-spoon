@@ -285,6 +285,17 @@ export class FarakhanValidationError extends Error {
   }
 }
 
+/** فاز ۹۱ - خطای سرور/شبکه: پیام فارسی روشن + اینکه ثبت انجام نشده و داده محفوظ است */
+export class FarakhanServerError extends Error {
+  status: number;
+  kind: string;
+  constructor(message: string, status: number, kind = "server") {
+    super(message);
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
 export async function fetchFarakhanMeta(): Promise<FarakhanMeta> {
   const r = await fetch("/api/v1/farakhan/meta");
   if (!r.ok) throw new Error("خطا در دریافت اطلاعات فرم فراخوان");
@@ -326,17 +337,48 @@ export async function submitFarakhan(payload: Record<string, unknown>, files: Re
   for (const [key, file] of Object.entries(files)) {
     if (file) fd.append(key, file, file.name);
   }
-  const r = await fetch("/api/v1/farakhan/submissions", { method: "POST", body: fd });
+  let r: Response;
+  try {
+    r = await fetch("/api/v1/farakhan/submissions", { method: "POST", body: fd });
+  } catch {
+    // فاز ۹۱ - قطع شبکه/قطع بدنه در میانهٔ بارگذاری (پروکسی/فایروال) — پیام روشن فارسی
+    throw new FarakhanServerError(
+      "ارتباط با سرور در میانهٔ ارسال قطع شد؛ اطلاعات شما ذخیره نشده است. حجم فایل‌ها را کمتر کنید یا بعد از بررسی اینترنت دوباره «ذخیرهٔ فرم» را بزنید.",
+      0,
+      "network",
+    );
+  }
   if (!r.ok) {
+    // فاز ۹۱ - بدنهٔ خطا ممکن است ناقص برسد؛ بدون json سقوط نمی‌کنیم
     const d = await r.json().catch(() => null);
-    const detail = d && d.detail;
-    if (detail && typeof detail === "object" && detail.errors) {
+    const detail = d && typeof d === "object" ? (d as { detail?: unknown }).detail : null;
+    if (detail && typeof detail === "object" && (detail as { errors?: unknown }).errors) {
+      const dt = detail as { message?: string; errors?: Record<string, string> };
+      if (r.status >= 500) {
+        throw new FarakhanServerError(dt.message || "در ذخیره‌سازی فرم خطای سرور رخ داد؛ لطفاً دوباره تلاش کنید.", r.status, "server");
+      }
       throw new FarakhanValidationError(
-        detail.message || "اعتبارسنجی اطلاعات ناموفق بود.",
-        detail.errors as Record<string, string>,
+        dt.message || "اعتبارسنجی اطلاعات ناموفق بود.",
+        dt.errors as Record<string, string>,
       );
     }
-    throw new Error(typeof detail === "string" ? detail : "خطا در ثبت فرم فراخوان");
+    if (typeof detail === "string" && detail.trim()) {
+      throw r.status >= 500
+        ? new FarakhanServerError(detail, r.status)
+        : new FarakhanValidationError(detail, {});
+    }
+    if (r.status === 429) {
+      throw new FarakhanServerError("تعداد تلاش‌های ثبت زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.", 429, "rate");
+    }
+    if (r.status === 413) {
+      throw new FarakhanServerError("حجم مجموع فایل‌های ارسالی بیش از حد مجاز سرور است؛ یک یا چند فایل را کوچک‌تر کنید.", 413, "size");
+    }
+    throw new FarakhanServerError(
+      r.status >= 500
+        ? "خطای سرور در ذخیره‌سازی فرم؛ لطفاً چند لحظه بعد دوباره تلاش کنید. اگر تکرار شد با پشتیبانی تماس بگیرید."
+        : "ثبت فرم ناموفق بود؛ دوباره تلاش کنید.",
+      r.status,
+    );
   }
   return (await r.json()) as FarakhanSubmitResult;
 }

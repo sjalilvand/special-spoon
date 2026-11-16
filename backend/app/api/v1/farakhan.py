@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import secrets
 import time
 import uuid as uuid_mod
@@ -36,6 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFil
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
@@ -58,6 +60,9 @@ from app.services.farakhan_validation import (
 from app.services.image_sanitizer import strip_image_metadata
 
 router = APIRouter(prefix="/farakhan", tags=["farakhan"])
+
+# فاز ۹۱ — لاگر اختصاصی؛ هر خطای غیرمنتظرهٔ ثبت با ردیابی کامل در لاگ می‌افتد
+logger = logging.getLogger("farakhan")
 
 # ---------------------------------------------------------------- گزینه‌های فرم
 GENDER_OPTIONS = {"male": "مرد", "female": "زن"}
@@ -240,6 +245,50 @@ def _errors_422(errors: dict[str, str]) -> HTTPException:
     )
 
 
+# فاز ۹۱ — ترجمهٔ پیام‌های فنی pydantic به فارسی روان با ذکر محدودیت فیلد
+_PYDANTIC_TYPE_FA: dict[str, str] = {
+    "missing": "این فیلد الزامی است.",
+    "int_parsing": "باید عدد باشد.",
+    "int_type": "باید عدد باشد.",
+    "bool_parsing": "باید صحیح/نادرست باشد.",
+    "bool_type": "مقدار بله/خیر نامعتبر است.",
+    "string_type": "متن وارد کنید.",
+    "json_invalid": "قالب دادهٔ ارسالی خراب است.",
+}
+
+
+def _translate_validation_error(exc: ValidationError) -> dict[str, str]:
+    """خطاهای pydantic → نقشهٔ «برچسب فیلد → پیام فارسی»؛ پیام انگلیسی باقی نمی‌ماند."""
+    errors: dict[str, str] = {}
+    for err in exc.errors():
+        loc = ".".join(str(p) for p in err.get("loc", ["payload"]))
+        etype = str(err.get("type") or "")
+        msg = str(err.get("msg") or "مقدار نامعتبر است.")
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, "):]
+        elif msg.startswith("Assertion failed, "):
+            msg = msg[len("Assertion failed, "):]
+        # فاز ۹۱ — پیام‌های فنی انگلیسی pydantic جایگزین فارسی می‌شوند
+        if etype in _PYDANTIC_TYPE_FA:
+            msg = _PYDANTIC_TYPE_FA[etype]
+        elif etype == "string_too_long":
+            limit = (err.get("ctx") or {}).get("max_length") or (err.get("ctx") or {}).get("limit")
+            msg = f"حداکثر {limit} نویسه مجاز است." if limit else "متن بیش از حد مجاز است."
+        elif etype == "string_too_short":
+            limit = (err.get("ctx") or {}).get("min_length") or (err.get("ctx") or {}).get("limit")
+            msg = f"حداقل {limit} نویسه لازم است." if limit else "متن بیش از حد کوتاه است."
+        elif etype == "greater_than_equal":
+            minimum = (err.get("ctx") or {}).get("ge")
+            msg = f"کمترین مقدار مجاز {minimum} است."
+        elif etype == "less_than_equal":
+            maximum = (err.get("ctx") or {}).get("le")
+            msg = f"بیشترین مقدار مجاز {maximum} است."
+        label = FIELD_LABELS.get(loc, loc) or "فرم"
+        if label not in errors:  # اولین خطای هر فیلد نگه داشته می‌شود
+            errors[label] = msg
+    return errors or {"payload": "قالب JSON بخش payload نامعتبر است."}
+
+
 # ---------------------------------------------------------------- اسکیما
 class FarakhanCreate(BaseModel):
     """بار JSON فرم — نرمال‌سازی و اعتبارسنجی هم‌ارز فرم مرجع."""
@@ -310,6 +359,22 @@ class FarakhanCreate(BaseModel):
         if value is None:
             return None
         return normalize_digits(str(value)).strip()
+
+    # فاز ۹۱ — فیلدهای عددی: ارقام فارسی/فاصله هم پذیرفته می‌شود («۳»، " 2 ")
+    @field_validator("individual_rooms", "group_rooms", "child_rooms", "counselors_count", mode="before")
+    @classmethod
+    def _int_fa(cls, value):
+        if value is None or value == "":
+            return 0
+        if isinstance(value, bool):
+            raise ValueError("باید عدد باشد.")
+        if isinstance(value, int):
+            return value
+        normalized = normalize_digits(str(value)).strip()
+        try:
+            return int(float(normalized))
+        except (TypeError, ValueError):
+            raise ValueError("باید عدد باشد.")
 
     # ---------- قواعد هر فیلد ----------
     @field_validator("gender")
@@ -605,17 +670,8 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
     try:
         data = FarakhanCreate.model_validate_json(payload_part)
     except ValidationError as exc:
-        # پیام‌های pydantic فارسی‌اند؛ پیشوند فنی حذف و روی برچسب فیلد نقشه می‌شود
-        errors: dict[str, str] = {}
-        for err in exc.errors():
-            loc = ".".join(str(p) for p in err.get("loc", ["payload"]))
-            msg = str(err.get("msg") or "مقدار نامعتبر است.")
-            if msg.startswith("Value error, "):
-                msg = msg[len("Value error, "):]
-            elif msg.startswith("Assertion failed, "):
-                msg = msg[len("Assertion failed, "):]
-            errors[FIELD_LABELS.get(loc, loc) or "فرم"] = msg
-        raise _errors_422(errors or {"payload": "قالب JSON بخش payload نامعتبر است."})
+        # فاز ۹۱ — پیام‌ها همیشه فارسی و روی برچسب فیلد نقشه می‌شوند
+        raise _errors_422(_translate_validation_error(exc))
 
     # فایل‌ها: فقط کلیدهای مجاز فرم
     uploads: list[tuple[str, UploadFile]] = []
@@ -656,75 +712,102 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
         raise _errors_422({"شهرستان": "شهرستان انتخاب‌شده با استان همخوان نیست."})
 
     settings = get_settings()
-    submission = FarakhanSubmission(
-        tracking_code=f"FRK-{secrets.token_hex(6).upper()}",
-        first_name=data.first_name,
-        last_name=data.last_name,
-        national_code=data.national_code,
-        gender=data.gender,
-        birth_date_jalali=data.birth_date.replace("-", "/"),
-        military_status=data.military_status,
-        education_degree=data.education_degree,
-        education_field=(data.education_field or "").strip(),
-        license_status=data.license_status,
-        license_number=data.license_number,
-        license_description=data.license_description,
-        center_ownership=data.center_ownership,
-        province_name=data.province_name,
-        county_name=data.county_name,
-        phone=data.phone,
-        mobile_number=data.mobile_number,
-        postal_code=data.postal_code,
-        address=data.address,
-        individual_rooms=data.individual_rooms,
-        group_rooms=data.group_rooms,
-        child_rooms=data.child_rooms,
-        counselors_count=data.counselors_count,
-        has_waiting_space=data.has_waiting_space,
-        accepts_company_pattern=data.accepts_company_pattern,
-        has_accessibility=data.has_accessibility,
-        terms_accepted_at=datetime.now(timezone.utc),
-        submit_ip=ip,
-        status="new",
-    )
-    db.add(submission)
-    db.flush()
-
-    for field_key, upload in uploads:
-        raw, mime = _validate_upload(upload, field_key)
-        raw, metadata_stripped = strip_image_metadata(raw, mime)
-        scan = av_scan.scan_bytes(upload.filename or "file", mime, raw, settings.allowed_mime_list)
-        provider, storage_key, sha, st_fallback = objstore.store(raw, settings)
-        detail = scan.detail
-        if metadata_stripped:
-            detail = f"{detail} - فراداده تصویر حذف شد"
-        if st_fallback:
-            detail = f"{detail} - ذخیره‌سازی به محلی بازگشت (S3 فعال/در دسترس نبود)"
-        stored = StoredFile(
-            case_id=None,
-            uploaded_by=None,
-            context="farakhan",
-            original_name=(upload.filename or "file")[:255],
-            mime=mime,
-            size_bytes=len(raw),
-            sha256=sha,
-            storage_key=storage_key,
-            storage=provider,
-            sensitivity="confidential",
-            scan_status=scan.status,
+    # فاز ۹۱ — سپر خطای غیرمنتظره: هیچ خطای پایگاه‌داده/فایل دیگر «۵۰۰ بی‌پیام»
+    # نمی‌سازد؛ ردیابی کامل در لاگ می‌افتد و پاسخ JSON ساختاریافته با پیام فارسی
+    # برمی‌گردد تا فرم می‌تواند آن را نشان دهد و کاربر داده‌اش را از دست ندهد.
+    try:
+        submission = FarakhanSubmission(
+            tracking_code=f"FRK-{secrets.token_hex(6).upper()}",
+            first_name=data.first_name,
+            last_name=data.last_name,
+            national_code=data.national_code,
+            gender=data.gender,
+            birth_date_jalali=data.birth_date.replace("-", "/"),
+            military_status=data.military_status,
+            education_degree=data.education_degree,
+            education_field=(data.education_field or "").strip(),
+            license_status=data.license_status,
+            license_number=data.license_number,
+            license_description=data.license_description,
+            center_ownership=data.center_ownership,
+            province_name=data.province_name,
+            county_name=data.county_name,
+            phone=data.phone,
+            mobile_number=data.mobile_number,
+            postal_code=data.postal_code,
+            address=data.address,
+            individual_rooms=data.individual_rooms,
+            group_rooms=data.group_rooms,
+            child_rooms=data.child_rooms,
+            counselors_count=data.counselors_count,
+            has_waiting_space=data.has_waiting_space,
+            accepts_company_pattern=data.accepts_company_pattern,
+            has_accessibility=data.has_accessibility,
+            terms_accepted_at=datetime.now(timezone.utc),
+            submit_ip=ip,
+            status="new",
         )
-        db.add(stored)
+        db.add(submission)
         db.flush()
-        db.add(FileScan(file_id=stored.id, status=scan.status, detail=detail, scanner=scan.scanner))
-        db.add(FarakhanFile(
-            submission_id=submission.id,
-            file_id=stored.id,
-            field_key=field_key,
-            original_name=stored.original_name,
-            size_bytes=len(raw),
-        ))
 
-    db.commit()
+        for field_key, upload in uploads:
+            raw, mime = _validate_upload(upload, field_key)
+            raw, metadata_stripped = strip_image_metadata(raw, mime)
+            scan = av_scan.scan_bytes(upload.filename or "file", mime, raw, settings.allowed_mime_list)
+            provider, storage_key, sha, st_fallback = objstore.store(raw, settings)
+            detail = scan.detail
+            if metadata_stripped:
+                detail = f"{detail} - فراداده تصویر حذف شد"
+            if st_fallback:
+                detail = f"{detail} - ذخیره‌سازی به محلی بازگشت (S3 فعال/در دسترس نبود)"
+            stored = StoredFile(
+                case_id=None,
+                uploaded_by=None,
+                context="farakhan",
+                original_name=(upload.filename or "file")[:255],
+                mime=mime,
+                size_bytes=len(raw),
+                sha256=sha,
+                storage_key=storage_key,
+                storage=provider,
+                sensitivity="confidential",
+                scan_status=scan.status,
+            )
+            db.add(stored)
+            db.flush()
+            db.add(FileScan(file_id=stored.id, status=scan.status, detail=detail, scanner=scan.scanner))
+            db.add(FarakhanFile(
+                submission_id=submission.id,
+                file_id=stored.id,
+                field_key=field_key,
+                original_name=stored.original_name,
+                size_bytes=len(raw),
+            ))
+
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.exception("farakhan submit: تداخل داده در ذخیره (کد ملی/کد پیگیری)")
+        raise _errors_422({"داده": "ثبت با این اطلاعات از قبل وجود دارد یا با دادهٔ سامانه تداخل دارد؛ اطلاعات را بازبینی کنید."})
+    except OperationalError as exc:
+        db.rollback()
+        logger.exception("farakhan submit: خطای اتصال پایگاه‌داده")
+        raise HTTPException(status_code=503, detail={
+            "message": "در حال حاضر امکان ذخیره نیست (خدمت پایگاه‌داده در دسترس نیست). چند لحظه بعد دوباره تلاش کنید.",
+            "errors": {},
+            "kind": "database",
+        }) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("farakhan submit: خطای غیرمنتظره در ذخیرهٔ فرم")
+        raise HTTPException(status_code=500, detail={
+            "message": "در ذخیره‌سازی فرم خطای غیرمنتظرهٔ سرور رخ داد؛ اطلاعات شما ذخیره نشد. لطفاً دوباره تلاش کنید؛ اگر تکرار شد با پشتیبانی تماس بگیرید.",
+            "errors": {},
+            "kind": "server",
+        }) from exc
     return {
         "success": True,
         "tracking_code": submission.tracking_code,
