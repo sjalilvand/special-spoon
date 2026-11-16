@@ -295,12 +295,48 @@ export default function FarakhanPage() {
     return "";
   };
 
+  // فاز ۹۲ - پیش‌آزمون فایل‌ها در مرورگر: پیش از بارگذاری سنگین، فایل اجباری
+  // گم‌شده/حجم بیش از سقف/پسوند ممنوع را همان‌جا رد می‌کنیم تا کاربر ۳۵ مگابایت
+  // را نفرستد و بعد با ۴۲۲ برگردد.
+  const clientFileErrors = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (!meta) return out;
+    for (const f of meta.file_fields) {
+      const file = files[f.key];
+      if (!file) {
+        if (f.required) out[f.label] = "انتخاب این فایل الزامی است.";
+        continue;
+      }
+      if (file.size > meta.max_file_size_bytes) {
+        out[f.label] = `حجم فایل بیش از ${faNum(Math.ceil(meta.max_file_size_bytes / (1024 * 1024)))} مگابایت است.`;
+        continue;
+      }
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (!meta.allowed_extensions.includes(ext)) {
+        out[f.label] = "تنها فایل‌های PDF و تصویری (JPG، JPEG، PNG) پذیرفته می‌شود.";
+      }
+    }
+    return out;
+  };
+
+  // فاز ۹۲ - کلید خطای فایل سرور («files.national_id_card») به برچسب فارسی همان فیلد
+  const fileErrorLabel = (key: string): string => {
+    if (!key.startsWith("files.")) return key;
+    const fk = key.slice("files.".length);
+    return meta?.file_fields.find((f) => f.key === fk)?.label ?? fk;
+  };
+
   const onSubmit = async () => {
     setErrorText("");
     setFieldErrors({});
     const clientError = clientValidate();
-    if (clientError) {
-      setErrorText(clientError);
+    const fileErrors = clientFileErrors();
+    if (clientError || Object.keys(fileErrors).length > 0) {
+      setFieldErrors(fileErrors);
+      setErrorText(
+        clientError
+          || "فایل‌های ستاره‌دار الزامی را با حجم و قالب مجاز انتخاب کنید؛ جزئیات زیر هر فایل آمده است.",
+      );
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -352,14 +388,36 @@ export default function FarakhanPage() {
       if (err instanceof FarakhanValidationError) {
         setFieldErrors(err.errors);
         const names = Object.keys(err.errors);
+        const msgs = Object.values(err.errors).join(" ");
+        // فاز ۹۲ - نشست سرور منقضی/گم‌شده (مثلاً ری‌استارت سرویس یا سقف یک ساعت):
+        // به‌جای بن‌بست، نشست تازه از سرور گرفته می‌شود و کاربر فقط یک‌بار دیگر
+        // «ذخیرهٔ فرم» را می‌زند؛ داده‌های فرم حفظ می‌شوند.
+        if (msgs.includes("مهلت") || msgs.includes("نشست")) {
+          try {
+            const m = await fetchFarakhanMeta();
+            const dl = Date.now() + Math.max(60, m.session_ttl_seconds || 3600) * 1000;
+            setSessionId(m.session_id);
+            setDeadline(dl);
+            setExpired(false);
+            try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ sid: m.session_id, deadline: dl })); } catch { /* بی‌اهمیت */ }
+            setErrorText("نشست فرم تازه‌سازی شد؛ کپچای جدید را وارد کنید و دوباره «ذخیرهٔ فرم» را بزنید. اطلاعات شما حفظ شده است.");
+          } catch {
+            setErrorText("مهلت تکمیل فرم منقضی شده است؛ لطفاً صفحه را دوباره باز کنید.");
+          }
+          loadCaptcha();
+          setForm((prev) => ({ ...prev, captcha_answer: "" }));
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
         setErrorText(
           names.length > 0
-            ? `ثبت ناموفق بود؛ این موارد را اصلاح کنید: ${names.join("، ")} — جزئیات هر فیلد زیر همان فیلد نمایش داده شده است.`
+            ? `ثبت ناموفق بود؛ این موارد را اصلاح کنید: ${names.map(fileErrorLabel).join("، ")} — جزئیات هر فیلد زیر همان فیلد نمایش داده شده است.`
             : "ثبت فرم ناموفق بود؛ موارد اعلام‌شده را اصلاح کنید.",
         );
       } else if (err instanceof FarakhanServerError) {
         setFieldErrors({});
-        setErrorText(err.message);
+        // فاز ۹۲ - کد وضعیت HTTP در پیام می‌آید تا گزارش کاربر برای ریشه‌یابی کافی باشد
+        setErrorText(err.status > 0 ? `${err.message} (کد خطا: ${err.status})` : err.message);
       } else {
         setFieldErrors({});
         setErrorText(err instanceof Error ? err.message : "خطا در ثبت فرم فراخوان");
@@ -466,7 +524,8 @@ export default function FarakhanPage() {
             <Alert severity="warning" sx={{ mb: 3 }}>
               <Stack spacing={0.5}>
                 {Object.entries(fieldErrors).map(([label, message]) => (
-                  <Typography key={label} variant="body2">• <b>{label}:</b> {message}</Typography>
+                  // فاز ۹۲ - کلیدهای «files.*» سرور به برچسب فارسی فیلد فایل نقشه می‌شوند
+                  <Typography key={label} variant="body2">• <b>{fileErrorLabel(label)}:</b> {message}</Typography>
                 ))}
                 <Typography variant="caption" color="text.secondary">
                   اطلاعات واردشدهٔ شما حفظ شده است؛ فقط موارد بالا را اصلاح کنید و دوباره ذخیره کنید.

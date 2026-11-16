@@ -50,10 +50,10 @@ def _meta_and_captcha(client):
     m = client.get(META_URL).json()
     sid = m["session_id"]
     cap = client.get("/api/v1/farakhan/captcha").json()
-    # برای ثبت موفق، پاسخ واقعی کپچا از حافظهٔ ماژول خوانده می‌شود (فقط آزمون)
-    from app.api.v1.farakhan import _captcha_store
+    # برای ثبت موفق، پاسخ واقعی کپچا از فروشگاه مرجع ماژول خوانده می‌شود (فقط آزمون؛ فاز ۹۲)
+    from app.api.v1.farakhan import _peek_captcha_answer
 
-    answer = str(_captcha_store[cap["captcha_id"]]["answer"])
+    answer = str(_peek_captcha_answer(cap["captcha_id"]))
     return sid, cap, answer
 
 

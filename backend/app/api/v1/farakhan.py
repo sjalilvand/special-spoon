@@ -61,8 +61,19 @@ from app.services.image_sanitizer import strip_image_metadata
 
 router = APIRouter(prefix="/farakhan", tags=["farakhan"])
 
-# فاز ۹۱ — لاگر اختصاصی؛ هر خطای غیرمنتظرهٔ ثبت با ردیابی کامل در لاگ می‌افتد
+# فاز ۹۲ — لاگر اختصاصی با هندلر مستقل: «هر» تلاش ثبت (موفق/۴xx/۵xx) با مهر زمانی
+# در لاگ سرویس rosepsy-api می‌افتد. عارضهٔ فاز ۹۱: فقط خطاهای غیرمنتظرهٔ ذخیره لاگ
+# می‌شدند و هر ردِ اعتبارسنجی ۴۲۲ هیچ ردی در لاگ نمی‌گذاشت؛ جست‌وجوی «farakhan»
+# در لاگ بی‌نتیجه می‌ماند و ریشه‌یابی از راه دور ناممکن بود.
 logger = logging.getLogger("farakhan")
+if not any(getattr(_h, "_farakhan_own", False) for _h in logger.handlers):
+    _farakhan_handler = logging.StreamHandler()
+    _farakhan_handler.setFormatter(
+        logging.Formatter("%(asctime)s | farakhan | %(levelname)s | %(message)s")
+    )
+    _farakhan_handler._farakhan_own = True  # type: ignore[attr-defined]
+    logger.addHandler(_farakhan_handler)
+logger.setLevel(logging.INFO)
 
 # ---------------------------------------------------------------- گزینه‌های فرم
 GENDER_OPTIONS = {"male": "مرد", "female": "زن"}
@@ -115,16 +126,103 @@ FIELD_LABELS = {
     "payload": "دادهٔ فرم",
 }
 
-# ---------------------------------------------------------------- کپچای محاسبه‌ای
-_CAPTCHA_TTL = 600.0  # ۱۰ دقیقه
-_CAPTCHA_MAX_STORE = 2000
-_captcha_store: dict[str, dict] = {}
+# ---------------------------------------------------------------- فروشگاه KV نشست/کپچا (فاز ۹۲)
+# تا فاز ۹۱ نشست فرم و کپچا فقط در حافظهٔ فرایند بودند؛ هر ری‌استارت سرویس
+# (از جمله ری‌استارتِ خودکار هنگام استقرار) همهٔ نشست‌ها را می‌خشکاند و کاربری
+# که فرم را قبل از استقرار باز کرده بود، در ثبت با «مهلت منقضی» رد می‌شد —
+# بدون هیچ ردی در لاگ. اکنون اول Redis (پایدار در برابر ری‌استارت؛ TTL خودکار)
+# و در نبودِ آن حافظهٔ فرایند استفاده می‌شود (محیط توسعه/آزمون) — همان الگوی
+# fail-open سقف نرخ، بند ۶ سند ADR-05. پاپ (مصرف تک‌بار کپچا) با pipeline
+# اتمی GET+DELETE نوشته شده تا با Redis 5.0 سرور هم سازگار باشد (GETDEL از ۶.۲).
+_CAPTCHA_TTL = 600.0        # ۱۰ دقیقه
+_FORM_SESSION_TTL = 3600.0  # یک ساعت (فاز ۸۹)
+_KV_MEMORY_MAX = 5000       # سقف حافظهٔ پشتیبان (نبود Redis)
 
-# فاز ۸۹ - نشست یک‌ساعتهٔ فرم: از لحظهٔ ورود به صفحه، کاربر یک ساعت فرصت تکمیل
-# و ذخیره دارد؛ پس از آن سرور ثبت را رد می‌کند (به‌همراه شمارش معکوس سمت مرورگر).
-_FORM_SESSION_TTL = 3600.0  # یک ساعت
-_FORM_SESSION_MAX = 5000
-_form_sessions: dict[str, float] = {}
+_kv_memory: dict[str, tuple[float, str]] = {}
+
+
+def _purge_kv_memory() -> None:
+    """سقف حافظهٔ پشتیبان: حذف منقضی‌ها و سپس قدیمی‌ترین‌ها."""
+    if len(_kv_memory) <= _KV_MEMORY_MAX:
+        return
+    now = time.monotonic()
+    for key in [k for k, (exp, _v) in _kv_memory.items() if exp <= now]:
+        _kv_memory.pop(key, None)
+    while len(_kv_memory) > _KV_MEMORY_MAX:
+        _kv_memory.pop(next(iter(_kv_memory)), None)
+
+
+def _redis():
+    """کلاینت مشترک Redis (اگر در تنظیمات فعال باشد)؛ وگرنه None — fail-open."""
+    try:
+        from app.core.redis_client import get_redis
+
+        return get_redis()
+    except Exception:
+        return None
+
+
+def _kv_put(key: str, value: str, ttl: float) -> None:
+    client = _redis()
+    if client is not None:
+        try:
+            client.set(key, value, ex=max(1, int(ttl)))
+            return
+        except Exception:
+            logger.warning("kv put: Redis در دسترس نیست؛ به حافظهٔ فرایند بازگشت | key=%s", key[:28])
+    _purge_kv_memory()
+    _kv_memory[key] = (time.monotonic() + ttl, value)
+
+
+def _kv_get(key: str) -> str | None:
+    """خواندن؛ پاسخ None یعنی کلید وجود ندارد (پاسخ Redis مرجع است)."""
+    client = _redis()
+    if client is not None:
+        try:
+            raw = client.get(key)
+        except Exception:
+            logger.warning("kv get: Redis در دسترس نیست؛ به حافظهٔ فرایند بازگشت | key=%s", key[:28])
+        else:
+            if raw is None:
+                return None
+            return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    rec = _kv_memory.get(key)
+    if rec is None:
+        return None
+    exp, value = rec
+    if exp <= time.monotonic():
+        _kv_memory.pop(key, None)
+        return None
+    return value
+
+
+def _kv_pop(key: str) -> str | None:
+    """خواندن تک‌مصرف (پاپ اتمی) — برای کپچای ضد-replay."""
+    client = _redis()
+    if client is not None:
+        try:
+            pipe = client.pipeline(transaction=True)
+            pipe.get(key)
+            pipe.delete(key)
+            raw, _deleted = pipe.execute()
+            if raw is None:
+                return None
+            return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        except Exception:
+            logger.warning("kv pop: Redis در دسترس نیست؛ از حافظهٔ فرایند مصرف می‌شود | key=%s", key[:28])
+    rec = _kv_memory.pop(key, None)
+    if rec is None:
+        return None
+    exp, value = rec
+    if exp <= time.monotonic():
+        return None
+    return value
+
+
+def _peek_captcha_answer(captcha_id: str) -> str | None:
+    """فقط برای آزمون‌ها: خواندن پاسخ کپچا بدون مصرف آن (فروشگاه مرجع)."""
+    return _kv_get(f"farakhan:cap:{captcha_id}")
+
 
 # محدودسازی نرخ ثبت فرم از هر IP (کپچا + این سقف، هم‌پوشان یکدیگرند)
 _submit_ip_hits: dict[str, list[float]] = {}
@@ -152,12 +250,6 @@ def _submit_rate_ok(ip: str) -> bool:
     lst.append(now)
     _submit_ip_hits[ip] = lst
     return True
-
-
-def _purge_captcha() -> None:
-    now = time.monotonic()
-    for key in [k for k, v in _captcha_store.items() if v["exp"] <= now]:
-        _captcha_store.pop(key, None)
 
 
 def _render_math_svg(a: int, b: int) -> str:
@@ -196,49 +288,44 @@ def _render_math_svg(a: int, b: int) -> str:
 
 def _new_math_captcha() -> dict:
     """کپچای محاسبهٔ دو عدد؛ خروجی (captcha_id، svg). تک‌مصرف در verify."""
-    _purge_captcha()
-    if len(_captcha_store) >= _CAPTCHA_MAX_STORE:
-        _captcha_store.clear()
+    _purge_kv_memory()
     a = secrets.randbelow(80) + 11  # ۱۱..۹۰
     b = secrets.randbelow(80) + 11
     captcha_id = secrets.token_urlsafe(16)
-    _captcha_store[captcha_id] = {"answer": a + b, "exp": time.monotonic() + _CAPTCHA_TTL}
+    _kv_put(f"farakhan:cap:{captcha_id}", str(a + b), _CAPTCHA_TTL)
     return {"captcha_id": captcha_id, "svg": _render_math_svg(a, b), "ttl_seconds": int(_CAPTCHA_TTL)}
 
 
 def _verify_math_captcha(captcha_id: str | None, answer: str | None) -> bool:
     """تک‌مصرف: هر تلاش (درست یا غلط) کپچا را مصرف می‌کند — ضد replay."""
-    entry = _captcha_store.pop(captcha_id or "", None)
-    if not entry or entry["exp"] <= time.monotonic():
-        return False
     given = normalize_digits((answer or "").strip())
-    return given.isdigit() and int(given) == entry["answer"]
-
-
-def _purge_form_sessions() -> None:
-    now = time.monotonic()
-    for key in [k for k, exp in _form_sessions.items() if exp <= now]:
-        _form_sessions.pop(key, None)
+    stored = _kv_pop(f"farakhan:cap:{captcha_id or ''}")
+    if stored is None:
+        return False
+    return given.isdigit() and int(given) == int(stored)
 
 
 def _new_form_session() -> dict:
-    """نشست تازهٔ فرم — از لحظهٔ بازکردن صفحه تا یک ساعت معتبر است."""
-    _purge_form_sessions()
-    if len(_form_sessions) >= _FORM_SESSION_MAX:
-        for key, _exp in sorted(_form_sessions.items(), key=lambda kv: kv[1])[: _FORM_SESSION_MAX // 5]:
-            _form_sessions.pop(key, None)
+    """نشست تازهٔ فرم — از لحظهٔ بازکردن صفحه تا یک ساعت معتبر است.
+
+    فاز ۹۲: نشست در Redis با TTL یک‌ساعته ذخیره می‌شود؛ ری‌استارت سرویس
+    (مثلاً هنگام استقرار) دیگر آن را نمی‌خشکاند و کاربرِ در میانهٔ تکمیل فرم
+    با «مهلت منقضی» بی‌سبب رد نمی‌شود.
+    """
+    _purge_kv_memory()
     session_id = secrets.token_urlsafe(16)
-    _form_sessions[session_id] = time.monotonic() + _FORM_SESSION_TTL
+    _kv_put(f"farakhan:sess:{session_id}", "1", _FORM_SESSION_TTL)
     return {"session_id": session_id, "session_ttl_seconds": int(_FORM_SESSION_TTL)}
 
 
 def _form_session_ok(session_id: str | None) -> bool:
     """نشست باید موجود و منقضی‌نشده باشد (چند بار تلاش در همان ساعت مجاز است)."""
-    exp = _form_sessions.get(session_id or "")
-    return bool(exp and exp > time.monotonic())
+    return _kv_get(f"farakhan:sess:{session_id or ''}") is not None
 
 
 def _errors_422(errors: dict[str, str]) -> HTTPException:
+    # فاز ۹۲ — هر رد اعتبارسنجی اکنون در لاگ می‌افتد (پیش‌تر ۴۲۲ هیچ رد پایی نداشت)
+    logger.warning("submit: ۴۲۲ رد شد | %s", " | ".join(f"{k}={v}" for k, v in errors.items()))
     return HTTPException(
         status_code=422,
         detail={"message": "اعتبارسنجی اطلاعات ناموفق بود.", "errors": errors},
@@ -653,12 +740,20 @@ def _validate_upload(upload: UploadFile, field_key: str) -> tuple[bytes, str]:
 async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> dict:
     """ثبت نهایی فراخوان همکاری — فرم + فایل‌ها در یک تراکنش."""
     ip = _client_ip(request)
+    _t0 = time.monotonic()
+    # فاز ۹۲ — شروع هر تلاش ثبت در لاگ می‌آید؛ حتی اگر درخواست در اعتبارسنجی رد شود
+    logger.info(
+        "submit: درخواست رسید | ip=%s | حجم بدنه=%s بایت",
+        ip, request.headers.get("content-length") or "?",
+    )
     if not _submit_rate_ok(ip):
+        logger.warning("submit: ۴۲۹ سقف نرخ | ip=%s", ip)
         raise HTTPException(status_code=429, detail="تعداد ثبت‌نام‌ها بیش از حد مجاز است؛ کمی بعد تلاش کنید.")
 
     try:
         form = await request.form()
     except Exception:
+        logger.warning("submit: ۴۰۰ بدنهٔ multipart نامعتبر | ip=%s | حجم=%s", ip, request.headers.get("content-length") or "?")
         raise HTTPException(status_code=400, detail="قالب درخواست multipart نامعتبر است.")
 
     payload_part = form.get("payload")
@@ -692,6 +787,13 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
         if required not in seen_fields:
             label = FILE_FIELD_KEYS[required]
             raise _errors_422({f"files.{required}": f"آپلود «{label}» الزامی است."})
+
+    # فاز ۹۲ — خلاصهٔ درخواست در لاگ: فیلدهای فایل اعلام‌شده و حجم payload
+    logger.info(
+        "submit: محتوا | فایل‌ها=%s | حجم payload=%d بایت",
+        ",".join(sorted(seen_fields)) or "هیچ",
+        len(payload_part),
+    )
 
     # استان/شهرستان باید واقعاً در دادهٔ پایه باشد (الگوی فرم مرجع با FK)
     province_row = db.scalar(
@@ -808,6 +910,14 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
             "errors": {},
             "kind": "server",
         }) from exc
+    # فاز ۹۲ — ثبت موفق هم در لاگ می‌آید؛ تا همیشه میدان دید کامل باشد
+    logger.info(
+        "submit: ثبت موفق | tracking=%s | ip=%s | فایل‌ها=%d | مدت=%dms",
+        submission.tracking_code,
+        ip,
+        len(uploads),
+        int((time.monotonic() - _t0) * 1000),
+    )
     return {
         "success": True,
         "tracking_code": submission.tracking_code,
