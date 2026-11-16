@@ -24,11 +24,17 @@ from app.services.case_access import counselor_can_access
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
-# ماتریس دسترسی بند ۳.۲ سند - مدیر سامانه عمداً در فهرست نیست
-CASE_VIEW_ROLES = ("ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR")
-CASE_MANAGE_ROLES = ("ORG_MANAGER", "RECEPTION")
-ASSIGN_ROLES = ("ORG_MANAGER", "TECHNICAL_SUPERVISOR")
-REOPEN_ROLES = ("ORG_MANAGER",)
+# فاز ۸۹ - ماتریس دسترسی بند ۳.۲ سند، بازنگری‌شده:
+# - SYSTEM_ADMIN اکنون دیده/می‌سازد (قبلاً عمداً حذف شده بود؛ ولی در عمل مد نظر
+#   صاحب سامانه برای تشکیل پرونده لازم بود و خالی‌بودن بی‌خطای صفحه می‌ساخت)
+# - COUNSELOR می‌تواند پرونده بسازد (با پیش‌گزینش خودش به‌عنوان مشاور اصلی)
+CASE_VIEW_ROLES = ("ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "COUNSELOR", "SYSTEM_ADMIN")
+CASE_MANAGE_ROLES = ("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN")
+CASE_CREATE_ROLES = ("ORG_MANAGER", "RECEPTION", "COUNSELOR", "SYSTEM_ADMIN")
+ASSIGN_ROLES = ("ORG_MANAGER", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN")
+# گزینه‌های مشاور: به‌علاوهٔ تخصیص‌دهندگان، پذیرش و خود مشاوران (پیش‌گزینش نام خود)
+COUNSELOR_OPTION_ROLES = (*ASSIGN_ROLES, "RECEPTION", "COUNSELOR")
+REOPEN_ROLES = ("ORG_MANAGER", "SYSTEM_ADMIN")
 
 
 def generate_case_number(db: Session) -> str:
@@ -112,7 +118,7 @@ def _detail_out(db: Session, c: Case) -> dict:
 def _require_case_access(db: Session, actor, case: Case) -> None:
     """مشاور فقط پرونده تخصیص‌یافته جاری را می‌بیند؛ غیرمجاز = 404 (بند ۳.۲ و ۷.۲)"""
     roles = {r.code for r in actor.roles}
-    if roles & {"ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"}:
+    if roles & {"ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN"}:
         return
     if "COUNSELOR" in roles:
         c = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
@@ -126,10 +132,20 @@ def _require_case_access(db: Session, actor, case: Case) -> None:
 @router.get("/applicant-options")
 def applicant_options(
     search: str = Query(default="", max_length=100),
+    org_id: str = Query(default="", max_length=64),
     db: Session = Depends(get_db),
-    _actor=Depends(require_roles(*CASE_MANAGE_ROLES)),
+    _actor=Depends(require_roles(*CASE_CREATE_ROLES)),
 ) -> dict:
+    """فاز ۸۹ - جست‌وجوی متقاضی برای تشکیل پرونده با حجم بالا (حدود ۲ میلیون ردیف):
+    همیشه سمت سرور جست‌وجو و سقف ۵۰ نتیجه؛ فیلتر سازمان برای کاهش دامنهٔ پویش.
+    اگر org_id داده شود فقط متقاضیان همان سازمان برگردانده می‌شود."""
     q = select(Applicant).where(Applicant.status == "active")
+    if org_id.strip():
+        try:
+            org_uuid = uuid.UUID(org_id.strip())
+        except ValueError:
+            raise HTTPException(status_code=422, detail="شناسهٔ سازمان نامعتبر است")
+        q = q.where(Applicant.organization_id == org_uuid)
     if search.strip():
         like = f"%{search.strip()}%"
         q = q.where(or_(
@@ -147,12 +163,20 @@ def applicant_options(
 @router.get("/counselor-options")
 def counselor_options(
     db: Session = Depends(get_db),
-    _actor=Depends(require_roles(*ASSIGN_ROLES)),
+    actor=Depends(require_roles(*COUNSELOR_OPTION_ROLES)),
 ) -> dict:
     items = db.scalars(
         select(Counselor).where(Counselor.status == "active").order_by(Counselor.last_name)
     ).all()
-    return {"items": [{"id": str(c.id), "label": f"{c.first_name} {c.last_name} ({c.counselor_code})"} for c in items]}
+    # فاز ۸۹ - اگر کاربرِ واردشده خودش مشاور است، برای پیش‌گزینش نامش برگردانده می‌شود
+    self_row = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
+    return {
+        "items": [{"id": str(c.id), "label": f"{c.first_name} {c.last_name} ({c.counselor_code})"} for c in items],
+        "self_counselor": (
+            {"id": str(self_row.id), "label": f"{self_row.first_name} {self_row.last_name} ({self_row.counselor_code})"}
+            if self_row else None
+        ),
+    }
 
 
 # ---------- CRUD پرونده ----------
@@ -195,7 +219,7 @@ def list_cases(
 def create_case(
     payload: CaseCreate,
     db: Session = Depends(get_db),
-    actor=Depends(require_roles(*CASE_MANAGE_ROLES)),
+    actor=Depends(require_roles(*CASE_CREATE_ROLES)),
 ) -> dict:
     applicant = db.get(Applicant, payload.applicant_id)
     if applicant is None or applicant.status != "active":

@@ -82,11 +82,15 @@ export async function fetchCase(id: string): Promise<CaseDetail> {
   return (await apiClient.get(`/cases/${id}`)).data;
 }
 
-export async function fetchApplicantOptions(search?: string): Promise<{ items: OptionRow[] }> {
-  return (await apiClient.get("/cases/applicant-options", { params: { search } })).data;
+export async function fetchApplicantOptions(
+  params?: { search?: string; org_id?: string },
+): Promise<{ items: OptionRow[] }> {
+  // فاز ۸۹ - جست‌وجوی سمت سرور (حجم متقاضیان ~۲ میلیون) + فیلتر سازمان
+  return (await apiClient.get("/cases/applicant-options", { params: params ?? {} })).data;
 }
 
-export async function fetchCounselorOptions(): Promise<{ items: OptionRow[] }> {
+export async function fetchCounselorOptions(): Promise<{ items: OptionRow[]; self_counselor: OptionRow | null }> {
+  // فاز ۸۹ - self_counselor: اگر کاربرِ واردشده خودش مشاور باشد، برای پیش‌گزینش نامش
   return (await apiClient.get("/cases/counselor-options")).data;
 }
 

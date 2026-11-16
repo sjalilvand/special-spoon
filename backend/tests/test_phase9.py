@@ -17,9 +17,11 @@ def test_unauthenticated_401(client):
     assert client.get(f"{API}/cases").status_code == 401
 
 
-def test_system_admin_cannot_list_cases(client, env):
+def test_system_admin_can_list_cases(client, env):
+    # فاز ۸۹ - مدیر سامانه اکنون مجاز به دیدن/تشکیل پرونده است (درخواست صاحب سامانه؛
+    # رفتار قدیمی «عمداً حذف‌شده» باعث می‌شد صفحه پرونده برای او خالی و بی‌خطا باشد)
     t = login(client, "t_admin")
-    assert client.get(f"{API}/cases", headers=bearer(t)).status_code == 403
+    assert client.get(f"{API}/cases", headers=bearer(t)).status_code == 200
 
 
 def test_counselor_b_cannot_see_case_of_a(client, env):

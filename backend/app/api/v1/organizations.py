@@ -36,7 +36,8 @@ from app.services.accounting import entry_for_org_statement
 router = APIRouter(tags=["organizations"])
 
 MANAGE_ROLES = ("SYSTEM_ADMIN", "ORG_MANAGER")
-VIEW_ROLES = (*MANAGE_ROLES, "TECHNICAL_SUPERVISOR", "RECEPTION")
+# فاز ۸۹ - COUNSELOR هم برای فیلتر سازمان در تشکیل پرونده فهرست را می‌بیند
+VIEW_ROLES = (*MANAGE_ROLES, "TECHNICAL_SUPERVISOR", "RECEPTION", "COUNSELOR")
 
 
 def _roles(actor) -> set[str]:

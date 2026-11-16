@@ -1,18 +1,23 @@
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TablePagination, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { errDetail } from "../api/client";
 import {
   CASE_STATUS_META, CONSENT_META, PRIORITY_LABELS,
   createCase, fetchApplicantOptions, fetchCases, fetchCounselorOptions,
 } from "../api/cases";
+import type { OptionRow } from "../api/cases";
+import { fetchOrganizations } from "../api/organizations";
 import { fetchServiceLocations } from "../api/people";
 import { formatJalali } from "../utils/jalali";
+
+/** فاز ۸۹ - گزینهٔ «همهٔ سازمان‌ها»: جست‌وجوی سراسری متقاضیان (حداقل ۲ حرف) */
+const ALL_ORGS = "__all__";
 
 export default function CasesPage() {
   const navigate = useNavigate();
@@ -22,7 +27,7 @@ export default function CasesPage() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: listError } = useQuery({
     queryKey: ["cases", page, search, status],
     queryFn: () => fetchCases({ page: page + 1, search: search || undefined, status: status || undefined }),
   });
@@ -46,6 +51,12 @@ export default function CasesPage() {
       </Box>
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+      {/* فاز ۸۹ - خطای بارگذاری فهرست دیگر بی‌صدا نیست */}
+      {listError && (
+        <Alert severity="error">
+          دریافت فهرست پرونده‌ها ناموفق بود: {errDetail(listError)}
+        </Alert>
+      )}
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -97,13 +108,75 @@ function CreateCaseDialog({ open, onClose, onError }: { open: boolean; onClose: 
   const [form, setForm] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const { data: applicants } = useQuery({ queryKey: ["applicant-options"], queryFn: () => fetchApplicantOptions(), enabled: open });
-  const { data: counselors } = useQuery({ queryKey: ["counselor-options"], queryFn: fetchCounselorOptions, enabled: open });
-  const { data: locations } = useQuery({ queryKey: ["locations"], queryFn: fetchServiceLocations, enabled: open });
+
+  // فاز ۸۹ - جریان سازمان → متقاضی: ابتدا سازمان/مرکز، سپس جست‌وجوی متقاضیان همان سازمان
+  const [orgId, setOrgId] = useState("");
+  const [applicantSearch, setApplicantSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [applicantValue, setApplicantValue] = useState<OptionRow | null>(null);
+  const [counselorValue, setCounselorValue] = useState<OptionRow | null>(null);
+  const prefilledRef = useRef(false);
+
+  const { data: organizations, error: orgError } = useQuery({
+    queryKey: ["organization-list"],
+    queryFn: fetchOrganizations,
+    enabled: open,
+  });
+  const searchReady = orgId === ALL_ORGS ? debouncedSearch.trim().length >= 2 : orgId !== "";
+  const { data: applicants, isFetching: applicantsLoading, error: applicantsError } = useQuery({
+    queryKey: ["applicant-options", orgId, debouncedSearch],
+    queryFn: () => fetchApplicantOptions({
+      search: debouncedSearch.trim() || undefined,
+      org_id: orgId === ALL_ORGS ? undefined : orgId,
+    }),
+    enabled: open && searchReady,
+    staleTime: 30_000,
+  });
+  const { data: counselors, error: counselorsError } = useQuery({
+    queryKey: ["counselor-options"], queryFn: fetchCounselorOptions, enabled: open,
+  });
+  const { data: locations, error: locationsError } = useQuery({
+    queryKey: ["locations"], queryFn: fetchServiceLocations, enabled: open,
+  });
 
   useEffect(() => {
     if (open) { setForm({}); setFormError(null); }
   }, [open]);
+
+  // فاز ۸۹ - اگر کاربرِ واردشده خودش مشاور است، نام خودش به‌عنوان مشاور اصلی پیش‌گزینش می‌شود
+  useEffect(() => {
+    if (!open) { prefilledRef.current = false; return; }
+    if (prefilledRef.current) return;
+    const self = counselors?.self_counselor ?? null;
+    if (self) {
+      prefilledRef.current = true;
+      setForm((p) => ({ ...p, counselor_id: self.id }));
+      setCounselorValue(self);
+    }
+  }, [open, counselors]);
+
+  // جست‌وجوی متقاضی با تأخیر ۴۰۰ میلی‌ثانیه (ضد اسپم سرور)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(applicantSearch), 400);
+    return () => clearTimeout(t);
+  }, [applicantSearch]);
+
+  const orgOptions = useMemo(() => [
+    { id: ALL_ORGS, name: "همهٔ سازمان‌ها (جست‌وجوی سراسری)" },
+    ...(organizations ?? []).map((o) => ({ id: o.id, name: o.is_active === false ? `${o.name} (غیرفعال)` : o.name })),
+  ], [organizations]);
+
+  // فاز ۸۹ - هیچ خطای بارگذاری گزینه‌ها بی‌صدا نمی‌ماند
+  const optionErrorText = useMemo(() => {
+    const failed: string[] = [];
+    if (orgError) failed.push("فهرست سازمان‌ها");
+    if (counselorsError) failed.push("فهرست مشاوران");
+    if (locationsError) failed.push("محل‌های ارائه خدمت");
+    if (applicantsError) failed.push("جست‌وجوی متقاضیان");
+    if (failed.length === 0) return "";
+    const first = orgError || counselorsError || locationsError || applicantsError;
+    return `بارگذاری ${failed.join(" و ")} ناموفق بود — ${errDetail(first)}`;
+  }, [orgError, counselorsError, locationsError, applicantsError]);
 
   const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -111,7 +184,7 @@ function CreateCaseDialog({ open, onClose, onError }: { open: boolean; onClose: 
     e.preventDefault();
     setFormError(null);
     if (!form.applicant_id) {
-      setFormError("انتخاب متقاضی الزامی است");
+      setFormError("ابتدا سازمان متقاضی را مشخص و سپس متقاضی را جست‌وجو و انتخاب کنید.");
       return;
     }
     setBusy(true);
@@ -134,6 +207,12 @@ function CreateCaseDialog({ open, onClose, onError }: { open: boolean; onClose: 
     }
   };
 
+  const applicantNoOptions = orgId === ""
+    ? "ابتدا سازمان متقاضی را انتخاب کنید"
+    : orgId === ALL_ORGS && debouncedSearch.trim().length < 2
+      ? "برای جست‌وجوی همهٔ سازمان‌ها حداقل ۲ حرف بنویسید"
+      : "موردی یافت نشد";
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={submit}>
@@ -143,14 +222,47 @@ function CreateCaseDialog({ open, onClose, onError }: { open: boolean; onClose: 
             تاریخ پذیرش به‌صورت خودکار امروز ثبت می‌شود و شماره پرونده در سرور تولید می‌گردد.
           </Typography>
           {formError && <Alert severity="error" sx={{ mt: 2 }}>{formError}</Alert>}
+          {optionErrorText && <Alert severity="error" sx={{ mt: 2 }}>{optionErrorText}</Alert>}
           <Stack spacing={2} mt={2}>
-            <FormControl size="small" required>
-              <InputLabel>متقاضی *</InputLabel>
-              <Select value={form.applicant_id ?? ""} onChange={set("applicant_id")} label="متقاضی *">
-                <MenuItem value="">— انتخاب کنید —</MenuItem>
-                {applicants?.items.map((o) => <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>)}
-              </Select>
-            </FormControl>
+            {/* گام ۱ — سازمان/مرکز متقاضی */}
+            <Autocomplete
+              size="small"
+              options={orgOptions}
+              value={orgOptions.find((o) => o.id === orgId) ?? null}
+              getOptionLabel={(o) => o.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onChange={(_, v) => {
+                setOrgId(v?.id ?? "");
+                setApplicantValue(null);
+                setForm((p) => ({ ...p, applicant_id: "" }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} size="small" required label="سازمان / مرکز متقاضی"
+                  placeholder="جست‌وجوی سازمان…" />
+              )}
+            />
+            {/* گام ۲ — جست‌وجوی متقاضی (سمت سرور، مخصوص حجم بالا ~۲ میلیون) */}
+            <Autocomplete
+              size="small"
+              disablePortal
+              options={applicants?.items ?? []}
+              value={applicantValue}
+              loading={applicantsLoading}
+              filterOptions={(x) => x}
+              getOptionLabel={(o) => o.label}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onInputChange={(_, v) => setApplicantSearch(v)}
+              onChange={(_, v) => {
+                setApplicantValue(v);
+                setForm((p) => ({ ...p, applicant_id: v?.id ?? "" }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} size="small" required
+                  label={orgId === ALL_ORGS ? "جست‌وجوی متقاضی در همهٔ سازمان‌ها" : "جست‌وجوی متقاضی (نام یا کد ملی)"}
+                  placeholder="مثلاً: رضایی یا ۰۰۱۲…" />
+              )}
+              noOptionsText={applicantNoOptions}
+            />
             <Stack direction="row" spacing={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>اولویت</InputLabel>
@@ -169,13 +281,23 @@ function CreateCaseDialog({ open, onClose, onError }: { open: boolean; onClose: 
                 {locations?.map((l) => <MenuItem key={l.id} value={l.id}>{l.title} ({l.code})</MenuItem>)}
               </Select>
             </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>مشاور اصلی (اختیاری)</InputLabel>
-              <Select value={form.counselor_id ?? ""} onChange={set("counselor_id")} label="مشاور اصلی (اختیاری)">
-                <MenuItem value="">— بعداً تخصیص داده می‌شود —</MenuItem>
-                {counselors?.items.map((o) => <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>)}
-              </Select>
-            </FormControl>
+            {/* فاز ۸۹ - جست‌وجوی مشاور؛ اگر کاربرِ واردشده خودش مشاور باشد نامش پیش‌گزینش شده است */}
+            <Autocomplete
+              size="small"
+              options={counselors?.items ?? []}
+              value={counselorValue}
+              getOptionLabel={(o) => o.label}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              onChange={(_, v) => {
+                setCounselorValue(v);
+                setForm((p) => ({ ...p, counselor_id: v?.id ?? "" }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} size="small" label="مشاور اصلی (اختیاری)"
+                  placeholder="جست‌وجوی مشاور…" />
+              )}
+              noOptionsText="مشاوری یافت نشد"
+            />
             {form.counselor_id && (
               <TextField size="small" label="علت تخصیص (اختیاری در تخصیص اولیه)"
                 value={form.assignment_reason ?? ""} onChange={set("assignment_reason")} />

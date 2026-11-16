@@ -106,6 +106,7 @@ FIELD_LABELS = {
     "individual_rooms": "اتاق انفرادی", "group_rooms": "اتاق گروهی",
     "child_rooms": "اتاق کودک", "counselors_count": "تعداد مشاوران",
     "terms_accepted": "پذیرش قوانین", "captcha_id": "کپچا", "captcha_answer": "کپچا",
+    "session_id": "نشست فرم", "session_ttl_seconds": "مهلت فرم",
     "payload": "دادهٔ فرم",
 }
 
@@ -113,6 +114,12 @@ FIELD_LABELS = {
 _CAPTCHA_TTL = 600.0  # ۱۰ دقیقه
 _CAPTCHA_MAX_STORE = 2000
 _captcha_store: dict[str, dict] = {}
+
+# فاز ۸۹ - نشست یک‌ساعتهٔ فرم: از لحظهٔ ورود به صفحه، کاربر یک ساعت فرصت تکمیل
+# و ذخیره دارد؛ پس از آن سرور ثبت را رد می‌کند (به‌همراه شمارش معکوس سمت مرورگر).
+_FORM_SESSION_TTL = 3600.0  # یک ساعت
+_FORM_SESSION_MAX = 5000
+_form_sessions: dict[str, float] = {}
 
 # محدودسازی نرخ ثبت فرم از هر IP (کپچا + این سقف، هم‌پوشان یکدیگرند)
 _submit_ip_hits: dict[str, list[float]] = {}
@@ -203,6 +210,29 @@ def _verify_math_captcha(captcha_id: str | None, answer: str | None) -> bool:
     return given.isdigit() and int(given) == entry["answer"]
 
 
+def _purge_form_sessions() -> None:
+    now = time.monotonic()
+    for key in [k for k, exp in _form_sessions.items() if exp <= now]:
+        _form_sessions.pop(key, None)
+
+
+def _new_form_session() -> dict:
+    """نشست تازهٔ فرم — از لحظهٔ بازکردن صفحه تا یک ساعت معتبر است."""
+    _purge_form_sessions()
+    if len(_form_sessions) >= _FORM_SESSION_MAX:
+        for key, _exp in sorted(_form_sessions.items(), key=lambda kv: kv[1])[: _FORM_SESSION_MAX // 5]:
+            _form_sessions.pop(key, None)
+    session_id = secrets.token_urlsafe(16)
+    _form_sessions[session_id] = time.monotonic() + _FORM_SESSION_TTL
+    return {"session_id": session_id, "session_ttl_seconds": int(_FORM_SESSION_TTL)}
+
+
+def _form_session_ok(session_id: str | None) -> bool:
+    """نشست باید موجود و منقضی‌نشده باشد (چند بار تلاش در همان ساعت مجاز است)."""
+    exp = _form_sessions.get(session_id or "")
+    return bool(exp and exp > time.monotonic())
+
+
 def _errors_422(errors: dict[str, str]) -> HTTPException:
     return HTTPException(
         status_code=422,
@@ -263,6 +293,9 @@ class FarakhanCreate(BaseModel):
     # کپچا
     captcha_id: str = Field(min_length=1, max_length=64)
     captcha_answer: str = Field(min_length=1, max_length=12)
+
+    # فاز ۸۹ - نشست یک‌ساعتهٔ فرم (از GET /farakhan/meta صادر می‌شود)
+    session_id: str = Field(min_length=1, max_length=64)
 
     # ---------- نرمال‌سازها ----------
     @field_validator("first_name", "last_name", "education_field", "license_number",
@@ -415,6 +448,9 @@ class FarakhanCreate(BaseModel):
     # ---------- قواعد بین‌فیلدی ----------
     @model_validator(mode="after")
     def _conditional(self) -> "FarakhanCreate":
+        # فاز ۸۹ - نشست یک‌ساعته: پیش از مصرف کپچا چک می‌شود تا کپچا بی‌سبب مصرف نشود
+        if not _form_session_ok(self.session_id):
+            raise ValueError("مهلت یک‌ساعتهٔ تکمیل فرم منقضی شده است؛ لطفاً صفحه را دوباره باز کنید.")
         # سربازی فقط برای آقایان معنا دارد؛ برای خانم‌ها بی‌صدا حذف می‌شود
         # (رفتار مستند فرم مرجع — open decision #1)
         if self.gender == "female":
@@ -490,6 +526,8 @@ def get_farakhan_meta() -> dict:
         "max_file_size_bytes": MAX_FILE_SIZE_BYTES,
         "max_files": MAX_FILES,
         "rules": {"require_military_status_for_male": True, "phone_required": True},
+        # فاز ۸۹ - نشست یک‌ساعتهٔ فرم: شناسه + طول مهلت برای شمارش معکوس مرورگر
+        **_new_form_session(),
     }
 
 

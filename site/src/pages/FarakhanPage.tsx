@@ -76,6 +76,46 @@ function faNum(n: number): string {
   return n.toLocaleString("fa-IR");
 }
 
+const SESSION_KEY = "farakhan_session_v1";
+
+/** نشست ذخیره‌شدهٔ فرم در این تب — تا بازشدن تازهٔ لینک، مهلت از اولین ورود حساب می‌شود */
+function readSavedSession(): { sid: string; deadline: number } | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { sid?: unknown; deadline?: unknown };
+    if (typeof parsed.sid !== "string" || typeof parsed.deadline !== "number") return null;
+    if (parsed.deadline <= Date.now()) return null;
+    return { sid: parsed.sid, deadline: parsed.deadline };
+  } catch {
+    return null;
+  }
+}
+
+function clearSavedSession(): void {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* private mode — بی‌اهمیت */ }
+}
+
+/** ساعت شمارش معکوس با ارقام فارسی: ۰۱:۲۳:۴۵ */
+function faClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const two = (x: number) => String(x).padStart(2, "0");
+  const text = `${two(Math.floor(s / 3600))}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}`;
+  return text.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+}
+
+/** آیکون ساعت‌شیشه‌ای — SVG داخلی */
+function TimerIcon() {
+  return (
+    <Box component="svg" viewBox="0 0 24 24" sx={{ width: 22, height: 22, display: "block", mt: 0.25 }} aria-hidden>
+      <path
+        d="M6 2v6h.01L6 8.01 10 12l-4 4 .01.01H6V22h12v-5.99h-.01L18 16l-4-4 4-3.99-.01-.01H18V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5l-4-4V4h8v3.5l-4 4z"
+        fill="currentColor"
+      />
+    </Box>
+  );
+}
+
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <Card elevation={0} sx={{ border: "1px solid #f3dce2", borderRadius: 4, overflow: "hidden" }}>
@@ -153,6 +193,11 @@ export default function FarakhanPage() {
   const [errorText, setErrorText] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [trackingCode, setTrackingCode] = useState("");
+  // فاز ۸۹ - نشست یک‌ساعتهٔ فرم + شمارش معکوس ثانیه‌ای
+  const [sessionId, setSessionId] = useState("");
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [expired, setExpired] = useState(false);
 
   const loadCaptcha = useCallback(() => {
     setCaptcha(null);
@@ -162,12 +207,43 @@ export default function FarakhanPage() {
   }, []);
 
   useEffect(() => {
-    fetchFarakhanMeta().then(setMeta).catch(() => setErrorText("دریافت اطلاعات فرم ناموفق بود."));
+    // فاز ۸۹ - اگر این تب قبلاً لینک را باز کرده، همان مهلت ادامه می‌یابد؛
+    // در غیر این صورت نشست تازه از meta صادر و در sessionStorage ثبت می‌شود.
+    const saved = readSavedSession();
+    if (saved) {
+      setSessionId(saved.sid);
+      setDeadline(saved.deadline);
+    }
+    fetchFarakhanMeta().then((m) => {
+      setMeta(m);
+      if (!saved && m.session_id) {
+        const dl = Date.now() + Math.max(60, m.session_ttl_seconds || 3600) * 1000;
+        setSessionId(m.session_id);
+        setDeadline(dl);
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ sid: m.session_id, deadline: dl })); } catch { /* بی‌اهمیت */ }
+      }
+    }).catch(() => setErrorText("دریافت اطلاعات فرم ناموفق بود."));
     fetchFarakhanProvinces()
       .then((items) => setProvinces(items))
       .catch(() => undefined);
     loadCaptcha();
   }, [loadCaptcha]);
+
+  // فاز ۸۹ - شمارش معکوس ثانیه‌ای تا انقضای مهلت
+  useEffect(() => {
+    if (deadline == null) return undefined;
+    const tick = () => {
+      const rem = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      setRemaining(rem);
+      if (rem <= 0) {
+        setExpired(true);
+        clearSavedSession();
+      }
+    };
+    tick();
+    const t = window.setInterval(tick, 1000);
+    return () => window.clearInterval(t);
+  }, [deadline]);
 
   // شهرستان‌ها به‌ازای استان انتخاب‌شده
   useEffect(() => {
@@ -197,6 +273,7 @@ export default function FarakhanPage() {
   );
 
   const clientValidate = (): string => {
+    if (expired) return "مهلت یک‌ساعتهٔ تکمیل فرم منقضی شده است؛ لطفاً فرم را از ابتدا شروع کنید.";
     if (!form.first_name.trim()) return "نام را وارد کنید.";
     if (!form.last_name.trim()) return "نام خانوادگی را وارد کنید.";
     if (!/^\d{10}$/.test(form.national_code.trim())) return "کد ملی باید ۱۰ رقم باشد.";
@@ -255,6 +332,7 @@ export default function FarakhanPage() {
       terms_accepted: form.terms_accepted,
       captcha_id: captcha?.captcha_id ?? "",
       captcha_answer: form.captcha_answer.trim(),
+      session_id: sessionId,
     };
     const pickedFiles: Record<string, File> = {};
     for (const [key, file] of Object.entries(files)) {
@@ -264,6 +342,7 @@ export default function FarakhanPage() {
     try {
       const result = await submitFarakhan(payload, pickedFiles);
       setTrackingCode(result.tracking_code);
+      clearSavedSession();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       if (err instanceof FarakhanValidationError) {
@@ -327,6 +406,44 @@ export default function FarakhanPage() {
             فیلدهای ستاره‌دار الزامی‌اند.
           </Typography>
 
+          {/* فاز ۸۹ - شمارش معکوس یک‌ساعته: از لحظهٔ ورود به صفحه، یک ساعت فرصت تکمیل و ذخیره */}
+          {(deadline !== null || expired) && (
+            <Alert
+              severity={expired ? "error" : remaining <= 300 ? "warning" : "info"}
+              icon={<TimerIcon />}
+              sx={{ mb: 3, "& .MuiAlert-message": { width: "100%" } }}
+            >
+              {expired ? (
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" justifyContent="space-between">
+                  <Typography variant="body2">
+                    مهلت یک‌ساعتهٔ تکمیل فرم منقضی شد. برای ثبت‌نام باید فرم را از ابتدا شروع کنید.
+                  </Typography>
+                  <Button size="small" variant="outlined"
+                    onClick={() => { clearSavedSession(); window.location.reload(); }}>
+                    شروع دوباره
+                  </Button>
+                </Stack>
+              ) : (
+                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" justifyContent="space-between">
+                  <Typography variant="body2">
+                    برای تکمیل و ذخیرهٔ این فرم یک ساعت فرصت دارید؛ پس از آن مهلت منقضی می‌شود و فرم باید از ابتدا پر شود.
+                  </Typography>
+                  <Box
+                    sx={{
+                      fontFamily: "monospace", fontSize: 22, fontWeight: 800, direction: "ltr",
+                      color: remaining <= 300 ? "warning.dark" : "primary.dark",
+                      px: 1.5, py: 0.25, borderRadius: 2,
+                      background: "#fbf7f4", border: "1px solid #f3dce2",
+                    }}
+                    role="timer" aria-label="زمان باقی‌مانده برای تکمیل فرم"
+                  >
+                    {faClock(remaining)}
+                  </Box>
+                </Stack>
+              )}
+            </Alert>
+          )}
+
           {errorText && (
             <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorText("")}>
               {errorText}
@@ -347,6 +464,8 @@ export default function FarakhanPage() {
               <CircularProgress sx={{ color: "primary.main" }} />
             </Stack>
           ) : (
+            /* فاز ۸۹ - با انقضای مهلت، همهٔ ورودی‌های فرم یکجا غیرفعال می‌شوند */
+            <fieldset disabled={expired} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             <Stack spacing={3}>
               {/* ── بخش ۱: مشخصات فردی ── */}
               <SectionCard title="۱. مشخصات فردی">
@@ -627,7 +746,7 @@ export default function FarakhanPage() {
                   <Button
                     variant="contained"
                     size="large"
-                    disabled={submitting || captcha === null}
+                    disabled={submitting || captcha === null || expired}
                     onClick={onSubmit}
                     sx={{ alignSelf: "flex-start", px: 6 }}
                   >
@@ -636,6 +755,7 @@ export default function FarakhanPage() {
                 </Stack>
               </SectionCard>
             </Stack>
+            </fieldset>
           )}
         </Container>
       </Box>

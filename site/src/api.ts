@@ -265,6 +265,9 @@ export interface FarakhanMeta {
   max_file_size_bytes: number;
   max_files: number;
   rules: { require_military_status_for_male: boolean; phone_required: boolean };
+  /** فاز ۸۹ - نشست یک‌ساعتهٔ فرم: شناسهٔ نشست + طول مهلت (ثانیه) برای شمارش معکوس */
+  session_id: string;
+  session_ttl_seconds: number;
 }
 
 export interface FarakhanCaptcha {
