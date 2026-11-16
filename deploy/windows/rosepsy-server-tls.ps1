@@ -1,7 +1,7 @@
 ﻿<#
 ================================================================================
  rosepsy-server-tls.ps1
- گواهی رایگان HTTPS برای رزپسی روی Windows Server (Caddy + Let's Encrypt)
+ گواهی رایگان HTTPS برای رز دکتر روی Windows Server (Caddy + Let's Encrypt)
 ================================================================================
  چون مراج گواهی رایگان (Let's Encrypt و ...) گواهی برای «IP خالی» صادر نمی‌کنند،
  از دامنهٔ جایگزینِ رایگان sslip.io استفاده می‌شود:
@@ -150,7 +150,7 @@ function New-CaddyFiles {
         $ip = Get-ServerIp
         Write-Step "ساخت پیکربندی Caddy با گواهی داخلی (self-signed) برای $Domain و $ip"
         $caddyfile = @"
-# رزپسی — پراکسی لبهٔ Caddy با گواهی داخلی (self-signed)
+# رز دکتر — پراکسی لبهٔ Caddy با گواهی داخلی (self-signed)
 # تولیدشده توسط rosepsy-server-tls.ps1 — بازتولید: .\rosepsy-server-tls.ps1 tls -SelfSigned
 # مرورگر یک بار هشدار گواهی می‌دهد؛ با Advanced → Proceed ادامه دهید
 
@@ -164,7 +164,7 @@ https://$Domain, https://$ip {
         if ($Email) { $globalBlock = "{`n    email $Email`n}`n`n" }
         Write-Step "ساخت پیکربندی Caddy با گواهی خودکار Let's Encrypt برای $Domain"
         $caddyfile = @"
-# رزپسی — پراکسی لبهٔ Caddy با گواهی خودکار Let's Encrypt
+# رز دکتر — پراکسی لبهٔ Caddy با گواهی خودکار Let's Encrypt
 # تولیدشده توسط rosepsy-server-tls.ps1 — دامنه: $Domain
 # تمدید گواهی هر ۹۰ روز به‌صورت خودکار انجام می‌شود
 
@@ -177,7 +177,7 @@ ${globalBlock}$Domain {
 
     $caddyWinPath = ($CaddyDir -replace '\\', '/')
     $override = @"
-# رزپسی — سرویس لبهٔ TLS (Caddy) — تولیدشده توسط rosepsy-server-tls.ps1
+# رز دکتر — سرویس لبهٔ TLS (Caddy) — تولیدشده توسط rosepsy-server-tls.ps1
 # این فایل توسط git حذف نمی‌شود (untracked) و docker compose خودکار آن را با compose.yml ترکیب می‌کند
 # غیرفعال‌سازی: .\rosepsy-server-tls.ps1 off
 services:
@@ -259,7 +259,7 @@ function Set-FirewallTls {
 
 function Invoke-Tls {
     Write-Host '==============================================' -ForegroundColor DarkCyan
-    Write-Host ' رزپسی — گواهی رایگان HTTPS (Caddy + Let''s Encrypt)' -ForegroundColor DarkCyan
+    Write-Host ' رز دکتر — گواهی رایگان HTTPS (Caddy + Let''s Encrypt)' -ForegroundColor DarkCyan
     Write-Host '==============================================' -ForegroundColor DarkCyan
 
     if (-not (Test-Admin)) { throw 'این مرحله باید با PowerShell در حالت Run as Administrator اجرا شود (برای فایروال)' }
@@ -394,7 +394,7 @@ function Invoke-TlsOff {
 function Show-TlsHelp {
     Write-Host @'
 
- رزپسی — گواهی رایگان HTTPS روی سرور ویندوزی
+ رز دکتر — گواهی رایگان HTTPS روی سرور ویندوزی
  --------------------------------------------
    .\rosepsy-server-tls.ps1                          راه‌اندازی با 130.185.73.157.sslip.io (Let's Encrypt خودکار)
    .\rosepsy-server-tls.ps1 tls -Domain example.com  با دامنهٔ واقعی (A-record → 130.185.73.157)

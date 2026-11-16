@@ -283,6 +283,28 @@ export interface FarakhanCaptcha {
   ttl_seconds: number;
 }
 
+/** فاز ۹۴ - یک ردیف جدول عمومی «افراد ثبت‌نام‌شدهٔ فراخوان» (کمترین دادهٔ شخصی) */
+export interface FarakhanPublicRow {
+  name: string;
+  province_name: string;
+  county_name: string;
+  education_degree_label: string;
+  created_at: string | null;
+}
+
+export interface FarakhanPublicList {
+  items: FarakhanPublicRow[];
+  total: number;
+}
+
+/** فاز ۹۴ - فهرست عمومی ثبت‌نام‌شده‌های فراخوان (بدون ورود؛ سقف نرخ ۱۲۰/ساعت/IP) */
+export async function fetchFarakhanPublicSubmissions(): Promise<FarakhanPublicList> {
+  const r = await fetch("/api/v1/farakhan/public/submissions");
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as FarakhanPublicList;
+}
+
+
 /** خطای اعتبارسنجی فراخوان: نقشهٔ «برچسب فارسی فیلد → پیام» */
 export class FarakhanValidationError extends Error {
   errors: Record<string, string>;

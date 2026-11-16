@@ -168,7 +168,9 @@ export default function FarakhanPage() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
 
-  const { data, isLoading, isFetching } = useQuery({
+  // فاز ۹۴ — خطای دریافت فهرست باید «دیده شود»؛ پیش از این خطای ۴۰۱/۴۰۳/شبکه
+  // بی‌صدا مثل «فهرست خالی» رندر می‌شد و صاحب سامانه جدول را خالی می‌دید.
+  const { data, isLoading, isFetching, error: listError } = useQuery({
     queryKey: ["farakhan-submissions", page + 1, pageSize, q, status],
     queryFn: () => fetchFarakhanSubmissions({ q, status, page: page + 1, page_size: pageSize }),
   });
@@ -211,6 +213,12 @@ export default function FarakhanPage() {
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
+      {listError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          دریافت فهرست ثبت‌نام‌های فراخوان ناموفق بود: {errDetail(listError)}
+          — اگر از قبل وارد نشده‌اید ابتدا وارد شوید؛ در غیر این صورت دسترسی نقش شما را بررسی کنید.
+        </Alert>
+      )}
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
         <TextField size="small" label="جست‌وجو (نام، کد ملی، کد پیگیری، تلفن)" value={q}

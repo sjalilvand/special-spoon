@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- فاز ۹۴ — نقشهٔ سایت روی دامنهٔ رسمی rosedoctor.ir (مسیرهای عمومی سایت) -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://rosedoctor.ir/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>http://rosedoctor.ir/booking</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>http://rosedoctor.ir/clinics</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>http://rosedoctor.ir/services/psychotherapy</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>http://rosedoctor.ir/academy</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>http://rosedoctor.ir/farakhan</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>http://rosedoctor.ir/payment-rules</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+</urlset>

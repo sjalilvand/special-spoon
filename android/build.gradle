@@ -1,4 +1,4 @@
-// فاز ۶۸ - اپلیکیشن اندروید رزپسی (پوستهٔ WebView کاملاً آنلاین روی سایت)
+// فاز ۶۸ - اپلیکیشن اندروید رز دکتر (پوستهٔ WebView کاملاً آنلاین روی سایت)؛ فاز ۹۴: پکیج ir.rosedoctor.app
 plugins {
     id 'com.android.application' version '8.4.2' apply false
 }

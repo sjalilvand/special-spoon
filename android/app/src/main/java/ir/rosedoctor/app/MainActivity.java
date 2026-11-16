@@ -1,4 +1,4 @@
-package ir.rosepsy.app;
+package ir.rosedoctor.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -27,21 +27,21 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 /**
- * فاز ۶۸ - پوستهٔ آنلاین سایت رزپسی (به‌روز فاز ۷۸ب: تلاش اول روی IP خام).
+ * فاز ۶۸ - پوستهٔ آنلاین سایت رز دکتر (به‌روز فاز ۹۴: تلاش اول روی دامنهٔ اصلی).
  * اپ هیچ داده‌ای را نگه نمی‌دارد؛ همه‌چیز از خود سایت خوانده می‌شود:
- * DNS دامنهٔ sslip.io از بعضی شبکه‌های ایران کند است؛ پس تلاش اول روی
- * http://IP:8080 است (بدون DNS)، پشتیبان دامنهٔ sslip روی 8080 و بعد https.
- * صفحهٔ خطا هم دکمهٔ «تلاش دوباره» دارد که از IP شروع می‌کند.
+ * فاز ۹۴ — دامنهٔ rosedoctor.ir ست شده و TCP 80 باز است؛ پس ترتیب تلاش:
+ * ۱) http://rosedoctor.ir/ (پورت ۸۰، آدرس رسمی) ← ۲) همان دامنه روی ۸۰۸۰
+ * ← ۳) IP خام روی ۸۰۸۰ (بدون DNS) ← ۴) https (وقتی گواهی فعال شد).
+ * صفحهٔ خطا هم دکمهٔ «تلاش دوباره» دارد که از دامنه شروع می‌کند.
  */
 public class MainActivity extends Activity {
 
     private static final String SERVER_IP = "130.185.73.157";
     private static final String HOST = "rosedoctor.ir"; // فاز ۸۷ — دامنهٔ اصلی
-    // فایروال هاستینگ فعلاً 80/443 را می‌بندد؛ تلاش اول: IP خام روی 8080
-    // (بدون DNS → سریع‌ترین راه)، پشتیبان: دامنهٔ sslip روی 8080، سپس https.
-    // وقتی پورت‌های اصلی باز شدند، START_FAST را به "https://" + HOST + "/" تغییر دهید.
-    private static final String START_FAST  = "http://" + SERVER_IP + ":8080/";
+    // فاز ۹۴ — آدرس رسمی اول، سپس ۸۰۸۰، سپس IP خام و در آخر https
+    private static final String START_FAST  = "http://" + HOST + "/";
     private static final String START_ALT   = "http://" + HOST + ":8080/";
+    private static final String START_IP    = "http://" + SERVER_IP + ":8080/";
     private static final String START_HTTPS = "https://" + HOST + "/";
 
     private static final int FILE_CHOOSER_CODE = 4242;
@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private ProgressBar progress;
     private LinearLayout errorBox;
-    private int attempt = 0; // 0=IP:8080 (سریع) ، 1=sslip:8080 ، 2=https
+    private int attempt = 0; // ۰=دامنه:۸۰ (رسمی) ، ۱=دامنه:۸۰۸۰ ، ۲=IP:۸۰۸۰ ، ۳=https
     private ValueCallback<Uri[]> pendingFilePick;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -83,7 +83,7 @@ public class MainActivity extends Activity {
         web.setDownloadListener(new RoseDownloader());
 
         findViewById(R.id.retryBtn).setOnClickListener(v -> {
-            attempt = 0; // تلاش دوباره همیشه از مسیر مطمئن 8080 شروع می‌کند
+            attempt = 0; // تلاش دوباره همیشه از آدرس رسمی دامنه شروع می‌کند
             loadSite();
         });
 
@@ -97,7 +97,8 @@ public class MainActivity extends Activity {
     private String startUrl(int a) {
         if (a <= 0) return START_FAST;
         if (a == 1) return START_ALT;
-        if (a == 2) return START_HTTPS;
+        if (a == 2) return START_IP;
+        if (a == 3) return START_HTTPS;
         return START_FAST;
     }
 
@@ -116,10 +117,10 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * خرابی صفحهٔ اصلی: IP:8080 ← sslip:8080 ← HTTPS و بعد صفحهٔ خطا با دکمهٔ تلاش دوباره.
+     * خرابی صفحهٔ اصلی: دامنه:۸۰ ← دامنه:۸۰۸۰ ← IP:۸۰۸۰ ← HTTPS و بعد صفحهٔ خطا با دکمهٔ تلاش دوباره.
      */
     private void handleMainFailure() {
-        if (attempt < 2) {
+        if (attempt < 3) {
             attempt++;
             web.loadUrl(startUrl(attempt));
         } else {
@@ -154,7 +155,8 @@ public class MainActivity extends Activity {
         @Override
         public void onReceivedSslError(WebView v, SslErrorHandler handler,
                                        android.net.http.SslError error) {
-            // تا وقتی پورت ۴۴۳ سرور بسته است، گواهی HTTPS جواب نمی‌دهد
+            // تا وقتی گواهی HTTPS روی سرور فعال نشده، گواهی معتبر جواب نمی‌دهد؛
+            // ادامه به تلاش بعدی (IP:۸۰۸۰ یا صفحهٔ خطا).
             handler.cancel();
             if (v.getUrl() != null && v.getUrl().startsWith("https://")) {
                 handleMainFailure();
@@ -208,7 +210,7 @@ public class MainActivity extends Activity {
         @Override
         public void onDownloadStart(String url, String ua, String cd, String mime, long size) {
             try {
-                String name = "rosepsy-download";
+                String name = "rosedoctor-download";
                 if (cd != null && cd.contains("filename=")) {
                     int i = cd.indexOf("filename=") + 9;
                     name = cd.substring(i).replace("\"", "").trim();

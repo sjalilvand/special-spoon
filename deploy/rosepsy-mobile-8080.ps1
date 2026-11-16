@@ -8,7 +8,7 @@
 #       (OTP، بازیابی رمز، callback پرداخت، BASE_URL ...) — با بکاپ
 #    2) ساخت manifest.webmanifest + آیکون 192/512 + متاتگ‌های موبایل
 #       و تزریق به صفحهٔ اصلی site (هم در dist سروشده، هم در سورس)
-#       → گوشی «افزودن به صفحهٔ اصلی» با آیکون رزپسی می‌دهد
+#       → گوشی «افزودن به صفحهٔ اصلی» با آیکون رز دکتر می‌دهد
 #    3) وارسی باندل‌های ساخته‌شده برای URL هاردکد (گزارش)
 #    4) همگام‌سازی APK اندروید (نسخهٔ 8080) از site\public\app به dist سروشده
 #    5) انتظار برای بالا آمدن API بعد از ری‌استارت + خودآزمایی کامل مسیرهای موبایل روی 8080
@@ -18,16 +18,16 @@
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1            (اصلاح)
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode check (فقط گزارش)
 #    powershell -ExecutionPolicy Bypass -File C:\rosepsy\app\deploy\rosepsy-mobile-8080.ps1 -Mode revert (بعد از باز شدن پورت 80)
-#    ... -UrlHost domain   (اگر می‌خواهید آدرس‌های بیرونی دوباره دامنهٔ sslip.io شوند؛
-#                           پیش‌فرض «ip» است چون DNS دامنهٔ sslip.io از بعضی شبکه‌های
-#                           ایران کند است و IP خام سریع‌ترین راه است)
+#    ... -UrlHost domain   (فاز ۹۴: پیش‌فرض همین است — همهٔ آدرس‌های بیرونی روی دامنهٔ رسمی
+#                           rosedoctor.ir و بدون پورت؛ چون DNS ست شده و TCP 80 باز است)
+#    ... -UrlHost ip       (اگر هنوز دامنه/پورت ۸۰ فعال نیست: میزبان بیرونی = IP خام روی 8080)
 # =====================================================================
 param(
     [ValidateSet('check','fix','revert')]
     [string]$Mode = 'fix',
     [int]$ExternalPort = 8080,  # در Mode=revert نادیده گرفته می‌شود (هدف = بدون پورت)
     [ValidateSet('ip','domain')]
-    [string]$UrlHost = 'ip'     # ip: میزبان بیرونی = IP خام (سریع) — domain: دامنهٔ sslip.io
+    [string]$UrlHost = 'domain' # فاز ۹۴: domain = دامنهٔ رسمی rosedoctor.ir بدون پورت — ip = IP خام روی 8080
 )
 
 $ErrorActionPreference = 'Stop'
@@ -88,7 +88,7 @@ $TargetPort = 80
 if ($Mode -ne 'revert') { $TargetPort = $ExternalPort }
 
 Write-Host ""
-Write-Host "==> نسخهٔ موبایل Rosepsy روی پورت $TargetPort (Mode=$Mode، میزبان=$UrlHost)" -ForegroundColor White
+Write-Host "==> نسخهٔ موبایل رز دکتر روی پورت $TargetPort (Mode=$Mode، میزبان=$UrlHost)" -ForegroundColor White
 Write-Host ""
 
 # ---------------------------------------------------------------
@@ -218,16 +218,19 @@ foreach ($f in $envFiles) {
         if ($host_ -notmatch $DomainRx) { return $raw }
         if ($host_ -match '^(localhost|127\.0\.0\.1)$') { return $raw }
 
-        # میزبان هدف: ip = IP خام (سریع، بدون DNS) — domain = rosedoctor.ir (فاز ۸۷)
-        $hostOut = $host_
+        # میزبان هدف: ip = IP خام (وقتی دامنه هنوز فعال نیست) —
+        #             domain (پیش‌فرض فاز ۹۴) = دامنهٔ رسمی rosedoctor.ir و بدون پورت
         if ($Mode -ne 'revert') {
             if ($UrlHost -eq 'ip') {
                 $hostOut = $host_ -replace '(?i)\.sslip\.io$', ''
                 # rosedoctor.ir عیناً می‌ماند — دامنهٔ اصلی سامانه
-            } elseif ($host_ -eq '130.185.73.157' -or $host_ -match '(?i)\.sslip\.io$') {
+                if ($u.Port -eq 80 -or $u.Port -eq 443) { $portOut = $TargetPort } else { $portOut = $u.Port }
+            } else {
+                # فاز ۹۴ — همهٔ آدرس‌های بیرونی روی دامنهٔ رسمی و پورت ۸۰؛
+                # callback پرداخت و لینک‌های OTP/بازیابی رمز هم به دامنهٔ رسمی می‌روند.
                 $hostOut = 'rosedoctor.ir'
+                $portOut = 80
             }
-            if ($u.Port -eq 80 -or $u.Port -eq 443) { $portOut = $TargetPort } else { $portOut = $u.Port }
         } else {
             $portOut = 80   # revert: بدون پورت (پورت 80)
         }
@@ -558,23 +561,25 @@ foreach ($t in $tests) {
 # ---------------------------------------------------------------
 Write-Host ""
 Write-Host "========================= جمع‌بندی نسخهٔ موبایل =========================" -ForegroundColor White
-Write-Host "  آدرس اصلی (سریع‌ترین): http://130.185.73.157:8080/   ← بدون DNS؛ این را به کاربران بدهید"
-Write-Host "  دامنهٔ اصلی (فاز ۸۷) : http://rosedoctor.ir/  (بعد از تنظیم DNS + باز بودن TCP 80)"
-Write-Host "  دامنه روی 8080       : http://rosedoctor.ir:8080/"
-Write-Host "  پنل روی موبایل       : http://130.185.73.157:8080/panel/  (یا http://rosedoctor.ir/panel/)"
-Write-Host "  اپ اندروید (APK)     : http://130.185.73.157:8080/app/rosedoctor-1.0.0.apk"
+Write-Host "  آدرس اصلی (رسمی)    : http://rosedoctor.ir/   ← فاز ۹۴: این را به کاربران بدهید"
+Write-Host "  جایگزین بدون DNS    : http://130.185.73.157:8080/  (وقتی DNS کند بود)"
+Write-Host "  دامنه روی 8080      : http://rosedoctor.ir:8080/"
+Write-Host "  پنل روی موبایل      : http://rosedoctor.ir/panel/  (یا http://130.185.73.157:8080/panel/)"
+Write-Host "  اپ اندروید (APK)    : http://rosedoctor.ir/app/rosedoctor-1.0.0.apk"
 Write-Host "  SSO (هم‌اکنون باز)    : http://130.185.73.157:8082"
 if ($Mode -eq 'revert') {
     Write-Host "  حالت revert         : URLها به حالت بدون پورت برگشتند (پورت 80 باید باز شده باشد)"
     Write-Host "  گام بعدی            : deploy\windows\rosepsy-server-tls.ps1 را برای HTTPS اجرا کنید"
 } else {
-    Write-Host "  روی گوشی: آدرس IP بالا را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
-    Write-Host "  (آیکون رزپسی روی صفحهٔ گوشی می‌نشیند و تمام‌صفحه باز می‌شود)"
+    Write-Host "  روی گوشی: http://rosedoctor.ir/ را در Chrome/Safari باز کنید ← منو ← «افزودن به صفحهٔ اصلی»"
+    Write-Host "  (آیکون رز دکتر روی صفحهٔ گوشی می‌نشیند و تمام‌صفحه باز می‌شود)"
     Write-Host "  PWA کامل       : سرویس‌ورکر فعال است — باز کردن‌های بعدی از کش، سریع‌تر؛"
     Write-Host "                   قطعی اینترنت → صفحهٔ آفلاین برند‌شده؛ کشوی «بیشتر» ← نصب PWA"
-    Write-Host "  درگاه پرداخت        : با UrlHost=ip آدرس callback هم روی IP می‌رود — یک پرداخت"
-    Write-Host "                        آزمایشی بزنید؛ اگر درگاه واقعی خطای دامنه داد، یک‌بار با"
-    Write-Host "                        «-UrlHost domain» اجرا کنید تا callback به دامنه برگردد"
+    Write-Host "  نام PWA (فاز ۹۴) : manifest اکنون «رز دکتر» است — اگر قبلاً «افزودن به صفحهٔ"
+    Write-Host "                   اصلی» زده‌اید، میان‌بر قدیمی «رز دکتر» را حذف و دوباره اضافه کنید"
+    Write-Host "  درگاه پرداخت        : با UrlHost=domain (پیش‌فرض فاز ۹۴) آدرس callback هم روی"
+    Write-Host "                        دامنهٔ رسمی rosedoctor.ir می‌رود — یک پرداخت آزمایشی بزنید؛"
+    Write-Host "                        اگر درگاه خطای دامنه داد، یک‌بار با «-UrlHost ip» اجرا کنید"
 }
 Write-Host "  یادآوری             : URL بدون پورت (پورت 80) فقط با باز کردن TCP 80/443 در"
 Write-Host "                        پنل شرکت هاستینگ درست می‌شود؛ این مشکل داخل سرور نیست."

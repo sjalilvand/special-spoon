@@ -8,14 +8,18 @@
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, Container,
   Divider, FormControl, FormControlLabel, FormHelperText, Grid, IconButton,
-  InputLabel, MenuItem, Paper, Select, Stack, Switch, TextField, Typography,
+  InputLabel, MenuItem, Paper, Select, Stack, Switch, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FarakhanServerError, fetchFarakhanCaptcha, fetchFarakhanCounties, fetchFarakhanMeta,
-  fetchFarakhanProvinces, FarakhanValidationError, submitFarakhan, checkFarakhanNationalCode,
+  fetchFarakhanProvinces, fetchFarakhanPublicSubmissions, FarakhanValidationError,
+  submitFarakhan, checkFarakhanNationalCode,
 } from "../api";
-import type { FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta } from "../api";
+import type {
+  FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta, FarakhanPublicList,
+} from "../api";
 import {
   FARAKHAN_MAX_AGE, FARAKHAN_MIN_AGE, birthDateCalendarBounds, completedAgeFromJalali,
   isValidNationalCode, normalizeFaDigits,
@@ -132,6 +136,72 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
       </Box>
       <CardContent sx={{ p: { xs: 2, md: 3 } }}>{children}</CardContent>
     </Card>
+  );
+}
+
+/** فاز ۹۴ — جدول عمومی «افراد ثبت‌نام‌شدهٔ فراخوان» (خواستهٔ صاحب سامانه).
+ * تنها نام، استان/شهرستان، مدرک و تاریخ ثبت نمایش داده می‌شود؛ دادهٔ حساس
+ * (کد ملی، تلفن، نشانی، فایل‌ها و وضعیت بررسی) از سرور عمومی منتشر نمی‌شود. */
+function RegisteredPeopleCard() {
+  const [data, setData] = useState<FarakhanPublicList | null>(null);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(() => {
+    setFailed(false);
+    fetchFarakhanPublicSubmissions()
+      .then((d) => setData(d))
+      .catch(() => setFailed(true));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const faDate = (iso: string | null): string => {
+    if (!iso) return "—";
+    try {
+      return new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium" }).format(new Date(iso));
+    } catch {
+      return iso.slice(0, 10);
+    }
+  };
+  return (
+    <SectionCard
+      title="افراد ثبت‌نام‌شدهٔ فراخوان"
+      subtitle={data
+        ? `تا کنون ${faNum(data.total)} نفر ثبت‌نام کرده‌اند — کد ملی، شمارهٔ تماس و نشانی هرگز نمایش داده نمی‌شود.`
+        : "در حال دریافت فهرست ثبت‌نام‌شده‌ها…"}
+    >
+      {failed ? (
+        <Alert severity="warning">دریافت فهرست ثبت‌نام‌شده‌ها ناموفق بود؛ صفحه را دوباره باز کنید.</Alert>
+      ) : data === null ? (
+        <Stack alignItems="center" py={4}><CircularProgress sx={{ color: "primary.main" }} /></Stack>
+      ) : data.items.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" textAlign="center" py={3}>
+          هنوز ثبت‌نامی انجام نشده است؛ پس از ثبت‌نام، نام افراد در همین جدول نمایش داده می‌شود.
+        </Typography>
+      ) : (
+        <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid #f3dce2", borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: "#fdf3f5" }}>
+                <TableCell sx={{ fontWeight: 800 }}>ردیف</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>نام و نام خانوادگی</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>استان / شهرستان</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>مدرک تحصیلی</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>تاریخ ثبت</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {data.items.map((row, i) => (
+                <TableRow key={`${row.name}-${row.created_at ?? i}-${i}`} hover>
+                  <TableCell>{faNum(i + 1)}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
+                  <TableCell>{row.province_name} / {row.county_name}</TableCell>
+                  <TableCell>{row.education_degree_label}</TableCell>
+                  <TableCell>{faDate(row.created_at)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </SectionCard>
   );
 }
 
@@ -537,6 +607,11 @@ export default function FarakhanPage() {
             فرم ثبت‌نام همکاری مراکز مشاوره و روان‌شناسان — لطفاً همهٔ بخش‌ها را با دقت تکمیل کنید.
             فیلدهای ستاره‌دار الزامی‌اند.
           </Typography>
+
+          {/* فاز ۹۴ — جدول عمومی افراد ثبت‌نام‌شده + شمارندهٔ «تعداد ثبت‌شده‌ها» */}
+          <Box sx={{ mb: 4 }}>
+            <RegisteredPeopleCard />
+          </Box>
 
           {/* فاز ۸۹ - شمارش معکوس یک‌ساعته: از لحظهٔ ورود به صفحه، یک ساعت فرصت تکمیل و ذخیره */}
           {(deadline !== null || expired) && (

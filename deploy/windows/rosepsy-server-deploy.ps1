@@ -1,7 +1,7 @@
 ﻿<#
 ================================================================================
  rosepsy-server-deploy.ps1
- استقرار سامانهٔ رزپسی (Rosepsy / special-spoon) روی Windows Server 2025 از طریق گیت
+ استقرار سامانهٔ رز دکتر (Rosepsy / special-spoon) روی Windows Server 2025 از طریق گیت
 ================================================================================
  این اسکریپت برنامه را از گیت‌هاب می‌گیرد و با Docker روی سرور بالا می‌آورد:
    بک‌اند FastAPI  +  وب (سایت عمومی + پنل)  +  PostgreSQL  +  Redis  +  ClamAV
@@ -696,7 +696,7 @@ function Invoke-Doctor {
 
 function Invoke-Setup {
     Write-Host '==============================================' -ForegroundColor DarkCyan
-    Write-Host ' گام setup: نصب پیش‌نیازهای استقرار رزپسی' -ForegroundColor DarkCyan
+    Write-Host ' گام setup: نصب پیش‌نیازهای استقرار رز دکتر' -ForegroundColor DarkCyan
     Write-Host '==============================================' -ForegroundColor DarkCyan
 
     if (-not (Test-Admin)) { throw 'این مرحله باید با PowerShell در حالت Run as Administrator اجرا شود' }
@@ -802,7 +802,7 @@ function New-EnvFile {
     # ثبت اعتبارنامه‌های ساخته‌شده در فایل محافظت‌شده (فقط Administrators)
     $credFile = Join-Path $InstallDir 'deploy-credentials.txt'
     $creds = @(
-        'رزپسی — اعتبارنامه‌های ساخته‌شده در زمان استقرار'
+        'رز دکتر — اعتبارنامه‌های ساخته‌شده در زمان استقرار'
         "تاریخ: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         ''
         'این مقادیر داخل فایل .env مخزن هم ذخیره شده‌اند:'
@@ -902,7 +902,7 @@ function Show-DeploySummary {
     $base = "http://${ip}:$Port"
     Write-Host ''
     Write-Host '=================================================' -ForegroundColor DarkGreen
-    Write-Ok 'استقرار رزپسی کامل شد'
+    Write-Ok 'استقرار رز دکتر کامل شد'
     Write-Host '=================================================' -ForegroundColor DarkGreen
     Write-Host "  سایت عمومی : $base/"                -ForegroundColor White
     Write-Host "  پنل مدیریت : $base/panel/"          -ForegroundColor White
@@ -926,7 +926,7 @@ function Invoke-Deploy {
     $label = 'استقرار (deploy)'
     if ($UpdateOnly) { $label = 'به‌روزرسانی (update)' }
     Write-Host '==============================================' -ForegroundColor DarkCyan
-    Write-Host " رزپسی — $label روی Windows Server" -ForegroundColor DarkCyan
+    Write-Host " رز دکتر — $label روی Windows Server" -ForegroundColor DarkCyan
     Write-Host '==============================================' -ForegroundColor DarkCyan
 
     if (-not (Test-Admin)) { throw 'این مرحله باید با PowerShell در حالت Run as Administrator اجرا شود (برای قاعدهٔ فایروال)' }
@@ -1019,7 +1019,7 @@ function Invoke-Backup {
 function Show-Help {
     Write-Host @'
 
- رزپسی — استقرار روی Windows Server 2025 از طریق گیت
+ رز دکتر — استقرار روی Windows Server 2025 از طریق گیت
  ----------------------------------------------------
    .\rosepsy-server-deploy.ps1 setup        نصب پیش‌نیازها (Git + WSL2 + Docker Desktop)
    .\rosepsy-server-deploy.ps1 deploy       استقرار کامل: کلون + .env + بیلد + مهاجرت + seed + فایروال

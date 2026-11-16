@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- فاز ۶۸ - پوستهٔ آنلاین سایت رزپسی؛ فقط مجوز اینترنت لازم است -->
+<!-- فاز ۶۸ - پوستهٔ آنلاین سایت رز دکتر؛ فقط مجوز اینترنت لازم است (فاز ۹۴: پکیج ir.rosedoctor.app) -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />

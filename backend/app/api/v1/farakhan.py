@@ -5,6 +5,8 @@
 - ``GET  /farakhan/captcha``                  کپچای محاسبهٔ دو عدد (SVG تک‌مصرف)
 - ``GET  /farakhan/provinces``                استان‌ها
 - ``GET  /farakhan/provinces/{id}/counties``  شهرستان‌های استان
+- ``GET  /farakhan/check-national-code``      وارسی زندهٔ کد ملی (فاز ۹۳)
+- ``GET  /farakhan/public/submissions``       جدول عمومی افراد ثبت‌نام‌شده (فاز ۹۴)
 - ``POST /farakhan/submissions``              ثبت نهایی فرم (multipart: payload + فایل‌ها)
 
 مسیرهای پنل (گیت ماتریس منو + نقش):
@@ -807,6 +809,61 @@ def check_farakhan_national_code(
     if valid:
         duplicate = _duplicate_national_code(db, normalized) is not None
     return {"valid": valid, "duplicate": duplicate}
+
+
+# فاز ۹۴ — فهرست عمومیِ ثبت‌نام‌شده‌های فراخوان (خواستهٔ صاحب سامانه:
+# «نمایش افراد ثبت‌شده در جدول افراد ثبت‌نام‌شده» روی خود صفحهٔ /farakhan).
+# حریم خصوصی: تنها نام، استان/شهرستان، مدرک تحصیلی و زمانِ ثبت منتشر می‌شود؛
+# کد ملی، تلفن‌ها، نشانی، فایل‌ها، وضعیتِ بررسی و یادداشت‌ها هرگز در پاسخ نیستند.
+# سقف نرخ: ۱۲۰ درخواست در ساعت از هر IP — ضد پیمایش.
+_public_list_ip_hits: dict[str, list[float]] = {}
+_PUBLIC_LIST_RATE = 120
+_PUBLIC_LIST_WINDOW = 3600.0
+_PUBLIC_LIST_MAX = 200
+
+
+def _public_list_rate_ok(ip: str) -> bool:
+    now = time.monotonic()
+    lst = [t for t in _public_list_ip_hits.get(ip, []) if now - t < _PUBLIC_LIST_WINDOW]
+    if len(lst) >= _PUBLIC_LIST_RATE:
+        _public_list_ip_hits[ip] = lst
+        return False
+    lst.append(now)
+    _public_list_ip_hits[ip] = lst
+    return True
+
+
+@router.get("/public/submissions")
+def list_public_farakhan_submissions(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """جدول عمومی «افراد ثبت‌نام‌شدهٔ فراخوان» — بدون ورود، با کمترین دادهٔ شخصی.
+
+    ترتیب: جدیدترین اول؛ حداکثر ۲۰۰ ردیف آخر. ``total`` شمارِ کل ثبت‌نام‌هاست
+    (شمارندهٔ «تعداد ثبت‌شده‌ها» برای نمایش در بالای جدول).
+    """
+    ip = _client_ip(request)
+    if not _public_list_rate_ok(ip):
+        logger.warning("public/submissions: ۴۲۹ سقف نرخ | ip=%s", ip)
+        raise HTTPException(status_code=429, detail="تعداد درخواست‌ها بیش از حد مجاز است؛ کمی بعد تلاش کنید.")
+    rows = db.scalars(
+        select(FarakhanSubmission)
+        .order_by(FarakhanSubmission.created_at.desc(), FarakhanSubmission.id.desc())
+        .limit(_PUBLIC_LIST_MAX)
+    ).all()
+    total = db.scalar(select(func.count(FarakhanSubmission.id))) or 0
+    items = [
+        {
+            "name": f"{s.first_name} {s.last_name}".strip(),
+            "province_name": s.province_name,
+            "county_name": s.county_name,
+            "education_degree_label": EDUCATION_DEGREE_OPTIONS.get(s.education_degree, s.education_degree),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+        for s in rows
+    ]
+    return {"items": items, "total": total}
 
 
 def _validate_upload(upload: UploadFile, field_key: str) -> tuple[bytes, str]:

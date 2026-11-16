@@ -10,11 +10,11 @@ if (ksFile.exists()) {
 }
 
 android {
-    namespace 'ir.rosepsy.app'
+    namespace 'ir.rosedoctor.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'ir.rosepsy.app'
+        applicationId 'ir.rosedoctor.app'
         minSdk 24          // اندروید ۷ به بالا
         targetSdk 34
         versionCode 1

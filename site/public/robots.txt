@@ -1,0 +1,9 @@
+# فاز ۹۴ — ربات‌های موتور جست‌وجو؛ دامنهٔ رسمی سامانه rosedoctor.ir است
+User-agent: *
+Allow: /
+
+# پنل مدیریتی و مسیرهای خصوصی ایندکس نشوند
+Disallow: /panel/
+Disallow: /api/
+
+Sitemap: http://rosedoctor.ir/sitemap.xml
