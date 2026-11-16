@@ -20,6 +20,9 @@ export interface ConsultationRow {
   /** فاز ۶۹: وضعیت پرداخت آنلاین رزرو (زرین‌پال) */
   payment_status: string;
   paid_at: string | null;
+  /** فاز ۹۰ — پروندهٔ حاصل از تبدیل؛ برای نمایش شماره پرونده در جدول */
+  case_id: string | null;
+  case_number: string | null;
 }
 
 export const CONSULT_PAYMENT_META: Record<string, { label: string; color: "success" | "warning" | "error" | "default" }> = {
@@ -38,6 +41,8 @@ export const CONSULT_STATUS_META: Record<string, { label: string; color: "succes
 
 export async function fetchConsultationRequests(params: {
   status?: string;
+  /** فاز ۹۰ — جست‌وجو (نام/موبایل/موضوع/شهر/شمارهٔ پرونده) */
+  search?: string;
   page: number;
 }): Promise<{ items: ConsultationRow[]; total: number }> {
   // فاز ۳۹ (v2): data آرایه + total در meta.pagination

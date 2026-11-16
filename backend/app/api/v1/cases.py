@@ -192,7 +192,11 @@ def list_cases(
 ) -> dict:
     q = select(Case)
     actor_roles = {r.code for r in actor.roles}
-    if not (actor_roles & {"ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR"}):
+    # فاز ۹۰ - ریشهٔ «پرونده تشکیل می‌شود ولی فهرست خالی می‌ماند»: SYSTEM_ADMIN
+    # در شاخهٔ مشاور می‌افتاد، ردیف مشاور نداشت و بلافاصله «فهرست خالی» برمی‌گشت
+    # (بدون خطا). اکنون مدیر سامانه مانند مدیر سازمان کل پرونده‌ها را می‌بیند؛
+    # فقط مشاور به پرونده‌های تخصیص‌یافتهٔ خودش محدود می‌شود.
+    if not (actor_roles & {"ORG_MANAGER", "RECEPTION", "TECHNICAL_SUPERVISOR", "SYSTEM_ADMIN"}):
         counselor = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
         if counselor is None:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}

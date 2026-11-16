@@ -30,11 +30,15 @@ export default function ConsultationRequestsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const roles = user?.roles ?? [];
+  // فاز ۹۰ — مدیر سامانه هم می‌تواند درخواست ثبت کند و درخواست را به متقاضی/پرونده تبدیل کند
   const canCreate =
-    roles.includes("ORG_MANAGER") || roles.includes("RECEPTION") || roles.includes("COUNSELOR");
+    roles.includes("ORG_MANAGER") || roles.includes("RECEPTION") || roles.includes("COUNSELOR")
+    || roles.includes("SYSTEM_ADMIN");
 
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
+  // فاز ۹۰ — جست‌وجوی درخواست‌ها (نام/موبایل/موضوع/شهر/شمارهٔ پروندهٔ حاصل از تبدیل)
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [convertRow, setConvertRow] = useState<ConsultationRow | null>(null);
   const [followRow, setFollowRow] = useState<ConsultationRow | null>(null);
@@ -42,8 +46,8 @@ export default function ConsultationRequestsPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["consultations", page, status],
-    queryFn: () => fetchConsultationRequests({ page: page + 1, status: status || undefined }),
+    queryKey: ["consultations", page, status, search],
+    queryFn: () => fetchConsultationRequests({ page: page + 1, status: status || undefined, search: search.trim() || undefined }),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["consultations"] });
@@ -52,7 +56,15 @@ export default function ConsultationRequestsPage() {
     <Stack spacing={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} flexWrap="wrap">
         <Typography variant="h6" fontWeight={700}>درخواست‌های مشاوره</Typography>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          {/* فاز ۹۰ — جست‌وجو: نام، موبایل، موضوع، شهر یا شمارهٔ پروندهٔ حاصل از تبدیل */}
+          <TextField
+            size="small"
+            label="جست‌وجو (نام، موبایل یا شمارهٔ پرونده)"
+            value={search}
+            onChange={(e) => { setPage(0); setSearch(e.target.value); }}
+            sx={{ width: 300 }}
+          />
           {canCreate && (
             <Button variant="contained" onClick={() => setCreateOpen(true)}>ثبت درخواست جدید</Button>
           )}
@@ -131,7 +143,17 @@ export default function ConsultationRequestsPage() {
                         label={CONSULT_PAYMENT_META[row.payment_status]?.label ?? row.payment_status} />
                     )}
                   </TableCell>
-                  <TableCell><Chip size="small" color={m.color} label={m.label} /></TableCell>
+                  <TableCell>
+                    <Chip size="small" color={m.color} label={m.label} />
+                    {/* فاز ۹۰ — پروندهٔ حاصل از تبدیل: با کلیک به جزئیات پرونده می‌رود */}
+                    {row.case_id && row.case_number && (
+                      <Chip
+                        size="small" sx={{ mt: 0.5 }} color="primary" variant="outlined"
+                        label={`پرونده ${row.case_number}`}
+                        onClick={() => navigate(`/cases/${row.case_id}`)}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} alignItems="center">
                       {canConvert && (

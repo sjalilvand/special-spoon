@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
@@ -84,6 +84,9 @@ class ConsultStatusUpdate(BaseModel):
 
 def _out(db: Session, r: ConsultationRequest) -> dict:
     handler = db.get(User, r.handled_by) if r.handled_by else None
+    # فاز ۹۰ — پیوند پروندهٔ حاصل از تبدیل؛ پذیرش با یک نگاه می‌بیند کدام درخواست
+    # پرونده شده و با کلیک به پرونده می‌رود (جست‌وجوی پرونده از همین صفحه)
+    case = db.get(Case, r.case_id) if r.case_id else None
     return {
         "id": str(r.id),
         "full_name": r.full_name,
@@ -104,12 +107,17 @@ def _out(db: Session, r: ConsultationRequest) -> dict:
         # فاز ۶۹: وضعیت پرداخت آنلاین رزرو (زرین‌پال) برای پذیرش
         "payment_status": r.payment_status,
         "paid_at": r.paid_at.isoformat() if r.paid_at else None,
+        # فاز ۹۰: پروندهٔ مرتبط
+        "case_id": str(r.case_id) if r.case_id else None,
+        "case_number": case.case_number if case else None,
     }
 
 
 @router.get("/consultation-requests")
 def list_consultation_requests(
     status: str = Query(default="", max_length=20),
+    # فاز ۹۰ — جست‌وجو در درخواست‌ها (نام/موبایل/موضوع/شهر/شمارهٔ پروندهٔ حاصل)
+    search: str = Query(default="", max_length=100),
     page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -118,6 +126,18 @@ def list_consultation_requests(
     q = select(ConsultationRequest)
     if status in ("new", "in_review", "converted", "archived"):
         q = q.where(ConsultationRequest.status == status)
+    if search.strip():
+        like = f"%{search.strip()}%"
+        q = q.where(or_(
+            ConsultationRequest.full_name.ilike(like),
+            ConsultationRequest.mobile.ilike(like),
+            ConsultationRequest.topic.ilike(like),
+            ConsultationRequest.city.ilike(like),
+            # جست‌وجو با شمارهٔ پرونده: درخواستِ تبدیل‌شده را از این صفحه پیدا می‌کند
+            ConsultationRequest.case_id.in_(
+                select(Case.id).where(Case.case_number.ilike(like))
+            ),
+        ))
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     items = db.scalars(
         q.order_by(ConsultationRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
@@ -130,7 +150,8 @@ def update_consultation_request(
     request_id: uuid.UUID,
     payload: ConsultStatusUpdate,
     db: Session = Depends(get_db),
-    actor=Depends(require_roles("ORG_MANAGER", "RECEPTION")),
+    # فاز ۹۰ — مدیر سامانه هم می‌تواند پیگیری را ثبت کند (قبلاً ۴۰۳ بی‌صدا بود)
+    actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN")),
 ) -> dict:
     r = db.get(ConsultationRequest, request_id)
     if r is None:
@@ -161,9 +182,10 @@ def convert_request(request_id: uuid.UUID, payload: ConvertRequest, db: Session 
     r = db.get(ConsultationRequest, request_id)
     if r is None:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد")
-    # ماتریس: مدیر سازمان/پذیرش همیشه؛ مشاور تنها اگر به‌عنوان همکار/اصلی به یکی از پرونده‌های متقاضی تخصیص دارد
+    # ماتریس: مدیر سازمان/پذیرش/مدیر سامانه همیشه؛ مشاور تنها اگر به‌عنوان همکار/اصلی به یکی از پرونده‌های متقاضی تخصیص دارد
     actor_roles = {rc.code for rc in actor.roles}
-    if not (actor_roles & {"ORG_MANAGER", "RECEPTION"}):
+    # فاز ۹۰ — SYSTEM_ADMIN هم مجاز به تبدیل است (دکمهٔ تبدیل برای او نمایش داده می‌شود)
+    if not (actor_roles & {"ORG_MANAGER", "RECEPTION", "SYSTEM_ADMIN"}):
         if "COUNSELOR" not in actor_roles:
             raise HTTPException(status_code=403, detail="دسترسی مجاز نیست")
         counselor = db.scalar(select(Counselor).where(Counselor.user_id == actor.id))
@@ -277,7 +299,7 @@ def _normalize_mobile_staff(raw: str) -> str:
 
 
 @router.post("/consultation-requests", status_code=201)
-def create_consultation_request(payload: ManualConsultationCreate, db: Session = Depends(get_db), actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "COUNSELOR"))) -> dict:
+def create_consultation_request(payload: ManualConsultationCreate, db: Session = Depends(get_db), actor=Depends(require_roles("ORG_MANAGER", "RECEPTION", "COUNSELOR", "SYSTEM_ADMIN"))) -> dict:
     """ثبت حضوری/تلفنی درخواست مشاوره توسط کارکنان (بند ۹.۱ سند)"""
     mobile = _normalize_mobile_staff(payload.mobile)
     if not re.fullmatch(r"09\d{9}", mobile):
