@@ -228,6 +228,35 @@ app.add_middleware(EnvelopeMiddleware)
 app.add_middleware(V1DeprecationMiddleware)
 
 # ---------------------------------------------------------------------------
+# فاز ۹۵ — CORS برای مسیر پشتیبان ثبت فراخوان همکاری.
+# عارضهٔ میدانی: دامنهٔ rosedoctor.ir پشت CDN (WCDN) است؛ CDN بدنهٔ multipart
+# فرم فراخوان را در میانهٔ ارسال می‌شکند (IncompleteRead) و پاسخ غیر-۲xx را با
+# صفحهٔ HTML خودش جایگزین می‌کند. فرم عمومی اکنون در شکست، ثبت را یک‌بار مستقیم
+# از مبدأ اصلی (IP سرور) دوباره تلاش می‌کند؛ این میان‌افزار فقط اجازه می‌دهد
+# مرورگر پاسخ همان مسیر cross-origin را بخواند (درخواست فراخوان بدون کوکی است؛
+# allow_credentials لازم نیست). مبدأها با CORS_ORIGINS (ویرگول‌جداشده) قابل
+# بازنویسی‌اند؛ خالی = فهرست پیش‌فرض استقرار همین سرور.
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+_DEFAULT_CORS_ORIGINS = [
+    "http://rosedoctor.ir",
+    "http://www.rosedoctor.ir",
+    "http://130.185.73.157",
+    "http://rosedoctor.ir:8080",
+    "http://130.185.73.157:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_cors_origins = [o.strip() for o in (settings.cors_origins or "").split(",") if o.strip()] or _DEFAULT_CORS_ORIGINS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
 # فاز ۷۰ الف — ناهمگامی اسکیمای بانک با کد: پیام روشن فارسی به‌جای 500 بی‌صدا.
 # عارضهٔ میدانی: سرور با کدِ ۰.۵۴.۰ بالا آمده بود ولی مایگریشن ۰۰۴۴ روی بانک
 # اعمال نشده بود → SELECT روی user_counseling_files / psych_attempts.viewed_at

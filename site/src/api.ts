@@ -392,15 +392,56 @@ export async function submitFarakhan(payload: Record<string, unknown>, files: Re
     r = await fetch("/api/v1/farakhan/submissions", { method: "POST", body: fd });
   } catch {
     // فاز ۹۱ - قطع شبکه/قطع بدنه در میانهٔ بارگذاری (پروکسی/فایروال) — پیام روشن فارسی
-    throw new FarakhanServerError(
-      "ارتباط با سرور در میانهٔ ارسال قطع شد؛ اطلاعات شما ذخیره نشده است. حجم فایل‌ها را کمتر کنید یا بعد از بررسی اینترنت دوباره «ذخیرهٔ فرم» را بزنید.",
-      0,
-      "network",
-    );
+    throw _farakhanNetworkError();
   }
+  // فاز ۹۵ - مسیر پشتیبان ثبت: دامنهٔ رسمی پشت CDN است؛ CDN بدنهٔ multipart را در
+  // میانهٔ ارسال می‌شکند (IncompleteRead) و پاسخِ غیر-۲xx را با صفحهٔ HTML خودش
+  // جایگزین می‌کند. اگر پاسخ مسیر اصلی «JSON سالم» نبود، ثبت یک‌بار مستقیم از
+  // مبدأ اصلی (IP سرور — VITE_API_FALLBACK_BASE) دوباره تلاش می‌شود؛ پاسخ همان
+  // مسیر پشتیبان (موفق یا خطای اعتبارسنجی واقعی) ملاک است. اگر ثبت اول در واقعیت
+  // رسیده باشد، مسیر پشتیبان «کد ملی تکراری» می‌دهد و فرم همان پیام را نشان می‌دهد.
+  if (_farakhanFallbackUsable() && !(r.ok && _farakhanIsJson(r))) {
+    try {
+      const r2 = await fetch(`${FARAKHAN_FALLBACK_BASE}/api/v1/farakhan/submissions`, { method: "POST", body: fd });
+      if (_farakhanIsJson(r2)) return await _farakhanParseSubmitResponse(r2);
+    } catch {
+      // مسیر پشتیبان هم در دسترس نیست — به پیام‌های مسیر اصلی برمی‌گردیم
+    }
+  }
+  return await _farakhanParseSubmitResponse(r);
+}
+
+/** فاز ۹۵ — مبدأ پشتیبان ثبت فراخوان: وقتی سایت از مبدأ دیگری (دامنهٔ پشت CDN) سرو
+ * می‌شود، ثبت می‌تواند مستقیم از IP سرور دوباره تلاش کند؛ خالی = بدون مسیر پشتیبان. */
+const FARAKHAN_FALLBACK_BASE = (import.meta.env.VITE_API_FALLBACK_BASE ?? "").trim();
+
+function _farakhanFallbackUsable(): boolean {
+  if (!FARAKHAN_FALLBACK_BASE) return false;
+  try {
+    return window.location.origin !== new URL(FARAKHAN_FALLBACK_BASE).origin;
+  } catch {
+    return true;
+  }
+}
+
+function _farakhanIsJson(r: Response): boolean {
+  return (r.headers.get("content-type") ?? "").toLowerCase().includes("application/json");
+}
+
+function _farakhanNetworkError(): FarakhanServerError {
+  return new FarakhanServerError(
+    "ارتباط با سرور در میانهٔ ارسال قطع شد؛ اطلاعات شما ذخیره نشده است. حجم فایل‌ها را کمتر کنید یا بعد از بررسی اینترنت دوباره «ذخیرهٔ فرم» را بزنید.",
+    0,
+    "network",
+  );
+}
+
+/** فاز ۹۵ — تحلیل پاسخ ثبت: خطای ساخت‌یافته (۴۲۲/۵۰۰ با detail.errors) یا پیام‌های
+ * عمومی؛ پاسخ غیر-JSON (صفحهٔ خطای CDN) با پیام فارسی روشن رد می‌شود. */
+async function _farakhanParseSubmitResponse(r: Response): Promise<FarakhanSubmitResult> {
   if (!r.ok) {
     // فاز ۹۱ - بدنهٔ خطا ممکن است ناقص برسد؛ بدون json سقوط نمی‌کنیم
-    const d = await r.json().catch(() => null);
+    const d = _farakhanIsJson(r) ? await r.json().catch(() => null) : null;
     const detail = d && typeof d === "object" ? (d as { detail?: unknown }).detail : null;
     if (detail && typeof detail === "object" && (detail as { errors?: unknown }).errors) {
       const dt = detail as { message?: string; errors?: Record<string, string> };
@@ -428,6 +469,14 @@ export async function submitFarakhan(payload: Record<string, unknown>, files: Re
         ? "خطای سرور در ذخیره‌سازی فرم؛ لطفاً چند لحظه بعد دوباره تلاش کنید. اگر تکرار شد با پشتیبانی تماس بگیرید."
         : "ثبت فرم ناموفق بود؛ دوباره تلاش کنید.",
       r.status,
+    );
+  }
+  if (!_farakhanIsJson(r)) {
+    // فاز ۹۵ - پاسخ ۲xx با بدنهٔ غیر JSON (مثلاً صفحهٔ واسط CDN) — قابل اعتماد نیست
+    throw new FarakhanServerError(
+      "پاسخ سرور قابل خواندن نبود (واسط میانی پاسخ را جایگزین کرده است)؛ لطفاً دوباره تلاش کنید.",
+      r.status,
+      "cdn",
     );
   }
   return (await r.json()) as FarakhanSubmitResult;

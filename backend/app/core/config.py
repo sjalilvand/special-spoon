@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # خالی = غیرفعال (پیش‌فرض توسعه/آزمون)؛ در compose مقدار redis://redis:6379/0
     # نبود Redis/خطای آن → fail-open با هشدار (بند ۶ ADR-05: دسترس‌پذیری مقدم است)
     rate_limit_redis_url: str = ""
+    # فاز ۹۵ - CORS: مبدأهای مجاز برای فراخوان cross-origin (مسیر پشتیبان ثبت فراخوان
+    # وقتی CDN بدنهٔ POST را می‌شکند). رشتهٔ جداشده با ویرگول؛ خالی = فهرست پیش‌فرض استقرار.
+    cors_origins: str = ""
     # سقف پیش‌فرض (بند گام ۲ طرح): ۱۲۰/دقیقه ناشناس (کلید route,ip) و ۶۰/دقیقه احرازشده
     rate_limit_public_per_minute: int = 120
     rate_limit_auth_per_minute: int = 60

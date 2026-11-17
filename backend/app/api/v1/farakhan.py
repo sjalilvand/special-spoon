@@ -978,6 +978,10 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
     # فاز ۹۱ — سپر خطای غیرمنتظره: هیچ خطای پایگاه‌داده/فایل دیگر «۵۰۰ بی‌پیام»
     # نمی‌سازد؛ ردیابی کامل در لاگ می‌افتد و پاسخ JSON ساختاریافته با پیام فارسی
     # برمی‌گردد تا فرم می‌تواند آن را نشان دهد و کاربر داده‌اش را از دست ندهد.
+    # فاز ۹۵ — لاگ مرحله‌به‌مرحلهٔ ذخیره: با عارضهٔ میدانی «۵۰۰ بی‌سبب در سرور واقعی»
+    # (که در محیط آزمون بازتولید نمی‌شد) هر مرحله در لاگ سرویس rosepsy-api پُل می‌شود؛
+    # آخرین «مرحله=» در لاگ، دقیقاً همان جایی است که خطا رخ داده (فایل‌سیستم/بانک/...).
+    logger.info("submit: مرحله=شروع ذخیره | ردیف‌ها=1 | فایل‌ها=%d", len(uploads))
     try:
         submission = FarakhanSubmission(
             tracking_code=f"FRK-{secrets.token_hex(6).upper()}",
@@ -1012,12 +1016,21 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
         )
         db.add(submission)
         db.flush()
+        logger.info("submit: مرحله=insert-submissions ok | id=%s", submission.id)
 
         for field_key, upload in uploads:
             raw, mime = _validate_upload(upload, field_key)
             raw, metadata_stripped = strip_image_metadata(raw, mime)
             scan = av_scan.scan_bytes(upload.filename or "file", mime, raw, settings.allowed_mime_list)
+            logger.info(
+                "submit: مرحله=فایل | key=%s | اسم=%s | حجم=%d | mime=%s | اسکن=%s",
+                field_key, upload.filename or "?", len(raw), mime, scan.status,
+            )
             provider, storage_key, sha, st_fallback = objstore.store(raw, settings)
+            logger.info(
+                "submit: مرحله=ذخیرهٔ فایل ok | provider=%s | key=%s",
+                provider, storage_key,
+            )
             detail = scan.detail
             if metadata_stripped:
                 detail = f"{detail} - فراداده تصویر حذف شد"
@@ -1047,6 +1060,7 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
                 size_bytes=len(raw),
             ))
 
+        logger.info("submit: مرحله=commit")
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -1072,10 +1086,13 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
     except Exception as exc:
         db.rollback()
         logger.exception("farakhan submit: خطای غیرمنتظره در ذخیرهٔ فرم")
+        # فاز ۹۵ — نوع خطا در پاسخ هم می‌آید (فقط نام کلاس، بدون جزئیات داخلی) تا
+        # عیب‌یابی از راه دور ممکن باشد؛ پیام کاربر همان سپر فارسی فاز ۹۱ می‌ماند.
         raise HTTPException(status_code=500, detail={
             "message": "در ذخیره‌سازی فرم خطای غیرمنتظرهٔ سرور رخ داد؛ اطلاعات شما ذخیره نشد. لطفاً دوباره تلاش کنید؛ اگر تکرار شد با پشتیبانی تماس بگیرید.",
             "errors": {},
             "kind": "server",
+            "exc": type(exc).__name__,
         }) from exc
     # فاز ۹۲ — ثبت موفق هم در لاگ می‌آید؛ تا همیشه میدان دید کامل باشد
     logger.info(
