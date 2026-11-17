@@ -117,7 +117,9 @@ FILE_FIELD_KEYS = {
 }
 REQUIRED_FILE_FIELDS = ("national_id_card", "degree_document", "center_activity_license")
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
-MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+# فاز ۹۷ — سقف هر فایل ۵۰۰ کیلوبایت (خواست صاحب سامانه)؛ هم meta و هم
+# _validate_upload از همین ثابت استفاده می‌کنند تا کلاینت و سرور هم‌ارز بمانند.
+MAX_FILE_SIZE_BYTES = 500 * 1024
 MAX_FILES = 7
 MAGIC_BYTES = {
     "application/pdf": b"%PDF-",
@@ -765,7 +767,8 @@ def get_farakhan_provinces(db: Session = Depends(get_db)) -> dict:
     rows = db.scalars(
         select(FarakhanLocation)
         .where(FarakhanLocation.county_name.is_(None), FarakhanLocation.is_active.is_(True))
-        .order_by(FarakhanLocation.id)
+        # فاز ۹۷ — ترتیب الفبای استان‌ها (کلاینت هم با Intl.Collator مرتب می‌کند)
+        .order_by(FarakhanLocation.province_name)
     ).all()
     return {"items": [{"id": r.id, "name": r.province_name} for r in rows]}
 
@@ -1031,7 +1034,9 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
                 "submit: مرحله=ذخیرهٔ فایل ok | provider=%s | key=%s",
                 provider, storage_key,
             )
-            detail = scan.detail
+            # فاز ۹۷ — حذف بایت NUL از متن اسکن پیش از درج در بانک (سپر دوم؛
+            # ریشه در av_scan پاک‌سازی شده ولی اینجا هم محافظت می‌کنیم)
+            detail = (scan.detail or "").replace("\x00", "").strip()
             if metadata_stripped:
                 detail = f"{detail} - فراداده تصویر حذف شد"
             if st_fallback:
@@ -1040,7 +1045,7 @@ async def submit_farakhan(request: Request, db: Session = Depends(get_db)) -> di
                 case_id=None,
                 uploaded_by=None,
                 context="farakhan",
-                original_name=(upload.filename or "file")[:255],
+                original_name=((upload.filename or "file").replace("\x00", ""))[:255],
                 mime=mime,
                 size_bytes=len(raw),
                 sha256=sha,

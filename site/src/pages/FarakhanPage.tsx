@@ -8,17 +8,17 @@
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, Container,
   Divider, FormControl, FormControlLabel, FormHelperText, Grid, IconButton,
-  InputLabel, MenuItem, Paper, Select, Stack, Switch, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TextField, Typography,
+  InputLabel, LinearProgress, MenuItem, Paper, Select, Stack, Switch, TextField,
+  Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FarakhanServerError, fetchFarakhanCaptcha, fetchFarakhanCounties, fetchFarakhanMeta,
-  fetchFarakhanProvinces, fetchFarakhanPublicSubmissions, FarakhanValidationError,
+  fetchFarakhanProvinces, FarakhanValidationError,
   submitFarakhan, checkFarakhanNationalCode,
 } from "../api";
 import type {
-  FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta, FarakhanPublicList,
+  FarakhanCaptcha, FarakhanFileField, FarakhanLocationOption, FarakhanMeta,
 } from "../api";
 import {
   FARAKHAN_MAX_AGE, FARAKHAN_MIN_AGE, birthDateCalendarBounds, completedAgeFromJalali,
@@ -85,6 +85,18 @@ function faNum(n: number): string {
   return n.toLocaleString("fa-IR");
 }
 
+/** فاز ۹۷ — نمایش حجم: زیر ۱ مگابایت با «کیلوبایت» (سقف فعلی هر فایل ۵۰۰ کیلوبایت است) */
+function faSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${faNum(Math.round(bytes / 1024))} کیلوبایت`;
+  return `${faNum(Math.round((bytes / (1024 * 1024)) * 10) / 10)} مگابایت`;
+}
+
+/** فاز ۹۷ — مرتب‌سازی الفبای فارسی با Intl.Collator (مستقل از ترتیب سرور/دیتابیس) */
+const faCollator = new Intl.Collator("fa");
+function sortFaNames(items: FarakhanLocationOption[]): FarakhanLocationOption[] {
+  return [...items].sort((a, b) => faCollator.compare(a.name, b.name));
+}
+
 const SESSION_KEY = "farakhan_session_v1";
 
 /** نشست ذخیره‌شدهٔ فرم در این تب — تا بازشدن تازهٔ لینک، مهلت از اولین ورود حساب می‌شود */
@@ -139,71 +151,8 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
   );
 }
 
-/** فاز ۹۴ — جدول عمومی «افراد ثبت‌نام‌شدهٔ فراخوان» (خواستهٔ صاحب سامانه).
- * تنها نام، استان/شهرستان، مدرک و تاریخ ثبت نمایش داده می‌شود؛ دادهٔ حساس
- * (کد ملی، تلفن، نشانی، فایل‌ها و وضعیت بررسی) از سرور عمومی منتشر نمی‌شود. */
-function RegisteredPeopleCard() {
-  const [data, setData] = useState<FarakhanPublicList | null>(null);
-  const [failed, setFailed] = useState(false);
-  const load = useCallback(() => {
-    setFailed(false);
-    fetchFarakhanPublicSubmissions()
-      .then((d) => setData(d))
-      .catch(() => setFailed(true));
-  }, []);
-  useEffect(() => { load(); }, [load]);
-  const faDate = (iso: string | null): string => {
-    if (!iso) return "—";
-    try {
-      return new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium" }).format(new Date(iso));
-    } catch {
-      return iso.slice(0, 10);
-    }
-  };
-  return (
-    <SectionCard
-      title="افراد ثبت‌نام‌شدهٔ فراخوان"
-      subtitle={data
-        ? `تا کنون ${faNum(data.total)} نفر ثبت‌نام کرده‌اند — کد ملی، شمارهٔ تماس و نشانی هرگز نمایش داده نمی‌شود.`
-        : "در حال دریافت فهرست ثبت‌نام‌شده‌ها…"}
-    >
-      {failed ? (
-        <Alert severity="warning">دریافت فهرست ثبت‌نام‌شده‌ها ناموفق بود؛ صفحه را دوباره باز کنید.</Alert>
-      ) : data === null ? (
-        <Stack alignItems="center" py={4}><CircularProgress sx={{ color: "primary.main" }} /></Stack>
-      ) : data.items.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" textAlign="center" py={3}>
-          هنوز ثبت‌نامی انجام نشده است؛ پس از ثبت‌نام، نام افراد در همین جدول نمایش داده می‌شود.
-        </Typography>
-      ) : (
-        <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid #f3dce2", borderRadius: 3 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: "#fdf3f5" }}>
-                <TableCell sx={{ fontWeight: 800 }}>ردیف</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>نام و نام خانوادگی</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>استان / شهرستان</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>مدرک تحصیلی</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>تاریخ ثبت</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.items.map((row, i) => (
-                <TableRow key={`${row.name}-${row.created_at ?? i}-${i}`} hover>
-                  <TableCell>{faNum(i + 1)}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
-                  <TableCell>{row.province_name} / {row.county_name}</TableCell>
-                  <TableCell>{row.education_degree_label}</TableCell>
-                  <TableCell>{faDate(row.created_at)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </SectionCard>
-  );
-}
+/* فاز ۹۷ — جدول عمومی «افراد ثبت‌نام‌شدهٔ فراخوان» از صفحهٔ عمومی حذف شد؛
+ * خواست صاحب سامانه: فهرست ثبت‌نام‌ها فقط در پنل /panel/farakhan دیده می‌شود. */
 
 function FilePicker({
   field, meta, file, onPick,
@@ -214,10 +163,26 @@ function FilePicker({
   onPick: (key: string, file: File | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const maxMb = Math.round(meta.max_file_size_bytes / (1024 * 1024));
   const tooBig = file != null && file.size > meta.max_file_size_bytes;
   const badExt = file != null && !meta.allowed_extensions.includes(file.name.split(".").pop()?.toLowerCase() || "");
   const error = tooBig || badExt;
+  // فاز ۹۷ — پیش‌نمایش بندانگشتی فایل انتخاب‌شده: تصویر با URL موقت، PDF با برچسب
+  const isPdf = !!file && (file.type === "application/pdf" || (file.name.split(".").pop() || "").toLowerCase() === "pdf");
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setThumbUrl(null);
+      return undefined;
+    }
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if (file.type.startsWith("image/") || ext === "jpg" || ext === "jpeg" || ext === "png") {
+      const url = URL.createObjectURL(file);
+      setThumbUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setThumbUrl(null);
+    return undefined;
+  }, [file]);
   return (
     <Box>
       <input
@@ -239,8 +204,27 @@ function FilePicker({
         </Stack>
         {file && (
           <Stack direction="row" spacing={0.5} alignItems="center">
+            {thumbUrl ? (
+              <Box
+                component="img"
+                src={thumbUrl}
+                alt={`پیش‌نمایش ${field.label}`}
+                sx={{ width: 44, height: 44, objectFit: "cover", borderRadius: 1.5, border: "1px solid #f3dce2", flexShrink: 0 }}
+              />
+            ) : isPdf ? (
+              <Box
+                sx={{
+                  width: 44, height: 44, borderRadius: 1.5, flexShrink: 0,
+                  border: "1px solid #f3dce2", bgcolor: "#fdf3f5",
+                  display: "grid", placeItems: "center",
+                }}
+                aria-hidden
+              >
+                <Typography variant="caption" fontWeight={800} color="primary.main">PDF</Typography>
+              </Box>
+            ) : null}
             <Typography variant="caption" color={error ? "error" : "text.secondary"} noWrap sx={{ maxWidth: 140 }}>
-              {file.name} ({faNum(Math.ceil(file.size / 1024))} کیلوبایت)
+              {file.name} ({faSize(file.size)})
             </Typography>
             <IconButton size="small" aria-label={`حذف فایل ${field.label}`} onClick={() => {
               if (inputRef.current) inputRef.current.value = "";
@@ -251,7 +235,7 @@ function FilePicker({
           </Stack>
         )}
       </Stack>
-      {tooBig && <FormHelperText error>حجم فایل بیش از {faNum(maxMb)} مگابایت است.</FormHelperText>}
+      {tooBig && <FormHelperText error>حجم فایل بیش از {faSize(meta.max_file_size_bytes)} است؛ فایل کوچک‌تری انتخاب کنید.</FormHelperText>}
       {badExt && <FormHelperText error>تنها PDF/JPG/JPEG/PNG مجاز است.</FormHelperText>}
     </Box>
   );
@@ -268,6 +252,10 @@ export default function FarakhanPage() {
   const [errorText, setErrorText] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [trackingCode, setTrackingCode] = useState("");
+  // فاز ۹۷ — ثبت دو مرحله‌ای: «ذخیره» → صفحهٔ بازبینی با تاییدیه → «ذخیرهٔ نهایی»
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [progress, setProgress] = useState(0);
   // فاز ۸۹ - نشست یک‌ساعتهٔ فرم + شمارش معکوس ثانیه‌ای
   const [sessionId, setSessionId] = useState("");
   const [deadline, setDeadline] = useState<number | null>(null);
@@ -312,7 +300,7 @@ export default function FarakhanPage() {
       }
     }).catch(() => setErrorText("دریافت اطلاعات فرم ناموفق بود."));
     fetchFarakhanProvinces()
-      .then((items) => setProvinces(items))
+      .then((items) => setProvinces(sortFaNames(items)))
       .catch(() => undefined);
     loadCaptcha();
   }, [loadCaptcha]);
@@ -340,7 +328,7 @@ export default function FarakhanPage() {
       return;
     }
     fetchFarakhanCounties(Number(form.province_id))
-      .then(setCounties)
+      .then((items) => setCounties(sortFaNames(items)))
       .catch(() => setCounties([]));
   }, [form.province_id]);
 
@@ -438,7 +426,7 @@ export default function FarakhanPage() {
         continue;
       }
       if (file.size > meta.max_file_size_bytes) {
-        out[f.label] = `حجم فایل بیش از ${faNum(Math.ceil(meta.max_file_size_bytes / (1024 * 1024)))} مگابایت است.`;
+        out[f.label] = `حجم فایل بیش از ${faSize(meta.max_file_size_bytes)} است؛ فایل کوچک‌تری انتخاب کنید.`;
         continue;
       }
       const ext = (file.name.split(".").pop() || "").toLowerCase();
@@ -456,7 +444,8 @@ export default function FarakhanPage() {
     return meta?.file_fields.find((f) => f.key === fk)?.label ?? fk;
   };
 
-  const onSubmit = async () => {
+  // فاز ۹۷ — گام اول «ذخیره»: فقط اعتبارسنجی کامل؛ سپس صفحهٔ بازبینی (تاییدیه) باز می‌شود
+  const onSubmit = () => {
     setErrorText("");
     setFieldErrors({});
     const clientError = clientValidate();
@@ -470,6 +459,15 @@ export default function FarakhanPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    setConfirmed(false);
+    setReviewOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // فاز ۹۷ — گام دوم «ذخیرهٔ نهایی»: ارسال واقعی فرم + فایل‌ها با نوار پیشرفت بارگذاری
+  const doSubmit = async () => {
+    setErrorText("");
+    setFieldErrors({});
     const provinceRow = provinces.find((p) => String(p.id) === String(form.province_id));
     const payload = {
       first_name: form.first_name,
@@ -508,11 +506,13 @@ export default function FarakhanPage() {
     }
     setSubmitting(true);
     try {
-      const result = await submitFarakhan(payload, pickedFiles);
+      const result = await submitFarakhan(payload, pickedFiles, (pct) => setProgress(pct));
       setTrackingCode(result.tracking_code);
       clearSavedSession();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
+      // فاز ۹۷ — خطا → بازگشت به فرم با پیام‌ها (دادهٔ فرم حفظ می‌شود)
+      setReviewOpen(false);
       // فاز ۹۱ - مدیریت کامل خطا: اعتبارسنجی روی فیلدها، سرور/شبکه با پیام روشن فارسی؛
       // دادهٔ فرم همیشه حفظ می‌شود و کپچا تازه می‌شود
       if (err instanceof FarakhanValidationError) {
@@ -530,7 +530,7 @@ export default function FarakhanPage() {
             setDeadline(dl);
             setExpired(false);
             try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ sid: m.session_id, deadline: dl })); } catch { /* بی‌اهمیت */ }
-            setErrorText("نشست فرم تازه‌سازی شد؛ کپچای جدید را وارد کنید و دوباره «ذخیرهٔ فرم» را بزنید. اطلاعات شما حفظ شده است.");
+            setErrorText("نشست فرم تازه‌سازی شد؛ کپچای جدید را وارد کنید و دوباره «ذخیره» و سپس «ذخیرهٔ نهایی» را بزنید. اطلاعات شما حفظ شده است.");
           } catch {
             setErrorText("مهلت تکمیل فرم منقضی شده است؛ لطفاً صفحه را دوباره باز کنید.");
           }
@@ -595,23 +595,145 @@ export default function FarakhanPage() {
   // فاز ۹۳ — خطای زندهٔ زیر فیلد (کد ملی/تاریخ تولد) مقدم بر خطاهای submit است
   const err = (label: string): string | undefined => liveErrors?.[label] || fieldErrors?.[label];
 
+  // فاز ۹۷ — صفحهٔ بازبینی (گام میانی ثبت دو مرحله‌ای): همهٔ اطلاعات + فایل‌ها +
+  // تاییدیه؛ «ذخیرهٔ نهایی» تا علامت‌خوردن تاییدیه غیرفعال است.
+  if (reviewOpen) {
+    const optLabel = (opts: { value: string; label: string }[] | undefined, v: string): string =>
+      opts?.find((o) => o.value === v)?.label ?? v;
+    const yesNo = (b: boolean): string => (b ? "بله" : "خیر");
+    const reviewRows: { label: string; value: string }[] = [
+      { label: "نام و نام خانوادگی", value: `${form.first_name.trim()} ${form.last_name.trim()}` },
+      { label: "کد ملی", value: form.national_code.trim() },
+      { label: "جنسیت", value: optLabel(meta?.genders, form.gender) },
+      { label: "تاریخ تولد (شمسی)", value: form.birth_date },
+      ...(isMale ? [{ label: "وضعیت سربازی", value: optLabel(meta?.military_status_options, form.military_status) }] : []),
+      { label: "مدرک تحصیلی", value: optLabel(meta?.education_degrees, form.education_degree) },
+      { label: "رشته تحصیلی", value: form.education_field.trim() },
+      { label: "وضعیت پروانه", value: optLabel(meta?.license_status_options, form.license_status) },
+      ...(form.license_status === "valid" ? [{ label: "شماره پروانه", value: form.license_number }] : []),
+      ...(form.license_description.trim() ? [{ label: "توضیحات پروانه", value: form.license_description }] : []),
+      { label: "مالکیت مرکز", value: optLabel(meta?.center_ownership_options, form.center_ownership) },
+      { label: "استان / شهرستان", value: `${selectedProvinceName} / ${form.county_name}` },
+      { label: "تلفن ثابت", value: form.phone.trim() },
+      ...(form.mobile_number.trim() ? [{ label: "شماره همراه", value: form.mobile_number }] : []),
+      ...(form.postal_code.trim() ? [{ label: "کدپستی", value: form.postal_code }] : []),
+      ...(form.address.trim() ? [{ label: "نشانی مرکز", value: form.address }] : []),
+      { label: "اتاق انفرادی / گروهی / کودک", value: `${faNum(form.individual_rooms)} / ${faNum(form.group_rooms)} / ${faNum(form.child_rooms)}` },
+      { label: "تعداد مشاوران", value: faNum(form.counselors_count) },
+      { label: "فضای انتظار مناسب", value: yesNo(form.has_waiting_space) },
+      { label: "الگوی شرکت‌ها را می‌پذیرد", value: yesNo(form.accepts_company_pattern) },
+      { label: "دسترسی‌پذیری معلولیت", value: yesNo(form.has_accessibility) },
+    ];
+    return (
+      <Box>
+        <Header />
+        <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 }, minHeight: "60vh" }}>
+          <Typography variant="h4" fontWeight={800} color="primary.main" gutterBottom>
+            بازبینی اطلاعات پیش از ذخیرهٔ نهایی
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            همهٔ موارد را بررسی کنید؛ پس از زدن «ذخیرهٔ نهایی» اطلاعات ارسال می‌شود و تغییر خودکار ندارد.
+          </Typography>
+          {errorText && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorText("")}>
+              {errorText}
+            </Alert>
+          )}
+          <Paper elevation={0} sx={{ border: "1px solid #f3dce2", borderRadius: 4, overflow: "hidden" }}>
+            {reviewRows.map((row) => (
+              <Box
+                key={row.label}
+                sx={{
+                  display: "grid", gridTemplateColumns: { xs: "1fr", sm: "220px 1fr" },
+                  gap: { xs: 0.25, sm: 2 }, px: { xs: 2, md: 3 }, py: 1,
+                  borderBottom: "1px solid #fdf3f5",
+                }}
+              >
+                <Typography variant="caption" color="text.secondary">{row.label}</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {row.value.trim() || "—"}
+                </Typography>
+              </Box>
+            ))}
+            {meta && (
+              <Box sx={{ px: { xs: 2, md: 3 }, py: 2 }}>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+                  مدارک انتخاب‌شده
+                </Typography>
+                <Stack spacing={0.5}>
+                  {meta.file_fields.map((f) => {
+                    const file = files[f.key] ?? null;
+                    return (
+                      <Typography key={f.key} variant="body2" color={file ? "text.primary" : "text.secondary"}>
+                        • {f.label}{f.required ? " (الزامی)" : ""}: {file ? `${file.name} — ${faSize(file.size)}` : "انتخاب نشده"}
+                      </Typography>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            )}
+          </Paper>
+
+          <Box sx={{ mt: 3 }}>
+            <FormControlLabel
+              control={<Checkbox checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={submitting} />}
+              label={(
+                <Typography variant="body2">
+                  <b>تاییدیه:</b> صحت همهٔ اطلاعات بالا را بررسی کردم و تأیید می‌کنم.
+                </Typography>
+              )}
+            />
+            {submitting && (
+              <Box sx={{ mb: 2, mt: 1 }}>
+                <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 5, mb: 1 }} />
+                <Typography variant="caption" color="text.secondary">
+                  در حال ارسال اطلاعات و فایل‌ها… {faNum(progress)}٪ — لطفاً صفحه را نبندید و دکمه را عوض نکنید.
+                </Typography>
+              </Box>
+            )}
+            <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mt: 1 }}>
+              <Button
+                variant="outlined"
+                size="large"
+                disabled={submitting}
+                onClick={() => { setReviewOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              >
+                بازگشت و ویرایش
+              </Button>
+              <Button
+                variant="contained"
+                size="large"
+                disabled={submitting || !confirmed || captcha === null}
+                onClick={doSubmit}
+                sx={{ px: 6 }}
+              >
+                {submitting ? `در حال ذخیره… ${faNum(progress)}٪` : "ذخیرهٔ نهایی"}
+              </Button>
+            </Stack>
+            {!confirmed && !submitting && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                برای فعال‌شدن «ذخیرهٔ نهایی»، تاییدیه را علامت بزنید.
+              </Typography>
+            )}
+          </Box>
+        </Container>
+        <Footer />
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Header />
       <Box sx={{ background: "linear-gradient(180deg,#fdf3f5 0%,#ffffff 100%)", pb: 6 }}>
         <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 }, minHeight: "60vh" }}>
           <Typography variant="h3" fontWeight={800} color="primary.main" textAlign="center">
-            فراخوان همکاری
+            فراخوان همکاری کلینک ها مرکز همکار
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 4 }}>
             فرم ثبت‌نام همکاری مراکز مشاوره و روان‌شناسان — لطفاً همهٔ بخش‌ها را با دقت تکمیل کنید.
             فیلدهای ستاره‌دار الزامی‌اند.
           </Typography>
-
-          {/* فاز ۹۴ — جدول عمومی افراد ثبت‌نام‌شده + شمارندهٔ «تعداد ثبت‌شده‌ها» */}
-          <Box sx={{ mb: 4 }}>
-            <RegisteredPeopleCard />
-          </Box>
 
           {/* فاز ۸۹ - شمارش معکوس یک‌ساعته: از لحظهٔ ورود به صفحه، یک ساعت فرصت تکمیل و ذخیره */}
           {(deadline !== null || expired) && (
@@ -678,8 +800,8 @@ export default function FarakhanPage() {
             /* فاز ۸۹ - با انقضای مهلت، همهٔ ورودی‌های فرم یکجا غیرفعال می‌شوند */
             <fieldset disabled={expired} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             <Stack spacing={3}>
-              {/* ── بخش ۱: مشخصات فردی ── */}
-              <SectionCard title="۱. مشخصات فردی">
+              {/* ── بخش ۱: مشخصات کلینک / مرکز مشاوره ── */}
+              <SectionCard title="۱. مشخصات کلینک / مرکز مشاوره">
                 <Grid container spacing={2.5}>
                   <Grid item xs={12} sm={6}>
                     <TextField fullWidth required size="small" label="نام" value={form.first_name}
@@ -879,7 +1001,7 @@ export default function FarakhanPage() {
               </SectionCard>
 
               {/* ── بخش ۵: ظرفیت و امکانات ── */}
-              <SectionCard title="۵. ظرفیت مرکز">
+              <SectionCard title="۵. ظرفیت کلینک / مرکز مشاوره">
                 <Grid container spacing={2.5}>
                   <Grid item xs={6} sm={3}>
                     <TextField fullWidth size="small" type="number" label="اتاق انفرادی" value={form.individual_rooms}
@@ -919,7 +1041,7 @@ export default function FarakhanPage() {
 
               {/* ── بخش ۶: فایل‌ها ── */}
               <SectionCard title="۶. بارگذاری مدارک"
-                subtitle={`فایل‌های PDF یا تصویری — حداکثر ${faNum(Math.round(meta.max_file_size_bytes / (1024 * 1024)))} مگابایت هر فایل و ${faNum(meta.max_files)} فایل`}>
+                subtitle={`فایل‌های PDF یا تصویری — حداکثر ${faSize(meta.max_file_size_bytes)} هر فایل و حداکثر ${faNum(meta.max_files)} فایل`}>
                 <Stack spacing={1.5}>
                   {meta.file_fields.map((f) => (
                     <FilePicker key={f.key} field={f} meta={meta} file={files[f.key] ?? null}
@@ -983,11 +1105,11 @@ export default function FarakhanPage() {
                   <Button
                     variant="contained"
                     size="large"
-                    disabled={submitting || captcha === null || expired}
+                    disabled={captcha === null || expired}
                     onClick={onSubmit}
                     sx={{ alignSelf: "flex-start", px: 6 }}
                   >
-                    {submitting ? "در حال ثبت…" : "ذخیرهٔ فرم"}
+                    ذخیره
                   </Button>
                 </Stack>
               </SectionCard>

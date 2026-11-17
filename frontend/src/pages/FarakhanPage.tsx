@@ -193,9 +193,9 @@ export default function FarakhanPage() {
   return (
     <Box p={{ xs: 2, md: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-        <Typography variant="h6" fontWeight={800}>فراخوان همکاری</Typography>
+        <Typography variant="h6" fontWeight={800}>فراخوان همکاری کلینک ها مرکز همکار</Typography>
         <Typography variant="caption" color="text.secondary">
-          ثبت‌نام‌های فرم عمومی /farakhan
+          کلینک / مرکز ثبت نشده فراخوان — ثبت‌نام‌های فرم عمومی /farakhan
         </Typography>
         <Box flexGrow={1} />
         <Tooltip title="خروجی اکسل">

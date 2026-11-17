@@ -381,16 +381,54 @@ export async function checkFarakhanNationalCode(code: string): Promise<FarakhanN
   }
 }
 
-export async function submitFarakhan(payload: Record<string, unknown>, files: Record<string, File>): Promise<FarakhanSubmitResult> {
+/** فاز ۹۷ — POST فرم با XMLHttpRequest به‌جای fetch تا گزارشِ پیشرفتِ بارگذاری
+ * ممکن شود (fetch پیشرفت آپلود را گزارش نمی‌دهد). پاسخ به‌صورت متن خام برمی‌گردد
+ * تا تحلیل پاسخ هم‌ارز نسخهٔ fetch باشد. */
+function _xhrPostForm(
+  url: string,
+  fd: FormData,
+  onProgress?: (pct: number) => void,
+): Promise<{ status: number; ok: boolean; isJson: boolean; text: string | null }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    xhr.responseType = "text";
+    xhr.timeout = 300000; // ۵ دقیقه — با فایل‌های مجاز (۵۰۰KB) روی اینترنت ضعیف هم می‌سزد
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          onProgress(Math.min(99, Math.round((e.loaded / e.total) * 100)));
+        }
+      };
+    }
+    xhr.onload = () => {
+      const ct = (xhr.getResponseHeader("content-type") ?? "").toLowerCase();
+      if (onProgress) onProgress(100);
+      resolve({
+        status: xhr.status,
+        ok: xhr.status >= 200 && xhr.status < 300,
+        isJson: ct.includes("application/json"),
+        text: typeof xhr.response === "string" ? xhr.response : null,
+      });
+    };
+    xhr.onerror = () => resolve({ status: 0, ok: false, isJson: false, text: null });
+    xhr.ontimeout = () => resolve({ status: 0, ok: false, isJson: false, text: null });
+    xhr.send(fd);
+  });
+}
+
+export async function submitFarakhan(
+  payload: Record<string, unknown>,
+  files: Record<string, File>,
+  onProgress?: (pct: number) => void,
+): Promise<FarakhanSubmitResult> {
   const fd = new FormData();
   fd.append("payload", JSON.stringify(payload));
   for (const [key, file] of Object.entries(files)) {
     if (file) fd.append(key, file, file.name);
   }
-  let r: Response;
-  try {
-    r = await fetch("/api/v1/farakhan/submissions", { method: "POST", body: fd });
-  } catch {
+  const primary = await _xhrPostForm("/api/v1/farakhan/submissions", fd, onProgress);
+  if (primary.status === 0) {
     // فاز ۹۱ - قطع شبکه/قطع بدنه در میانهٔ بارگذاری (پروکسی/فایروال) — پیام روشن فارسی
     throw _farakhanNetworkError();
   }
@@ -400,15 +438,13 @@ export async function submitFarakhan(payload: Record<string, unknown>, files: Re
   // مبدأ اصلی (IP سرور — VITE_API_FALLBACK_BASE) دوباره تلاش می‌شود؛ پاسخ همان
   // مسیر پشتیبان (موفق یا خطای اعتبارسنجی واقعی) ملاک است. اگر ثبت اول در واقعیت
   // رسیده باشد، مسیر پشتیبان «کد ملی تکراری» می‌دهد و فرم همان پیام را نشان می‌دهد.
-  if (_farakhanFallbackUsable() && !(r.ok && _farakhanIsJson(r))) {
-    try {
-      const r2 = await fetch(`${FARAKHAN_FALLBACK_BASE}/api/v1/farakhan/submissions`, { method: "POST", body: fd });
-      if (_farakhanIsJson(r2)) return await _farakhanParseSubmitResponse(r2);
-    } catch {
-      // مسیر پشتیبان هم در دسترس نیست — به پیام‌های مسیر اصلی برمی‌گردیم
-    }
+  if (_farakhanFallbackUsable() && !(primary.ok && primary.isJson)) {
+    onProgress?.(0);
+    const fallback = await _xhrPostForm(`${FARAKHAN_FALLBACK_BASE}/api/v1/farakhan/submissions`, fd, onProgress);
+    if (fallback.ok && fallback.isJson) return _farakhanParseSubmitText(fallback.status, fallback.text);
+    // مسیر پشتیبان هم در دسترس نیست — به پیام‌های مسیر اصلی برمی‌گردیم
   }
-  return await _farakhanParseSubmitResponse(r);
+  return _farakhanParseSubmitText(primary.status, primary.text);
 }
 
 /** فاز ۹۵ — مبدأ پشتیبان ثبت فراخوان: وقتی سایت از مبدأ دیگری (دامنهٔ پشت CDN) سرو
@@ -424,29 +460,35 @@ function _farakhanFallbackUsable(): boolean {
   }
 }
 
-function _farakhanIsJson(r: Response): boolean {
-  return (r.headers.get("content-type") ?? "").toLowerCase().includes("application/json");
-}
-
 function _farakhanNetworkError(): FarakhanServerError {
   return new FarakhanServerError(
-    "ارتباط با سرور در میانهٔ ارسال قطع شد؛ اطلاعات شما ذخیره نشده است. حجم فایل‌ها را کمتر کنید یا بعد از بررسی اینترنت دوباره «ذخیرهٔ فرم» را بزنید.",
+    "ارتباط با سرور در میانهٔ ارسال قطع شد؛ اطلاعات شما ذخیره نشده است. حجم فایل‌ها را کمتر کنید یا بعد از بررسی اینترنت دوباره «ذخیرهٔ نهایی» را بزنید.",
     0,
     "network",
   );
 }
 
-/** فاز ۹۵ — تحلیل پاسخ ثبت: خطای ساخت‌یافته (۴۲۲/۵۰۰ با detail.errors) یا پیام‌های
- * عمومی؛ پاسخ غیر-JSON (صفحهٔ خطای CDN) با پیام فارسی روشن رد می‌شود. */
-async function _farakhanParseSubmitResponse(r: Response): Promise<FarakhanSubmitResult> {
-  if (!r.ok) {
+function _farakhanSafeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** فاز ۹۷ — تحلیل پاسخ ثبت از متن خام (XHR): خطای ساخت‌یافته (۴۲۲/۵۰۰ با
+ * detail.errors) یا پیام‌های عمومی؛ پاسخ غیر-JSON (صفحهٔ خطای CDN) با پیام
+ * فارسی روشن رد می‌شود. هم‌ارز نسخهٔ فاز ۹۵ مبتنی بر Response. */
+function _farakhanParseSubmitText(status: number, text: string | null): FarakhanSubmitResult {
+  const isJson = !!text && text.trimStart().startsWith("{");
+  const d = isJson ? (_farakhanSafeJson(text as string) as { detail?: unknown } | null) : null;
+  if (status < 200 || status >= 300) {
     // فاز ۹۱ - بدنهٔ خطا ممکن است ناقص برسد؛ بدون json سقوط نمی‌کنیم
-    const d = _farakhanIsJson(r) ? await r.json().catch(() => null) : null;
-    const detail = d && typeof d === "object" ? (d as { detail?: unknown }).detail : null;
+    const detail = d && typeof d === "object" ? d.detail : null;
     if (detail && typeof detail === "object" && (detail as { errors?: unknown }).errors) {
       const dt = detail as { message?: string; errors?: Record<string, string> };
-      if (r.status >= 500) {
-        throw new FarakhanServerError(dt.message || "در ذخیره‌سازی فرم خطای سرور رخ داد؛ لطفاً دوباره تلاش کنید.", r.status, "server");
+      if (status >= 500) {
+        throw new FarakhanServerError(dt.message || "در ذخیره‌سازی فرم خطای سرور رخ داد؛ لطفاً دوباره تلاش کنید.", status, "server");
       }
       throw new FarakhanValidationError(
         dt.message || "اعتبارسنجی اطلاعات ناموفق بود.",
@@ -454,30 +496,30 @@ async function _farakhanParseSubmitResponse(r: Response): Promise<FarakhanSubmit
       );
     }
     if (typeof detail === "string" && detail.trim()) {
-      throw r.status >= 500
-        ? new FarakhanServerError(detail, r.status)
+      throw status >= 500
+        ? new FarakhanServerError(detail, status)
         : new FarakhanValidationError(detail, {});
     }
-    if (r.status === 429) {
+    if (status === 429) {
       throw new FarakhanServerError("تعداد تلاش‌های ثبت زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.", 429, "rate");
     }
-    if (r.status === 413) {
+    if (status === 413) {
       throw new FarakhanServerError("حجم مجموع فایل‌های ارسالی بیش از حد مجاز سرور است؛ یک یا چند فایل را کوچک‌تر کنید.", 413, "size");
     }
     throw new FarakhanServerError(
-      r.status >= 500
+      status >= 500
         ? "خطای سرور در ذخیره‌سازی فرم؛ لطفاً چند لحظه بعد دوباره تلاش کنید. اگر تکرار شد با پشتیبانی تماس بگیرید."
         : "ثبت فرم ناموفق بود؛ دوباره تلاش کنید.",
-      r.status,
+      status,
     );
   }
-  if (!_farakhanIsJson(r)) {
+  if (!isJson || !d) {
     // فاز ۹۵ - پاسخ ۲xx با بدنهٔ غیر JSON (مثلاً صفحهٔ واسط CDN) — قابل اعتماد نیست
     throw new FarakhanServerError(
       "پاسخ سرور قابل خواندن نبود (واسط میانی پاسخ را جایگزین کرده است)؛ لطفاً دوباره تلاش کنید.",
-      r.status,
+      status,
       "cdn",
     );
   }
-  return (await r.json()) as FarakhanSubmitResult;
+  return d as unknown as FarakhanSubmitResult;
 }

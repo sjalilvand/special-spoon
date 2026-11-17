@@ -77,9 +77,15 @@ def _clamd_instream(data: bytes, host: str, port: int, timeout: float) -> ScanRe
             if not part:
                 break
             response += part
-            if b"\n" in part:
+            # فاز ۹۷ — برخی بیلدهای clamd ویندوز پاسخ را با بایت NUL می‌بندند
+            # (مثلاً b"stream: OK\x00" بدون \n)؛ روی NUL هم قطع می‌کنیم تا اسکن
+            # به‌جای انتظار تا timeout، همان لحظه تمام شود.
+            if b"\n" in part or b"\x00" in part:
                 break
-    text = response.decode("utf-8", errors="replace").strip()
+    # فاز ۹۷ — بایت NUL در فیلدهای متنی PostgreSQL ممنوع است؛ پاسخ clamd ویندوز
+    # گاهی با \x00 تمام می‌شود و درج FileScan را با psycopg.DataError می‌شکند
+    # (علت قطعی ۵۰۰ «خطای غیرمنتظره» در ذخیرهٔ فراخوان).
+    text = response.decode("utf-8", errors="replace").replace("\x00", "").strip()
     if not text:
         raise OSError("پاسخی از clamd دریافت نشد")
     lowered = text.lower()
