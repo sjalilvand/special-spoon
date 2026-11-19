@@ -42,9 +42,9 @@ import QuizRounded from "@mui/icons-material/QuizRounded";
 import SelfImprovementRounded from "@mui/icons-material/SelfImprovementRounded";
 import StarsRounded from "@mui/icons-material/StarsRounded";
 import GrainRounded from "@mui/icons-material/GrainRounded";
-import type { ComponentType, SvgIconProps } from "@mui/material/SvgIcon";
+import SvgIcon from "@mui/material/SvgIcon";
 
-type IconType = ComponentType<SvgIconProps>;
+type IconType = typeof SvgIcon;
 
 const BY_SLUG: Record<string, IconType> = {
   "bdi-ii": MoodBadRounded,

@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Defs_Process_Case_Intake" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Rosepsy" exporterVersion="1">
+  <bpmn:process id="Process_Case_Intake" name="فرایند پذیرش و تشکیل پرونده (RS-PS-04-01)" isExecutable="false">
+    <bpmn:startEvent id="Start_04" name="مراجعه حضوری / درخواست مشاوره">
+      <bpmn:outgoing>F201</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="T1_04" name="ثبت اطلاعات و تشکیل پرونده">
+      <bpmn:outgoing>F202</bpmn:outgoing>
+      <bpmn:incoming>F201</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T2_04" name="تکمیل رضایت‌نامه آگاهانه">
+      <bpmn:outgoing>F203</bpmn:outgoing>
+      <bpmn:incoming>F202</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T3_04" name="تخصیص مشاور">
+      <bpmn:outgoing>F204</bpmn:outgoing>
+      <bpmn:incoming>F203</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T4_04" name="ارزیابی تخصصی و MSE
+(فرم RS-PS-04-01)">
+      <bpmn:outgoing>F205</bpmn:outgoing>
+      <bpmn:incoming>F204</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T5_04" name="نهایی‌سازی توسط مشاور">
+      <bpmn:outgoing>F206</bpmn:outgoing>
+      <bpmn:incoming>F205</bpmn:incoming>
+      <bpmn:incoming>F209</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G1_04" name="تأیید مسئول فنی؟" default="F207">
+      <bpmn:outgoing>F207</bpmn:outgoing>
+      <bpmn:outgoing>F208</bpmn:outgoing>
+      <bpmn:incoming>F206</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T6_04" name="اصلاح توسط مشاور
+(نسخه اصلاحی)">
+      <bpmn:outgoing>F209</bpmn:outgoing>
+      <bpmn:incoming>F208</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T7_04" name="تدوین طرح درمان">
+      <bpmn:outgoing>F210</bpmn:outgoing>
+      <bpmn:incoming>F207</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T8_04" name="جلسات درمانی و نوبت‌دهی">
+      <bpmn:outgoing>F211</bpmn:outgoing>
+      <bpmn:incoming>F210</bpmn:incoming>
+      <bpmn:incoming>F212</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G2_04" name="پاسخ به درمان؟" default="F212">
+      <bpmn:outgoing>F212</bpmn:outgoing>
+      <bpmn:outgoing>F213</bpmn:outgoing>
+      <bpmn:incoming>F211</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T9_04" name="ارزیابی پایانی و بستن پرونده">
+      <bpmn:outgoing>F214</bpmn:outgoing>
+      <bpmn:incoming>F213</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="End_04" name="پرونده بسته شد">
+      <bpmn:incoming>F214</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="F201" sourceRef="Start_04" targetRef="T1_04" />
+    <bpmn:sequenceFlow id="F202" sourceRef="T1_04" targetRef="T2_04" />
+    <bpmn:sequenceFlow id="F203" sourceRef="T2_04" targetRef="T3_04" />
+    <bpmn:sequenceFlow id="F204" sourceRef="T3_04" targetRef="T4_04" />
+    <bpmn:sequenceFlow id="F205" sourceRef="T4_04" targetRef="T5_04" />
+    <bpmn:sequenceFlow id="F206" sourceRef="T5_04" targetRef="G1_04" />
+    <bpmn:sequenceFlow id="F207" sourceRef="G1_04" targetRef="T7_04" name="تأیید" />
+    <bpmn:sequenceFlow id="F208" sourceRef="G1_04" targetRef="T6_04" name="برگشت برای اصلاح" />
+    <bpmn:sequenceFlow id="F209" sourceRef="T6_04" targetRef="T5_04" />
+    <bpmn:sequenceFlow id="F210" sourceRef="T7_04" targetRef="T8_04" />
+    <bpmn:sequenceFlow id="F211" sourceRef="T8_04" targetRef="G2_04" />
+    <bpmn:sequenceFlow id="F212" sourceRef="G2_04" targetRef="T8_04" name="ادامه جلسات" />
+    <bpmn:sequenceFlow id="F213" sourceRef="G2_04" targetRef="T9_04" name="تکمیل اهداف" />
+    <bpmn:sequenceFlow id="F214" sourceRef="T9_04" targetRef="End_04" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Process_Case_Intake">
+    <bpmndi:BPMNPlane id="Plane_Process_Case_Intake" bpmnElement="Process_Case_Intake">
+      <bpmndi:BPMNShape id="Start_04_di" bpmnElement="Start_04">
+        <dc:Bounds x="140" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_04_di" bpmnElement="T1_04">
+        <dc:Bounds x="230" y="160" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T2_04_di" bpmnElement="T2_04">
+        <dc:Bounds x="440" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T3_04_di" bpmnElement="T3_04">
+        <dc:Bounds x="640" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T4_04_di" bpmnElement="T4_04">
+        <dc:Bounds x="840" y="160" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T5_04_di" bpmnElement="T5_04">
+        <dc:Bounds x="840" y="320" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_04_di" bpmnElement="G1_04">
+        <dc:Bounds x="1040" y="335" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T6_04_di" bpmnElement="T6_04">
+        <dc:Bounds x="1150" y="470" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T7_04_di" bpmnElement="T7_04">
+        <dc:Bounds x="1150" y="320" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T8_04_di" bpmnElement="T8_04">
+        <dc:Bounds x="840" y="480" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G2_04_di" bpmnElement="G2_04">
+        <dc:Bounds x="1040" y="495" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T9_04_di" bpmnElement="T9_04">
+        <dc:Bounds x="1150" y="480" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_04_di" bpmnElement="End_04">
+        <dc:Bounds x="1370" y="502" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F201_di" bpmnElement="F201">
+        <di:waypoint x="176" y="200" />
+        <di:waypoint x="230" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F202_di" bpmnElement="F202">
+        <di:waypoint x="390" y="200" />
+        <di:waypoint x="440" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F203_di" bpmnElement="F203">
+        <di:waypoint x="590" y="200" />
+        <di:waypoint x="640" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F204_di" bpmnElement="F204">
+        <di:waypoint x="790" y="200" />
+        <di:waypoint x="840" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F205_di" bpmnElement="F205">
+        <di:waypoint x="925" y="240" />
+        <di:waypoint x="925" y="360" />
+        <di:waypoint x="990" y="360" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F206_di" bpmnElement="F206">
+        <di:waypoint x="990" y="360" />
+        <di:waypoint x="1040" y="360" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F207_di" bpmnElement="F207">
+        <di:waypoint x="1090" y="360" />
+        <di:waypoint x="1150" y="360" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1080" y="348" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F208_di" bpmnElement="F208">
+        <di:waypoint x="1065" y="385" />
+        <di:waypoint x="1065" y="510" />
+        <di:waypoint x="1150" y="510" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1053" y="456" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F209_di" bpmnElement="F209">
+        <di:waypoint x="1150" y="510" />
+        <di:waypoint x="915" y="510" />
+        <di:waypoint x="915" y="400" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F210_di" bpmnElement="F210">
+        <di:waypoint x="1225" y="400" />
+        <di:waypoint x="1225" y="440" />
+        <di:waypoint x="920" y="440" />
+        <di:waypoint x="920" y="480" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F211_di" bpmnElement="F211">
+        <di:waypoint x="1000" y="520" />
+        <di:waypoint x="1040" y="520" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F212_di" bpmnElement="F212">
+        <di:waypoint x="1040" y="540" />
+        <di:waypoint x="1000" y="540" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="980" y="528" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F213_di" bpmnElement="F213">
+        <di:waypoint x="1090" y="520" />
+        <di:waypoint x="1150" y="520" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1080" y="508" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F214_di" bpmnElement="F214">
+        <di:waypoint x="1320" y="520" />
+        <di:waypoint x="1370" y="520" />
+
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

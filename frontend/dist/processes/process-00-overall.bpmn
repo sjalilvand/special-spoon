@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Defs_Process_Rosepsy_Overall" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Rosepsy" exporterVersion="1">
+  <bpmn:process id="Process_Rosepsy_Overall" name="گردش کلی خدمات مشاوره روان‌شناختی سازمانی" isExecutable="false">
+    <bpmn:startEvent id="Start_00" name="مراجع (تلفن / سایت عمومی / حضوری)">
+      <bpmn:outgoing>F01</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="T1_00" name="پاسخگویی و ثبت درخواست">
+      <bpmn:outgoing>F02</bpmn:outgoing>
+      <bpmn:incoming>F01</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T2_00" name="پذیرش اولیه تلفنی
+(RS-PS-01-01)">
+      <bpmn:outgoing>F03</bpmn:outgoing>
+      <bpmn:incoming>F02</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G1_00" name="مورد حاد/پرخطر؟" default="F04">
+      <bpmn:outgoing>F04</bpmn:outgoing>
+      <bpmn:outgoing>F05</bpmn:outgoing>
+      <bpmn:incoming>F03</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T3_00" name="مدیریت مورد حاد
+(RS-PS-08-01)">
+      <bpmn:outgoing>F06</bpmn:outgoing>
+      <bpmn:incoming>F04</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T4_00" name="پیگیری مورد حاد و مختومه‌سازی">
+      <bpmn:outgoing>F07</bpmn:outgoing>
+      <bpmn:incoming>F06</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="End1_00" name="مورد حاد مختومه شد">
+      <bpmn:incoming>F07</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T5_00" name="پذیرش حضوری، تشکیل پرونده و رضایت
+(RS-PS-04-01)">
+      <bpmn:outgoing>F08</bpmn:outgoing>
+      <bpmn:incoming>F05</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T6_00" name="تخصیص مشاور">
+      <bpmn:outgoing>F09</bpmn:outgoing>
+      <bpmn:incoming>F08</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T7_00" name="ارزیابی تخصصی، MSE و طرح درمان
+(RS-PS-04-01)">
+      <bpmn:outgoing>F10</bpmn:outgoing>
+      <bpmn:incoming>F09</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T8_00" name="تأیید مسئول فنی">
+      <bpmn:outgoing>F11</bpmn:outgoing>
+      <bpmn:incoming>F10</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="T9_00" name="جلسات درمانی و نوبت‌دهی">
+      <bpmn:outgoing>F12</bpmn:outgoing>
+      <bpmn:incoming>F11</bpmn:incoming>
+      <bpmn:incoming>F13</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G2_00" name="تکمیل اهداف درمان؟" default="F13">
+      <bpmn:outgoing>F13</bpmn:outgoing>
+      <bpmn:outgoing>F14</bpmn:outgoing>
+      <bpmn:incoming>F12</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T10_00" name="ارزیابی پایانی و بستن پرونده">
+      <bpmn:outgoing>F15</bpmn:outgoing>
+      <bpmn:incoming>F14</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="End2_00" name="پرونده بسته شد">
+      <bpmn:incoming>F15</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="F01" sourceRef="Start_00" targetRef="T1_00" />
+    <bpmn:sequenceFlow id="F02" sourceRef="T1_00" targetRef="T2_00" />
+    <bpmn:sequenceFlow id="F03" sourceRef="T2_00" targetRef="G1_00" />
+    <bpmn:sequenceFlow id="F04" sourceRef="G1_00" targetRef="T3_00" name="بله" />
+    <bpmn:sequenceFlow id="F05" sourceRef="G1_00" targetRef="T5_00" name="خیر" />
+    <bpmn:sequenceFlow id="F06" sourceRef="T3_00" targetRef="T4_00" />
+    <bpmn:sequenceFlow id="F07" sourceRef="T4_00" targetRef="End1_00" />
+    <bpmn:sequenceFlow id="F08" sourceRef="T5_00" targetRef="T6_00" />
+    <bpmn:sequenceFlow id="F09" sourceRef="T6_00" targetRef="T7_00" />
+    <bpmn:sequenceFlow id="F10" sourceRef="T7_00" targetRef="T8_00" />
+    <bpmn:sequenceFlow id="F11" sourceRef="T8_00" targetRef="T9_00" />
+    <bpmn:sequenceFlow id="F12" sourceRef="T9_00" targetRef="G2_00" />
+    <bpmn:sequenceFlow id="F13" sourceRef="G2_00" targetRef="T9_00" name="ادامه جلسات" />
+    <bpmn:sequenceFlow id="F14" sourceRef="G2_00" targetRef="T10_00" name="تکمیل" />
+    <bpmn:sequenceFlow id="F15" sourceRef="T10_00" targetRef="End2_00" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Process_Rosepsy_Overall">
+    <bpmndi:BPMNPlane id="Plane_Process_Rosepsy_Overall" bpmnElement="Process_Rosepsy_Overall">
+      <bpmndi:BPMNShape id="Start_00_di" bpmnElement="Start_00">
+        <dc:Bounds x="140" y="302" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_00_di" bpmnElement="T1_00">
+        <dc:Bounds x="230" y="280" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T2_00_di" bpmnElement="T2_00">
+        <dc:Bounds x="440" y="280" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_00_di" bpmnElement="G1_00">
+        <dc:Bounds x="670" y="295" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T3_00_di" bpmnElement="T3_00">
+        <dc:Bounds x="780" y="160" width="190" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T4_00_di" bpmnElement="T4_00">
+        <dc:Bounds x="1020" y="160" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End1_00_di" bpmnElement="End1_00">
+        <dc:Bounds x="1240" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T5_00_di" bpmnElement="T5_00">
+        <dc:Bounds x="780" y="280" width="190" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T6_00_di" bpmnElement="T6_00">
+        <dc:Bounds x="1020" y="280" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T7_00_di" bpmnElement="T7_00">
+        <dc:Bounds x="1220" y="280" width="190" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T8_00_di" bpmnElement="T8_00">
+        <dc:Bounds x="1460" y="280" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T9_00_di" bpmnElement="T9_00">
+        <dc:Bounds x="230" y="480" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G2_00_di" bpmnElement="G2_00">
+        <dc:Bounds x="460" y="495" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T10_00_di" bpmnElement="T10_00">
+        <dc:Bounds x="560" y="480" width="180" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End2_00_di" bpmnElement="End2_00">
+        <dc:Bounds x="790" y="502" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F01_di" bpmnElement="F01">
+        <di:waypoint x="176" y="320" />
+        <di:waypoint x="230" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F02_di" bpmnElement="F02">
+        <di:waypoint x="380" y="320" />
+        <di:waypoint x="440" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F03_di" bpmnElement="F03">
+        <di:waypoint x="620" y="320" />
+        <di:waypoint x="670" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F04_di" bpmnElement="F04">
+        <di:waypoint x="695" y="295" />
+        <di:waypoint x="695" y="200" />
+        <di:waypoint x="780" y="200" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="683" y="219" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F05_di" bpmnElement="F05">
+        <di:waypoint x="720" y="320" />
+        <di:waypoint x="780" y="320" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="710" y="308" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F06_di" bpmnElement="F06">
+        <di:waypoint x="970" y="200" />
+        <di:waypoint x="1020" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F07_di" bpmnElement="F07">
+        <di:waypoint x="1190" y="200" />
+        <di:waypoint x="1240" y="200" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F08_di" bpmnElement="F08">
+        <di:waypoint x="970" y="320" />
+        <di:waypoint x="1020" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F09_di" bpmnElement="F09">
+        <di:waypoint x="1170" y="320" />
+        <di:waypoint x="1220" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F10_di" bpmnElement="F10">
+        <di:waypoint x="1410" y="320" />
+        <di:waypoint x="1460" y="320" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F11_di" bpmnElement="F11">
+        <di:waypoint x="1545" y="360" />
+        <di:waypoint x="1545" y="440" />
+        <di:waypoint x="320" y="440" />
+        <di:waypoint x="320" y="480" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F12_di" bpmnElement="F12">
+        <di:waypoint x="410" y="520" />
+        <di:waypoint x="460" y="520" />
+
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F13_di" bpmnElement="F13">
+        <di:waypoint x="485" y="495" />
+        <di:waypoint x="485" y="420" />
+        <di:waypoint x="320" y="420" />
+        <di:waypoint x="320" y="480" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="362" y="441" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F14_di" bpmnElement="F14">
+        <di:waypoint x="510" y="520" />
+        <di:waypoint x="560" y="520" />
+
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="495" y="508" width="80" height="24" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F15_di" bpmnElement="F15">
+        <di:waypoint x="740" y="520" />
+        <di:waypoint x="790" y="520" />
+
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

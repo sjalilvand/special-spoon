@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>راهنمای سامانه Rosepsy — راهنمای کاربر پنل</title>
+<style>
+  :root{
+    --bg:#f7f4f5; --card:#ffffff; --ink:#27303f; --muted:#6b7280;
+    --brand:#b04a5a; --brand-dark:#8b2f3e; --brand2:#7a5c8a;
+    --ok:#2e7d32; --warn:#b45309; --info:#1565c0; --line:#e8dfe2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Vazirmatn","Segoe UI",Tahoma,Arial,sans-serif;line-height:2;font-size:15px}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 16px 64px}
+  header.hero{background:linear-gradient(135deg,var(--brand-dark),var(--brand));
+       color:#fff;border-radius:16px;padding:26px 26px;margin-bottom:20px;
+       box-shadow:0 10px 28px rgba(139,47,62,.22)}
+  header.hero h1{margin:0 0 6px;font-size:25px}
+  header.hero p{margin:4px 0;opacity:.94;font-size:14px}
+  .badges{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+  .badge{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);
+       padding:2px 12px;border-radius:999px;font-size:12px}
+  nav.toc{background:var(--card);border:1px solid var(--line);border-radius:12px;
+       padding:14px 18px;margin-bottom:18px}
+  nav.toc a{color:var(--brand);text-decoration:none;margin-inline-end:14px;font-size:13.5px;white-space:nowrap}
+  nav.toc a:hover{text-decoration:underline}
+  section.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+       padding:20px 22px;margin-bottom:18px;box-shadow:0 2px 10px rgba(39,48,63,.04)}
+  h2{font-size:19px;margin:0 0 12px;color:var(--brand-dark);display:flex;align-items:center;gap:8px}
+  h2 .dot{width:9px;height:9px;border-radius:50%;background:var(--brand);display:inline-block}
+  h3{font-size:15.5px;margin:18px 0 6px;color:var(--brand2)}
+  p{margin:6px 0}
+  ol,ul{margin:6px 0;padding-inline-start:22px}
+  li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}
+  th{background:#faf3f4;color:var(--brand-dark);text-align:right;padding:8px 10px;
+     border-bottom:2px solid var(--line);white-space:nowrap}
+  td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  code{background:#f5eef0;border:1px solid var(--line);border-radius:6px;
+       padding:1px 7px;font-size:12.5px;direction:ltr;display:inline-block}
+  .note{border-inline-start:4px solid var(--info);background:#eff6ff;
+       border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13.5px}
+  .warn{border-inline-start:4px solid var(--warn);background:#fffbeb;
+       border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13.5px}
+  .ok{border-inline-start:4px solid var(--ok);background:#f0fdf4;
+       border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13.5px}
+  .step{display:flex;gap:10px;margin:10px 0;align-items:flex-start}
+  .step .n{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--brand);
+       color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:4px}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:26px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>📖 راهنمای سامانه Rosepsy</h1>
+  <p>راهنمای کاربر پنل مدیریت — گردش کار پذیرش تا پایان خدمت، شعب و مراکز، فرایندها، آزمون‌ها و مالی</p>
+  <div class="badges">
+    <span class="badge">نسخه ۰٫۴۷٫۰</span>
+    <span class="badge">فاز ۵۱</span>
+    <span class="badge">به‌روزرسانی: آبان ۱۴۰۵</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#start">شروع کار</a>
+  <a href="#flow">گردش کار</a>
+  <a href="#roles">نقش‌ها</a>
+  <a href="#branches">شعب و مراکز</a>
+  <a href="#processes">فرایندها</a>
+  <a href="#tests">آزمون‌ها</a>
+  <a href="#finance">مالی</a>
+  <a href="#faq">پرسش‌های پرتکرار</a>
+</nav>
+<section class="card" id="start">
+  <h2><span class="dot"></span>۱. شروع کار</h2>
+  <p>پنل مدیریت روی مسیر <code>/panel</code> در دسترس است. با نام کاربری و رمز عبوری که مدیر سامانه برای شما ساخته وارد شوید. نشست ورود با کوکی امن «refresh» نگه داشته می‌شود؛ اگر مدتی فعال نباشید و access token منقضی شود، سامانه به‌صورت خودکار نشست را تازه می‌کند و لازم نیست دوباره وارد شوید.</p>
+  <p>پس از ورود، داشبورد عملیاتی شاخص‌های کلیدی (متقاضیان، نوبت‌ها، مشاوره‌های انجام‌شده، آزمون‌ها و …) را در بازه‌های ۷/۳۰/۹۰ روز و ۱ سال نشان می‌دهد. همه منوها در نوار بالایی به‌صورت گروه‌بندی‌شده قرار دارند: <b>میز کار، پرونده و درمان، پذیرش و مشتریان، محتوا و آموزش، مالی، سازمان و منابع، سامانه و پشتیبانی</b>.</p>
+  <div class="note">اگر منویی را نمی‌بینید، یعنی نقش کاربری شما به آن دسترسی ندارد؛ با مدیر سامانه تماس بگیرید.</div>
+</section>
+
+<section class="card" id="flow">
+  <h2><span class="dot"></span>۲. گردش کلی کار (پذیرش تا پایان خدمت)</h2>
+  <div class="step"><div class="n">۱</div><div><b>ثبت درخواست مشاوره</b> — درخواست از سایت عمومی یا از منوی «درخواست‌های مشاوره» توسط پذیرش ثبت می‌شود و در وضعیت «جدید» می‌رود.</div></div>
+  <div class="step"><div class="n">۲</div><div><b>بررسی و پذیرش تلفنی</b> — پذیرش با فرم «پذیرش اولیه تلفنی» (RS-PS-01-01) اطلاعات فردی و نیاز مراجع را ثبت و مسیر را تعیین می‌کند.</div></div>
+  <div class="step"><div class="n">۳</div><div><b>تشکیل پرونده</b> — با فرم «تشکیل پرونده» (RS-PS-04-01) پرونده در وضعیت فعال ایجاد و مشاور تخصیص داده می‌شود.</div></div>
+  <div class="step"><div class="n">۴</div><div><b>ارزیابی و آزمون</b> — سرپرست فنی/مشاور از کیت فرم‌ها یا «مرکز آزمون روان‌شناسی» ابزار مناسب را به مراجع می‌دهد؛ نتایج در پرونده ثبت می‌شود.</div></div>
+  <div class="step"><div class="n">۵</div><div><b>جلسات مشاوره و نوبت</b> — نوبت‌ها در تقویم رزرو می‌شوند (ساعت‌های خالی/پرشده) و پس از هر جلسه، توصیه‌نامه منتشر می‌شود.</div></div>
+  <div class="step"><div class="n">۶</div><div><b>مورد حاد و ارجاع</b> — در موارد اورژانسی فرم «مورد حاد» (RS-PS-08-01) هشدار سطح ۳ برای سرپرست فنی می‌سازد و قاعده ارجاع سطح ۳ اعمال می‌شود.</div></div>
+  <div class="step"><div class="n">۷</div><div><b>مالی و تسویه</b> — سفارش، فاکتور، پرداخت و کیف پول به‌صورت یکپارچه در بخش مالی مدیریت می‌شود.</div></div>
+</section>
+
+<section class="card" id="roles">
+  <h2><span class="dot"></span>۳. نقش‌ها و دسترسی‌ها</h2>
+  <table>
+    <tr><th>نقش</th><th>مسئولیت اصلی</th><th>نمونه منوها</th></tr>
+    <tr><td><b>مدیر سامانه</b> (SYSTEM_ADMIN)</td><td>پیکربندی کامل سامانه، کاربران، فرایندها، یکپارچه‌سازی‌ها</td><td>کاربران، رخدادهای امنیتی، فرایندها، شعب، گزارش DPO</td></tr>
+    <tr><td><b>مدیر سازمان</b> (ORG_MANAGER)</td><td>مدیریت عملیاتی مرکز، گزارش‌های تحلیلی</td><td>داشبورد مدیر، حسابداری، مشاوران، سفارش و پرداخت</td></tr>
+    <tr><td><b>پذیرش</b> (RECEPTION)</td><td>پذیرش تلفنی، نوبت‌دهی، ثبت متقاضی</td><td>درخواست‌های مشاوره، متقاضیان، ورود اکسل، نوبت</td></tr>
+    <tr><td><b>سرپرست فنی</b> (TECHNICAL_SUPERVISOR)</td><td>بازبینی فنی، هشدارهای سطح ۳، نظارت بر پرونده‌ها</td><td>بررسی‌های فنی، هشدارهای سطح ۳، پرونده‌های تحت نظارت</td></tr>
+    <tr><td><b>مشاور</b> (COUNSELOR)</td><td>کارتابل جلسات، ارزیابی‌ها، توصیه‌نامه‌ها</td><td>کارتابل مشاور، ارزیابی‌های من، پرونده‌ها</td></tr>
+    <tr><td><b>متقاضی</b> (APPLICANT)</td><td>پنل شخصی، رزرو نوبت، آزمون، پشتیبانی</td><td>پنل من، مرکز آزمون، دستیار هوشمند</td></tr>
+  </table>
+</section>
+
+<section class="card" id="branches">
+  <h2><span class="dot"></span>۴. شعب و مراکز (B31) — ثبت مرکز و شعبه</h2>
+  <p>ساختار سازمانی دو سطح دارد: ابتدا <b>مرکز</b> (کلینیک) تعریف می‌شود و سپس <b>شعب</b> زیر آن ثبت می‌گردند. ثبت شعبه بدون انتخاب مرکز ممکن نیست — این یک قاعده ساختاری است.</p>
+  <h3>مرحله‌به‌مرحله:</h3>
+  <div class="step"><div class="n">۱</div><div>به منوی <b>«سازمان و منابع ← شعب»</b> بروید.</div></div>
+  <div class="step"><div class="n">۲</div><div>اگر هنوز مرکزی ندارید، دکمه <b>«+ مرکز جدید»</b> را بزنید و نام، slug (یکینامه لاتین مثل <code>rose-clinic</code>)، تلفن و وب‌سایت را پر کنید. پس از ایجاد، مرکز به‌طور خودکار انتخاب می‌شود.</div></div>
+  <div class="step"><div class="n">۳</div><div>اگر مرکز از قبل دارید، آن را از فهرست کشویی <b>«مرکز»</b> در بالای صفحه انتخاب کنید تا اطلاعات و شعب آن نمایش داده شود.</div></div>
+  <div class="step"><div class="n">۴</div><div>حالا دکمه <b>«+ شعبه جدید»</b> (بالای جدول) یا <b>«+ ثبت شعبه برای این مرکز»</b> (کارت اطلاعات مرکز) فعال است؛ استان را انتخاب کنید — شهر و مختصات مرکز استان خودکار پر می‌شود — و با نقشه موقعیت دقیق را تنظیم و شعبه را ذخیره کنید.</div></div>
+  <div class="step"><div class="n">۵</div><div>با دکمه <b>«خدمات»</b> هر شعبه، خدمت‌های ارائه‌شده آن را مشخص کنید (فقط خدمت‌های انتخابی در صفحات عمومی نمایش داده می‌شوند) و با دکمه <b>«انتشار»</b> شعبه را عمومی کنید.</div></div>
+  <div class="ok"><b>نکته:</b> شعبه در وضعیت «پیش‌نویس» فقط برای پرسنل داخلی دیده می‌شود؛ برای نمایش در سایت عمومی و نقشه (B40) باید منتشر شود.</div>
+</section>
+
+<section class="card" id="processes">
+  <h2><span class="dot"></span>۵. فرایندها و مانیتورینگ (B41/B42)</h2>
+  <h3>فرایندها (BPMN)</h3>
+  <p>در منوی «سامانه و پشتیبانی ← فرایندها (BPMN)» فرایندهای سازمانی با نمودار استاندارد BPMN 2.0 تعریف می‌شوند. هر فرایند <b>نسخه‌بندی</b> دارد: ثبت نسخه جدید شماره‌گذاری خودکار دارد و انتشار نسخه جدید، نسخه منتشرشده قبلی را بایگانی می‌کند تا سابقه حفظ شود.</p>
+  <h3>مانیتورینگ فرایندها</h3>
+  <p>صفحه «مانیتورینگ فرایندها» وضعیت هر درخواست/موضوع را در فرایندها نشان می‌دهد: کدام گام‌ها انجام شده، گام فعال چیست و چه کسی چه زمانی هر گام را ثبت کرده است.</p>
+  <ul>
+    <li><b>راه سریع:</b> در «درخواست‌های مشاوره» روی دکمه <b>«فرایند»</b> هر ردیف بزنید تا مانیتورینگ همان درخواست با فیلتر آماده باز شود.</li>
+    <li>با دکمه «+ شروع فرایند برای موضوع» می‌توانید یک نمونه اجرا جدید (درخواست مشاوره/پرونده/متقاضی/موضوع دستی) بسازید.</li>
+    <li>با «+ ثبت گام» پیشرفت ثبت می‌شود و با دکمه‌های تعلیق/تکمیل/لغو/ادامه وضعیت نمونه مدیریت می‌گردد.</li>
+  </ul>
+  <div class="note">اگر پیام «نمونه‌ای یافت نشد» دیدید، یعنی برای این فیلتر هنوز نمونه اجرایی ثبت نشده؛ فیلترها را پاک کنید یا فرایند جدیدی شروع کنید.</div>
+</section>
+
+<section class="card" id="tests">
+  <h2><span class="dot"></span>۶. مرکز آزمون روان‌شناسی (B37)</h2>
+  <p>بانک آزمون شامل ۳۱ ابزار استاندارد است (از آزمون‌های کوتاه مثل DASS-21 و GHQ-28 تا ابزارهای بلند مثل MMPI-370، NEO-PI-R 240، 16PF و MCMI) به‌همراه آزمون‌های تصویری ماتریس ریون (CPM کودکان رنگی و RSPM سیاه) با عکس پیوست سؤال.</p>
+  <ul>
+    <li>کاربر مجاز از «محتوا و آموزش ← مرکز آزمون روان‌شناسی» ابزار را انتخاب می‌کند؛ کارت هر آزمون کد رنگی، مدت و محدوده سنی دارد.</li>
+    <li>پیش از شروع آزمون، فرم <b>مشخصات اولیه</b> (جنسیت/سن/تحصیلات/تأهل) تکمیل می‌شود و با نتیجه آزمون ذخیره می‌گردد.</li>
+    <li>آزمون‌های تصویری، عکس سؤال را از API امن بارگیری می‌کنند؛ نمره و بازه تفسیر پس از ثبت به‌صورت خودکار محاسبه می‌شود.</li>
+    <li>ابزارهای در وضعیت «پیش‌نویس» (مثل تورنس و مینه‌سوتا فعلاً) برای اجرای عمومی فعال نیستند و پس بازبینی محتوا منتشر می‌شوند.</li>
+  </ul>
+</section>
+
+<section class="card" id="finance">
+  <h2><span class="dot"></span>۷. مالی (B10/B18/B22)</h2>
+  <table>
+    <tr><th>بخش</th><th>کاربرد</th></tr>
+    <tr><td>سفارش و پرداخت (B10)</td><td>ثبت سفارش خدمت، فاکتور، درگاه پرداخت و کد تخفیف</td></tr>
+    <tr><td>کیف پول (B18)</td><td>شارژ، مصرف اعتبار و استرداد وجه کاربران</td></tr>
+    <tr><td>حسابداری (B22)</td><td>کدینگ حساب‌ها، سند حسابداری، تسویه و گزارش مغایرت</td></tr>
+  </table>
+  <div class="warn"><b>امنیت مالی:</b> عملیات مالی با هدر <code>Idempotency-Key</code> محافظت می‌شوند؛ دوبار‌زدن دکمه پرداخت سفارش تکراری نمی‌سازد. سقف نرخ درخواست‌ها نیز با Redis اعمال می‌شود.</div>
+</section>
+
+<section class="card" id="faq">
+  <h2><span class="dot"></span>۸. پرسش‌های پرتکرار</h2>
+  <h3>چرا صفحه‌ای سفید/خالی شد؟</h3>
+  <p>از فاز ۵۱ همه صفحات پنل «مرز خطا» دارند؛ به‌جای صفحه سفید، پیام «نمایش این بخش با خطا مواجه شد» با دکمه تازه‌سازی می‌بینید. اگر باز هم صفحه سفید دیدید، کش مرورگر را پاک کنید یا با Ctrl+Shift+R تازه‌سازی سخت انجام دهید.</p>
+  <h3>خطای 401 در کنسول مرورگر خطرناک است؟</h3>
+  <p>خیر. اگر access token منقضی شده باشد، یک درخواست با 401 رد و بلافاصله با توکن تازه به‌صورت خودکار تکرار می‌شود؛ این خطا در کنسول فقط به‌صورت پیام قرمز ظاهر می‌شود و نشست شما حفظ می‌ماند. فقط اگر به صفحه ورود منتقل شدید، دوباره وارد شوید.</p>
+  <h3>دکمه «ثبت شعبه» را نمی‌بینم!</h3>
+  <p>برای ثبت شعبه باید ابتدا یک <b>مرکز</b> از فهرست بالای صفحه انتخاب شود (یا مرکز جدید بسازید). پس از انتخاب مرکز، دکمه‌های «+ شعبه جدید» و «+ ثبت شعبه برای این مرکز» فعال می‌شوند — بخش ۴ همین راهنما را ببینید.</p>
+  <h3>چطور نسخه جدید یک فرایند ثبت کنم؟</h3>
+  <p>در صفحه فرایندها، فرایند را انتخاب و XML نسخه جدید را با چانج‌لاگ ارسال کنید؛ شماره‌گذاری خودکار است و انتشار نسخه جدید نسخه قبلی را بایگانی می‌کند.</p>
+  <h3>گزارش پیشرفت پروژه کجاست؟</h3>
+  <p>از منوی «سامانه و پشتیبانی ← گزارش پیشرفت پروژه» — در تب جدید باز می‌شود و وضعیت فازها و کارهای باقی‌مانده را نشان می‌دهد.</p>
+</section>
+
+<footer>راهنمای سامانه Rosepsy — همراه فاز ۵۱ (v0.47.0) · این صفحه ایستا است و با هر استقرار به‌روز می‌شود</footer>
+</div>
+</body>
+</html>
