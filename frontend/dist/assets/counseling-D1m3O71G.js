@@ -1,0 +1,1 @@
+import{b as e,i}from"./index-BlTLTs_U.js";async function s(){return(await e.get("/me/counseling-file")).data}async function c(n=""){const t=await e.get("/counseling-files",{params:n?{q:n}:{}});return i(t)}async function o(n){return(await e.get(`/counseling-files/${n}`)).data}export{o as a,s as b,c as f};
