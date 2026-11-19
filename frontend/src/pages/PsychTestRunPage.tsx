@@ -15,6 +15,7 @@ import {
   AttemptResult, TestDemographics, fetchPublicPaper, submitPsychAttempt,
 } from "../api/psych";
 import PsychResultReport, { ScoreGauge } from "../components/PsychResultReport";
+import psychTestIcon from "../components/PsychTestIcons";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -229,6 +230,7 @@ export default function PsychTestRunPage() {
 
   // -------------------------------------------------- صفحه معرفی
   if (!started) {
+    const IntroIcon = psychTestIcon(slug, paper.data?.test.topic_name);
     return (
       <Stack sx={{ maxWidth: 760, mx: "auto", py: 2 }}>
         {paper.isLoading && <CircularProgress sx={{ display: "block", mx: "auto", mt: 6 }} />}
@@ -251,6 +253,16 @@ export default function PsychTestRunPage() {
                   sx={{ display: "block", mx: "auto", mb: 2, maxWidth: 220, maxHeight: 110, objectFit: "contain" }}
                 />
               )}
+              <Box sx={{ display: "flex", justifyContent: "center", mb: 1.5 }}>
+                <Box sx={{
+                  width: 64, height: 64, borderRadius: "50%", color: "#fff",
+                  bgcolor: paper.data.test.accent_color || "#8a3342",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 6px 16px rgba(0,0,0,.18)",
+                }}>
+                  <IntroIcon sx={{ fontSize: 34 }} />
+                </Box>
+              </Box>
               <Typography variant="h5" fontWeight={800} textAlign="center">
                 {branding?.entry_title || effTitle}
               </Typography>

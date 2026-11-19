@@ -21,6 +21,7 @@ import {
 } from "../api/psych";
 import { EmptyState, FormSection, OptionsEditor, OptionRow } from "../components/FormKit";
 import PsychResultReport from "../components/PsychResultReport";
+import psychTestIcon from "../components/PsychTestIcons";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
@@ -81,7 +82,7 @@ export default function PsychTestCenterPage() {
   return (
     <Stack spacing={2.5}>
       <Box>
-        <Typography variant="h5" fontWeight={800}>مرکز آزمون روان‌شناسی</Typography>
+        <Typography variant="h5" fontWeight={800} component="div">مرکز آزمون روان‌شناسی</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           ابزارهای غربالگری استاندارد را انجام دهید، نتیجه و ریزنمره ابعاد را ببینید و در صورت نیاز
           برای مشاوره اقدام کنید. نتیجه هر آزمون در «نتایج من» نگهداری می‌شود.
@@ -186,18 +187,22 @@ export default function PsychTestCenterPage() {
 
 function TestCard({ test, color, code, onRun }: {
   test: {
-    title: string; description: string | null; topic_name: string | null; question_count: number;
+    slug: string; title: string; description: string | null; topic_name: string | null; question_count: number;
     age_range?: string | null; estimated_minutes?: number | null;
   };
   color: string; code: string; onRun: () => void;
 }) {
+  const Icon = psychTestIcon(test.slug, test.topic_name);
   return (
     <Card variant="outlined" sx={{ borderRadius: 3, height: "100%", display: "flex", flexDirection: "column" }}>
       <CardActionArea onClick={onRun} sx={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-        {/* زبانه رنگی سمت راست مانند کارت‌های آزمون مرجع (کد ابزار عمودی) */}
-        <Box sx={{ width: 42, bgcolor: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "0 14px 14px 0" }}>
-          <Typography sx={{ transform: "rotate(90deg)", whiteSpace: "nowrap", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-            {code || test.title.slice(0, 12)}
+        {/* زبانه رنگی سمت راست: آیکون اختصاصی آزمون + کد ابزار عمودی */}
+        <Box sx={{ width: 52, bgcolor: color, color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0.75, borderRadius: "0 14px 14px 0", py: 1.25 }}>
+          <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon sx={{ fontSize: 20 }} />
+          </Box>
+          <Typography sx={{ transform: "rotate(90deg)", whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, maxWidth: 64, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {code || test.title.slice(0, 10)}
           </Typography>
         </Box>
         <Stack sx={{ p: 2, flexGrow: 1 }} spacing={0.75}>

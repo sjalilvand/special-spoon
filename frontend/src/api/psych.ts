@@ -128,6 +128,7 @@ export interface PublicPaper {
   test: {
     id: string; slug: string; title: string; description: string | null;
     code?: string | null; age_range?: string | null; estimated_minutes?: number | null; accent_color?: string | null;
+    topic_name?: string | null;
   };
   /** فاز ۷۵ — عنوان نمایشی برنامهٔ سازمانی (در صورت درخواست با ?program=) */
   effective_title?: string | null;
